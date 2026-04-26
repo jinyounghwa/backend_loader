@@ -1,13 +1,21 @@
 """S3 bucket security checker for AWS Guardian"""
 import boto3
+import os
 from typing import Dict, List, Any, Tuple
 from datetime import datetime, timedelta
 import json
 
+# Import config
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from config import Config
+
 class S3Checker:
     def __init__(self):
         """Initialize S3 checker"""
-        self.s3_client = boto3.client('s3')
+        boto3_kwargs = Config.get_boto3_kwargs()
+        self.s3_client = boto3.client('s3', **boto3_kwargs)
+        self.is_localstack = Config.is_localstack()
 
     def is_bucket_public_acl(self, bucket_name: str) -> bool:
         """Check if bucket has public ACL permissions"""

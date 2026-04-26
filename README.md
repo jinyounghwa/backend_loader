@@ -45,6 +45,14 @@ AWS 계정을 자동으로 감시하고, 위협 탐지 시 Telegram 알림 + 자
 - 모든 자동 대응 내역 DynamoDB 저장
 - Telegram + Discord 동시 알림
 
+### 6. GLM AI 기반 분석 (신규 ⭐)
+- **Zhipu GLM API 통합** - 고급 이상 분석
+- 비용 이상에 대한 근본 원인 분석
+- EC2 보안 위협도 평가 및 우선순위 지정
+- S3 규정 준수 위험 평가
+- AI 기반 자동 수정 단계 생성
+- 일일 Executive Summary 보고서
+
 ## 🏗️ 아키텍처
 
 ```
@@ -68,6 +76,7 @@ AWS 계정을 자동으로 감시하고, 위협 탐지 시 Telegram 알림 + 자
 | 스케줄러 | AWS EventBridge (cron) |
 | 비용 조회 | AWS Cost Explorer API |
 | 인프라 제어 | AWS SDK (boto3) |
+| AI 분석 | **Zhipu GLM API** (이상 분석) |
 | 알림 | Telegram Bot API |
 | 대시보드 | Discord Bot (discord.py) |
 | 상태 저장 | AWS DynamoDB (무료 티어) |
@@ -81,7 +90,8 @@ AWS 계정을 자동으로 감시하고, 위협 탐지 시 Telegram 알림 + 자
 1. **AWS 계정** (EC2, S3, Lambda, DynamoDB, Cost Explorer 접근 권한)
 2. **Telegram Bot Token** (`@BotFather`에서 생성)
 3. **Discord Bot Token** (Discord Developer Portal에서 생성)
-4. **LocalStack (선택사항)** - 로컬 개발/테스트용
+4. **GLM API Key** (Zhipu AI 플랫폼에서 생성) - AI 기반 분석용
+5. **LocalStack (선택사항)** - 로컬 개발/테스트용
 
 ### 설치 단계
 
@@ -99,6 +109,7 @@ export TELEGRAM_BOT_TOKEN="your-bot-token"
 export TELEGRAM_CHAT_ID="your-chat-id"
 export DISCORD_WEBHOOK_URL="your-webhook-url"
 export DISCORD_PUBLIC_KEY="your-public-key"
+export GLM_API_KEY="your-glm-api-key"
 export AWS_REGION="us-east-1"
 ```
 

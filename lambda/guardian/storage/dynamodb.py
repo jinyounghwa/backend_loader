@@ -1,15 +1,28 @@
 """DynamoDB storage for AWS Guardian"""
 import boto3
+import os
 from typing import Dict, Any, List
 from datetime import datetime
 import json
 
+# Import config
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from config import Config
+
 class DynamoDBStorage:
     def __init__(self, table_name: str = 'aws-guardian-events'):
         """Initialize DynamoDB storage"""
-        self.dynamodb = boto3.resource('dynamodb')
+        boto3_kwargs = Config.get_boto3_kwargs()
+        self.dynamodb = boto3.resource('dynamodb', **boto3_kwargs)
         self.table_name = table_name
-        self.table = self.dynamodb.Table(table_name)
+        self.is_localstack = Config.is_localstack()
+
+        try:
+            self.table = self.dynamodb.Table(table_name)
+        except Exception as e:
+            print(f"Warning: Could not access table {table_name}: {e}")
+            self.table = None
 
     def save_event(self, event_type: str, severity: str, details: Dict[str, Any]) -> bool:
         """
@@ -24,11 +37,15 @@ class DynamoDBStorage:
             True if successful, False otherwise
         """
         try:
+            if not self.table:
+                print("Warning: DynamoDB table not available")
+                return False
+
             item = {
                 'timestamp': datetime.utcnow().isoformat(),
                 'event_type': event_type,
                 'severity': severity,
-                'details': details
+                'details': json.dumps(details) if isinstance(details, dict) else details
             }
 
             self.table.put_item(Item=item)

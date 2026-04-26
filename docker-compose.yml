@@ -1,0 +1,31 @@
+version: '3.9'
+
+services:
+  localstack:
+    image: localstack/localstack:latest
+    container_name: aws-guardian-localstack
+    ports:
+      - "4566:4566"
+      - "4571:4571"
+    environment:
+      - DEBUG=1
+      - LAMBDA_EXECUTOR=docker
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+      - SERVICES=lambda,ec2,s3,dynamodb,logs,ssm,events,apigateway,iam
+      - LOCALSTACK_AUTH_TOKEN=ls-tAGa5429-0514-nebE-wOnE-QabIKAWu038b
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - guardian-network
+    healthcheck:
+      test: ["CMD", "awslocal", "kinesis", "list-streams"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+networks:
+  guardian-network:
+    driver: bridge

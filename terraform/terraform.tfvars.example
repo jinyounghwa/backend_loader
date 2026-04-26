@@ -16,3 +16,7 @@ telegram_chat_id   = "YOUR_TELEGRAM_CHAT_ID_HERE"
 # Get these from Discord Developer Portal
 discord_webhook_url = "https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN"
 discord_public_key  = "YOUR_DISCORD_PUBLIC_KEY_HERE"
+
+# GLM Configuration
+# Get API key from Zhipu AI platform
+glm_api_key = "YOUR_GLM_API_KEY_HERE"

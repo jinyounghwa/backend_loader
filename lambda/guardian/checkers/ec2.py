@@ -1,7 +1,13 @@
 """EC2 security checker for AWS Guardian"""
 import boto3
+import os
 from typing import Dict, List, Any, Tuple
 from datetime import datetime
+
+# Import config
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from config import Config
 
 class EC2Checker:
     def __init__(self, authorized_regions: List[str] = None):
@@ -11,21 +17,31 @@ class EC2Checker:
         Args:
             authorized_regions: List of allowed regions (default: all regions)
         """
-        self.ec2_client = boto3.client('ec2')
+        boto3_kwargs = Config.get_boto3_kwargs()
+        self.ec2_client = boto3.client('ec2', **boto3_kwargs)
         self.authorized_regions = authorized_regions or []
-        self.ssm_client = boto3.client('ssm')
+        self.ssm_client = boto3.client('ssm', **boto3_kwargs)
+        self.is_localstack = Config.is_localstack()
 
     def get_all_instances(self) -> Dict[str, List[Dict]]:
         """Get all running EC2 instances across regions"""
         instances_by_region = {}
 
         try:
-            # Get all regions
-            regions_response = self.ec2_client.describe_regions()
-            regions = [r['RegionName'] for r in regions_response['Regions']]
+            # In LocalStack, only use single region
+            if self.is_localstack:
+                region = 'us-east-1'
+                regions = [region]
+                print(f"[LocalStack] Using single region: {region}")
+            else:
+                # Get all regions
+                regions_response = self.ec2_client.describe_regions()
+                regions = [r['RegionName'] for r in regions_response['Regions']]
 
             for region in regions:
-                regional_ec2 = boto3.client('ec2', region_name=region)
+                boto3_kwargs = Config.get_boto3_kwargs()
+                boto3_kwargs['region_name'] = region
+                regional_ec2 = boto3.client('ec2', **boto3_kwargs)
                 try:
                     response = regional_ec2.describe_instances(
                         Filters=[{'Name': 'instance-state-name', 'Values': ['running']}]

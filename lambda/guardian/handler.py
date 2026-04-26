@@ -1,24 +1,47 @@
 """Main Lambda handler for AWS Guardian"""
 import os
+import sys
 import json
+
+# Add parent directory to path for local testing
+sys.path.insert(0, os.path.dirname(__file__))
+
 from checkers.cost import CostChecker
 from checkers.ec2 import EC2Checker
 from checkers.s3 import S3Checker
 from responders.telegram import TelegramResponder
 from responders.discord import DiscordResponder
+from responders.glm import GLMAnalyzer
 from storage.dynamodb import DynamoDBStorage
+from config import Config
 
 
-def lambda_handler(event, context):
+def lambda_handler(event, context=None):
     """Main Lambda handler for AWS Guardian monitoring"""
 
+    # Get configuration
+    is_localstack = Config.is_localstack()
+
+    if is_localstack:
+        print("[LocalStack Mode] Running in LocalStack environment")
+
     # Initialize components
-    cost_checker = CostChecker(cost_threshold=10.0)
+    cost_threshold = Config.get_cost_threshold()
+    cost_checker = CostChecker(cost_threshold=cost_threshold)
     ec2_checker = EC2Checker()
     s3_checker = S3Checker()
 
-    telegram = TelegramResponder()
-    discord = DiscordResponder()
+    # Get credentials from config
+    telegram_config = Config.get_telegram_config()
+    discord_config = Config.get_discord_config()
+
+    # Initialize responders only if credentials are available
+    has_telegram = telegram_config['bot_token'] and not is_localstack
+    has_discord = discord_config['webhook_url'] and not is_localstack
+
+    telegram = TelegramResponder() if has_telegram else None
+    discord = DiscordResponder() if has_discord else None
+    glm_analyzer = GLMAnalyzer()  # Always initialize GLM
     storage = DynamoDBStorage()
 
     results = {
@@ -35,9 +58,19 @@ def lambda_handler(event, context):
 
         if cost_anomaly:
             print(f"⚠️ Cost anomaly detected: ${cost_data['today_cost']}")
+
+            # Analyze with GLM
+            print("🤖 Analyzing with GLM...")
+            glm_analysis = glm_analyzer.analyze_cost_anomaly(cost_data)
+            cost_data['glm_analysis'] = glm_analysis
+
             storage.save_event('cost', 'warning', cost_data)
-            telegram.send_cost_alert(cost_data)
-            discord.send_cost_alert(cost_data)
+            if telegram:
+                telegram.send_cost_alert(cost_data)
+            if discord:
+                discord.send_cost_alert(cost_data)
+            if is_localstack:
+                print(f"[LocalStack] Would send cost alert: {json.dumps(cost_data, indent=2, default=str)}")
         else:
             print(f"✓ Cost normal: ${cost_data['today_cost']}")
 
@@ -53,23 +86,38 @@ def lambda_handler(event, context):
 
         if ec2_anomaly:
             print(f"⚠️ EC2 anomalies detected: {len(ec2_data.get('anomalies', []))} issues")
+
+            # Analyze with GLM
+            print("🤖 Analyzing EC2 issues with GLM...")
+            glm_analysis = glm_analyzer.analyze_ec2_anomalies(ec2_data)
+            ec2_data['glm_analysis'] = glm_analysis
+
             storage.save_event('ec2', 'critical', ec2_data)
-            telegram.send_ec2_alert(ec2_data)
-            discord.send_ec2_alert(ec2_data)
+            if telegram:
+                telegram.send_ec2_alert(ec2_data)
+            if discord:
+                discord.send_ec2_alert(ec2_data)
+            if is_localstack:
+                print(f"[LocalStack] Would send EC2 alert: {json.dumps(ec2_data, indent=2, default=str)}")
 
             # Auto-respond: Stop exposed instances
             for exposed in ec2_data.get('exposed_instances', []):
                 instance_id = exposed['instance_id']
                 region = exposed['region']
                 print(f"Stopping exposed instance: {instance_id}")
-                success = ec2_checker.stop_instance(instance_id, region)
+                if not is_localstack:
+                    success = ec2_checker.stop_instance(instance_id, region)
+                else:
+                    print(f"[LocalStack] Would stop instance: {instance_id}")
+                    success = True
                 storage.save_auto_response(
                     'stop_ec2',
                     instance_id,
                     'success' if success else 'failed',
                     {'region': region, 'reason': 'exposed_to_0_0_0_0'}
                 )
-                telegram.send_auto_response_notification('stop_ec2', instance_id, 'success' if success else 'failed')
+                if telegram:
+                    telegram.send_auto_response_notification('stop_ec2', instance_id, 'success' if success else 'failed')
 
         else:
             print("✓ EC2 instances secure")
@@ -86,22 +134,37 @@ def lambda_handler(event, context):
 
         if s3_anomaly:
             print(f"⚠️ S3 anomalies detected: {len(s3_data.get('anomalies', []))} issues")
+
+            # Analyze with GLM
+            print("🤖 Analyzing S3 issues with GLM...")
+            glm_analysis = glm_analyzer.analyze_s3_anomalies(s3_data)
+            s3_data['glm_analysis'] = glm_analysis
+
             storage.save_event('s3', 'critical', s3_data)
-            telegram.send_s3_alert(s3_data)
-            discord.send_s3_alert(s3_data)
+            if telegram:
+                telegram.send_s3_alert(s3_data)
+            if discord:
+                discord.send_s3_alert(s3_data)
+            if is_localstack:
+                print(f"[LocalStack] Would send S3 alert: {json.dumps(s3_data, indent=2, default=str)}")
 
             # Auto-respond: Block public access
             for public_bucket in s3_data.get('public_buckets', []):
                 bucket_name = public_bucket['bucket_name']
                 print(f"Blocking public access for: {bucket_name}")
-                success = s3_checker.block_public_access(bucket_name)
+                if not is_localstack:
+                    success = s3_checker.block_public_access(bucket_name)
+                else:
+                    print(f"[LocalStack] Would block public access for: {bucket_name}")
+                    success = True
                 storage.save_auto_response(
                     'block_s3_public',
                     bucket_name,
                     'success' if success else 'failed',
                     {'reasons': public_bucket['public_reasons']}
                 )
-                telegram.send_auto_response_notification('block_s3_public', bucket_name, 'success' if success else 'failed')
+                if telegram:
+                    telegram.send_auto_response_notification('block_s3_public', bucket_name, 'success' if success else 'failed')
 
         else:
             print("✓ S3 buckets secure")
@@ -113,9 +176,21 @@ def lambda_handler(event, context):
     # 4. Get and send summary
     try:
         summary = storage.get_event_summary(hours=24)
+
+        # Generate AI-powered report with GLM
+        print("🤖 Generating GLM-powered summary report...")
+        glm_report = glm_analyzer.generate_summary_report(results['checks'])
+        summary['glm_report'] = glm_report
+
         if summary.get('total_events', 0) > 0:
-            telegram.send_summary(summary)
-            discord.send_summary_embed(summary)
+            if telegram:
+                telegram.send_summary(summary)
+            if discord:
+                discord.send_summary_embed(summary)
+
+        # Save summary with GLM insights
+        storage.save_event('summary', 'info', summary)
+
     except Exception as e:
         print(f"Warning: Could not send summary: {e}")
 

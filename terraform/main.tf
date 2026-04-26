@@ -62,6 +62,12 @@ variable "discord_public_key" {
   sensitive   = true
 }
 
+variable "glm_api_key" {
+  description = "GLM API Key for Zhipu AI"
+  type        = string
+  sensitive   = true
+}
+
 # Store configuration in Parameter Store
 resource "aws_ssm_parameter" "cost_threshold" {
   name        = "/aws-guardian/cost-threshold"
@@ -96,6 +102,13 @@ resource "aws_ssm_parameter" "discord_public_key" {
   type        = "SecureString"
   value       = var.discord_public_key
   description = "Discord Public Key"
+}
+
+resource "aws_ssm_parameter" "glm_api_key" {
+  name        = "/aws-guardian/glm-api-key"
+  type        = "SecureString"
+  value       = var.glm_api_key
+  description = "GLM API Key for Zhipu AI"
 }
 
 output "guardian_lambda_arn" {

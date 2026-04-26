@@ -12,6 +12,7 @@ resource "aws_lambda_function" "guardian" {
       TELEGRAM_BOT_TOKEN  = aws_ssm_parameter.telegram_bot_token.value
       TELEGRAM_CHAT_ID    = aws_ssm_parameter.telegram_chat_id.value
       DISCORD_WEBHOOK_URL = aws_ssm_parameter.discord_webhook_url.value
+      GLM_API_KEY         = aws_ssm_parameter.glm_api_key.value
     }
   }
 

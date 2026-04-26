@@ -1,14 +1,22 @@
 """AWS Cost Explorer checker for AWS Guardian"""
 import boto3
+import os
 from datetime import datetime, timedelta
 from typing import Dict, Any, Tuple
+
+# Import config
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+from config import Config
 
 class CostChecker:
     def __init__(self, cost_threshold: float = 10.0):
         """Initialize cost checker with optional threshold in USD"""
-        self.ce_client = boto3.client('ce')
+        boto3_kwargs = Config.get_boto3_kwargs()
+        self.ce_client = boto3.client('ce', **boto3_kwargs)
         self.threshold = cost_threshold
-        self.ssm_client = boto3.client('ssm')
+        self.ssm_client = boto3.client('ssm', **boto3_kwargs)
+        self.is_localstack = Config.is_localstack()
 
     def get_daily_cost(self, date: str = None) -> float:
         """Get cost for a specific day (YYYY-MM-DD format)"""
@@ -16,6 +24,11 @@ class CostChecker:
             date = datetime.utcnow().strftime('%Y-%m-%d')
 
         try:
+            # LocalStack doesn't support Cost Explorer, return mock data
+            if self.is_localstack:
+                print(f"[LocalStack] Returning mock daily cost for {date}")
+                return 5.50  # Mock cost
+
             response = self.ce_client.get_cost_and_usage(
                 TimePeriod={'Start': date, 'End': date},
                 Granularity='DAILY',
@@ -28,6 +41,9 @@ class CostChecker:
             return 0.0
         except Exception as e:
             print(f"Error getting daily cost: {e}")
+            # Return mock data in LocalStack
+            if self.is_localstack:
+                return 5.50
             return 0.0
 
     def get_monthly_cost(self, year: int = None, month: int = None) -> float:
@@ -46,6 +62,11 @@ class CostChecker:
             end_date = f"{year}-{month + 1:02d}-01"
 
         try:
+            # LocalStack doesn't support Cost Explorer, return mock data
+            if self.is_localstack:
+                print(f"[LocalStack] Returning mock monthly cost for {year}-{month:02d}")
+                return 150.50  # Mock cost
+
             response = self.ce_client.get_cost_and_usage(
                 TimePeriod={'Start': start_date, 'End': end_date},
                 Granularity='MONTHLY',
@@ -58,6 +79,9 @@ class CostChecker:
             return 0.0
         except Exception as e:
             print(f"Error getting monthly cost: {e}")
+            # Return mock data in LocalStack
+            if self.is_localstack:
+                return 150.50
             return 0.0
 
     def check_cost_anomaly(self) -> Tuple[bool, Dict[str, Any]]:
