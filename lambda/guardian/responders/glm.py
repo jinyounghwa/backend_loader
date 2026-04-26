@@ -36,8 +36,13 @@ class GLMAnalyzer:
                 "model": self.model,
                 "messages": messages,
                 "temperature": 0.7,
+                "top_p": 0.8,
                 "max_tokens": 1000
             }
+
+            print(f"[GLM] Sending request to {self.base_url}/chat/completions")
+            print(f"[GLM] Model: {self.model}")
+            print(f"[GLM] Messages: {len(messages)}")
 
             response = requests.post(
                 f"{self.base_url}/chat/completions",
@@ -46,17 +51,36 @@ class GLMAnalyzer:
                 timeout=30
             )
 
+            print(f"[GLM] Response status: {response.status_code}")
+
             if response.status_code == 200:
                 result = response.json()
                 if 'choices' in result and len(result['choices']) > 0:
                     content = result['choices'][0]['message']['content']
+                    print(f"[GLM] Analysis successful: {len(content)} chars")
                     return True, content
+                else:
+                    print(f"[GLM] Unexpected response format: {result}")
+                    return False, ""
             else:
-                print(f"[GLM] API error: {response.status_code}")
+                error_body = response.text
+                print(f"[GLM] API error {response.status_code}: {error_body}")
+                # Try to extract error message
+                try:
+                    error_json = response.json()
+                    error_msg = error_json.get('error', {}).get('message', error_body)
+                    print(f"[GLM] Error detail: {error_msg}")
+                except:
+                    pass
                 return False, ""
 
+        except requests.exceptions.Timeout:
+            print(f"[GLM] Request timeout (30s)")
+            return False, ""
         except Exception as e:
-            print(f"[GLM] Request error: {e}")
+            print(f"[GLM] Request error: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
             return False, ""
 
     def analyze_cost_anomaly(self, cost_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -75,23 +99,21 @@ class GLMAnalyzer:
         monthly_cost = cost_data.get('monthly_cost', 0)
         increase_percent = cost_data.get('increase_percent', 0)
 
-        prompt = f"""
-Analyze the following AWS cost anomaly and provide insights:
+        prompt = f"""AWS 비용 급증 분석:
 
-Today's Cost: ${today_cost:.2f}
-Threshold: ${threshold:.2f}
-Yesterday's Cost: ${yesterday_cost:.2f}
-Monthly Cost: ${monthly_cost:.2f}
-Increase: {increase_percent}%
+오늘 비용: ${today_cost:.2f}
+임계값: ${threshold:.2f}
+어제 비용: ${yesterday_cost:.2f}
+월간 비용: ${monthly_cost:.2f}
+증가율: {increase_percent}%
 
-Please provide:
-1. Severity assessment (low/medium/high/critical)
-2. Root cause analysis
-3. Immediate actions to take
-4. Long-term optimization recommendations
+분석 항목:
+1. 심각도 (low/medium/high/critical)
+2. 근본 원인
+3. 즉시 조치
+4. 장기 최적화
 
-Format as JSON.
-"""
+JSON 형식으로 응답."""
 
         messages = [
             {
@@ -100,11 +122,13 @@ Format as JSON.
             }
         ]
 
+        print(f"[GLM] Analyzing cost anomaly: ${today_cost:.2f}")
         success, response = self._make_request(messages)
 
         if success:
             try:
                 # Try to parse as JSON
+                analysis = {}
                 if response.startswith('{'):
                     analysis = json.loads(response)
                 else:
@@ -112,7 +136,10 @@ Format as JSON.
                     start = response.find('{')
                     end = response.rfind('}') + 1
                     if start >= 0 and end > start:
-                        analysis = json.loads(response[start:end])
+                        try:
+                            analysis = json.loads(response[start:end])
+                        except json.JSONDecodeError:
+                            analysis = {'raw_response': response[start:end]}
                     else:
                         analysis = {
                             'severity': 'medium',
@@ -124,13 +151,15 @@ Format as JSON.
                     'analysis': analysis,
                     'timestamp': datetime.utcnow().isoformat()
                 }
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
+                print(f"[GLM] JSON parse error: {e}")
                 return {
                     'success': True,
                     'analysis': {'raw_response': response},
                     'timestamp': datetime.utcnow().isoformat()
                 }
         else:
+            print("[GLM] Cost analysis failed")
             return {
                 'success': False,
                 'analysis': {'error': 'GLM analysis unavailable'},

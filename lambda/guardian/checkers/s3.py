@@ -56,10 +56,16 @@ class S3Checker:
                         return True, statement
 
             return False, {}
-        except self.s3_client.exceptions.NoSuchBucketPolicy:
-            return False, {}
         except Exception as e:
-            print(f"Error checking policy for {bucket_name}: {e}")
+            # Handle both real AWS and LocalStack exceptions
+            error_code = getattr(e, 'response', {}).get('Error', {}).get('Code', str(type(e).__name__))
+
+            # NoSuchBucketPolicy is expected - bucket just doesn't have a policy
+            if 'NoSuchBucketPolicy' in str(error_code) or 'NoSuchBucketPolicy' in str(e):
+                return False, {}
+
+            # Log other errors
+            print(f"Error checking policy for {bucket_name}: {error_code} - {e}")
             return False, {}
 
     def is_bucket_public_block_disabled(self, bucket_name: str) -> bool:
