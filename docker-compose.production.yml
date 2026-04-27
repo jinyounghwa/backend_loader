@@ -1,0 +1,108 @@
+# AWS Guardian - Production Docker Compose Configuration
+# 🚀 For AWS ECR deployment with proper security and monitoring
+
+version: '3.8'
+
+services:
+  localstack:
+    # ⚠️  NOTE: In production, use AWS services directly, not LocalStack
+    # This is only for reference/dev environments
+    image: localstack/localstack:3.0.0
+    container_name: aws-guardian-localstack-prod
+    ports:
+      - "127.0.0.1:4566:4566"  # Bind to localhost only
+    env_file:
+      - .env.production  # Separate production config
+    environment:
+      # ❌ PRODUCTION: Disable debug logging
+      - DEBUG=0
+
+      # Lambda Execution
+      - LAMBDA_EXECUTOR=docker
+      - DOCKER_HOST=unix:///var/run/docker.sock
+
+      # ⚠️  AWS credentials should come from environment variables in production
+      # Do NOT hardcode credentials in compose file
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_REGION:-us-east-1}
+
+      # Enabled Services (production-only)
+      - SERVICES=lambda,ec2,s3,dynamodb,logs,ssm,events,apigateway,iam
+
+      # Performance Tuning for Production
+      - LOCALSTACK_LAMBDA_STUB_ECR=false
+      - ENFORCE_IAM_POLICIES=true  # Enforce IAM policies in production
+
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - localstack-data:/tmp/localstack
+
+    networks:
+      - guardian-network
+
+    # Production Resource Limits
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+        reservations:
+          cpus: '2'
+          memory: 2G
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+
+    healthcheck:
+      test: ["CMD", "awslocal", "s3", "ls"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+    # Production Logging Configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "service=localstack,environment=production"
+
+    # Security: Do not expose to internet
+    restart: unless-stopped
+
+  # Optional: Monitoring with CloudWatch (production)
+  # Remove if not needed
+  cloudwatch-logs:
+    image: ubuntu:22.04
+    profiles: ["monitoring"]  # Optional: only run with --profile monitoring
+    command: "true"
+    labels:
+      description: "CloudWatch Logs integration placeholder"
+
+volumes:
+  localstack-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/localstack-prod
+
+networks:
+  guardian-network:
+    driver: bridge
+    name: aws-guardian-network-prod
+    driver_opts:
+      com.docker.driver.mtu: 1450  # AWS VPC MTU
+
+# Usage:
+# Production with LocalStack emulation:
+#   docker-compose -f docker-compose.production.yml up -d
+#
+# With monitoring:
+#   docker-compose -f docker-compose.production.yml --profile monitoring up -d
+#
+# ⚠️  RECOMMENDED: In real production, replace LocalStack with actual AWS services
