@@ -483,12 +483,285 @@ getEventsByGSI() → AllEventsIndex Query
 
 ### Sprint 5: 프로덕션 배포 실행 (다음 단계)
 **상태**: 📋 Ready to execute
+**예상 소요시간**: 2-3시간 (인프라 설정) + 배포 + 모니터링
 
-**항목**:
-- [ ] Phase 2 실행: Terraform 백엔드 설정 (S3, DynamoDB, IAM)
-- [ ] Phase 3 실행: GitHub Secret 설정
-- [ ] Phase 5 실행: PR → 병합 → 배포 승인
-- [ ] Phase 6 실행: 24시간 검증
+#### 📋 Phase 2: Terraform 백엔드 설정
+```bash
+# 1. S3 버킷 생성
+aws s3 mb s3://aws-guardian-terraform-state-$(date +%s)
+aws s3api put-bucket-versioning --bucket ... --versioning-configuration Status=Enabled
+aws s3api put-public-access-block --bucket ... --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+
+# 2. DynamoDB Lock 테이블 생성
+aws dynamodb create-table --table-name terraform-locks \
+  --attribute-definitions AttributeName=LockID,AttributeType=S \
+  --key-schema AttributeName=LockID,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST
+
+# 3. GitHub OIDC 역할 설정
+# PRODUCTION_DEPLOYMENT_CHECKLIST.md의 Phase 2-3 참조
+```
+
+#### 📋 Phase 3: GitHub Secret 설정 (9개)
+- AWS_ROLE_TO_ASSUME
+- TERRAFORM_STATE_BUCKET
+- TERRAFORM_STATE_KEY
+- TERRAFORM_LOCK_TABLE
+- TELEGRAM_BOT_TOKEN
+- TELEGRAM_CHAT_ID
+- DISCORD_WEBHOOK_URL
+- DISCORD_PUBLIC_KEY
+- SLACK_WEBHOOK (선택)
+
+#### 📋 Phase 5: 프로덕션 배포
+```bash
+# 1. Feature branch 생성
+git checkout -b chore/deploy-to-production
+
+# 2. Push 및 PR 생성
+git push origin chore/deploy-to-production
+
+# 3. GitHub Actions 확인
+# - Lint 통과
+# - Test 통과
+# - Build 완료
+
+# 4. PR 병합 (자동으로 deploy 트리거)
+
+# 5. 프로덕션 승인
+# GitHub → Actions → Latest run → Review deployments → Approve
+```
+
+#### 📋 Phase 6: 24시간 검증
+- Lambda 함수 배포 확인
+- EventBridge 규칙 활성화 확인
+- 첫 시간별 실행 모니터링
+- 일일 비용 확인 실행 확인
+- DynamoDB 이벤트 저장 확인
+- Telegram/Discord 알림 테스트
+- CloudWatch Logs 확인
+
+**완료 조건**:
+- ✅ Lambda 함수 최신 버전 배포
+- ✅ EventBridge 규칙 ENABLED 상태
+- ✅ CloudWatch Logs에 정상 실행 기록
+- ✅ DynamoDB에 이벤트 저장됨
+- ✅ 비용: < $0.50/month 확인
+
+---
+
+### Sprint 6: 추가 AWS 서비스 감시 (기능 확장)
+**상태**: 📋 계획 단계
+**예상 소요시간**: 3-4일
+**우선순위**: 중간
+
+**목표**: CloudTrail, IAM, GuardDuty 감시 기능 추가
+
+#### 🎯 6-1. CloudTrail 비정상 API 호출 감지
+**파일**:
+- `lambda/guardian/checkers/cloudtrail.py` (NEW)
+- `lambda/guardian/responders/telegram.py` (ENHANCE)
+
+**체크 항목**:
+- 루트 계정 활동 탐지
+- 비인가 리전에서의 API 호출
+- 권한 상승 작업 (CreateAccessKey, AttachUserPolicy)
+- 리소스 삭제 작업 (DeleteBucket, TerminateInstances)
+
+**구현**:
+```python
+class CloudTrailChecker:
+    def check_suspicious_api_calls(self):
+        # CloudTrail Lookup Events 쿼리
+        # 마지막 1시간 이벤트 분석
+        # 위협 점수 계산
+        return anomaly, details
+```
+
+#### 🎯 6-2. IAM 권한 변경 감지
+**파일**:
+- `lambda/guardian/checkers/iam.py` (NEW)
+
+**체크 항목**:
+- 새 IAM 사용자 생성
+- 새 액세스 키 생성
+- 정책 변경 (AttachUserPolicy, PutUserPolicy)
+- 역할 신뢰 관계 변경
+
+**구현**:
+```python
+class IAMChecker:
+    def check_iam_changes(self):
+        # IAM 사용자, 역할, 정책 나열
+        # 이전 상태와 비교
+        # 변경사항 감지
+        return anomaly, changes
+```
+
+#### 🎯 6-3. GuardDuty 위협 탐지 통합
+**파일**:
+- `lambda/guardian/checkers/guardduty.py` (NEW)
+
+**체크 항목**:
+- GuardDuty 발견사항 조회
+- 심각도별 분류 (Low, Medium, High)
+- 자동 대응 (격리/차단)
+
+**구현**:
+```python
+class GuardDutyChecker:
+    def check_threats(self):
+        # GuardDuty ListFindings
+        # 심각도별 필터링
+        # 대응 권장사항 생성
+        return findings, risk_level
+```
+
+#### 📋 구현 순서
+1. Gemini CLI로 아키텍처 분석
+2. 각 체커 모듈 구현 (with 단위 테스트)
+3. Orchestrator에 체크 추가
+4. Telegram 포맷팅
+5. 로컬 테스트 및 배포
+
+---
+
+### Sprint 7: 다중 AWS 계정 지원
+**상태**: 📋 계획 단계
+**예상 소요시간**: 3-4일
+**우선순위**: 중간
+
+**목표**: Organizations 기반 다중 계정 모니터링
+
+#### 🎯 기능 요구사항
+- 조직 내 모든 계정 감시
+- 계정별 독립 임계값
+- 계정별 알림 채널 분리
+- Cross-account IAM Role 자동 구성
+
+#### 📁 필요한 변경
+1. `config.py` - ACCOUNT_ID 지원 추가
+2. `handler.py` - 다중 계정 루프 추가
+3. `terraform/main.tf` - STS AssumeRole 설정
+4. `terraform/iam.tf` - Cross-account 역할 정책
+5. 대시보드 - 계정별 필터 추가
+
+#### 🔄 구현 흐름
+```
+Organizations → List Accounts
+  ↓
+각 계정마다:
+  - STS AssumeRole
+  - EC2/S3/비용 확인
+  - 결과 통합
+  ↓
+DynamoDB 저장 (account_id 필드 추가)
+  ↓
+Telegram: 계정명 명시
+```
+
+---
+
+### Sprint 8: 웹 대시보드 인증 시스템
+**상태**: 📋 계획 단계
+**예상 소요시간**: 4-5일
+**우선순위**: 낮음
+
+**목표**: NextAuth 기반 인증 + RBAC
+
+#### 🎯 기능 요구사항
+- GitHub/Google OAuth 로그인
+- 역할 기반 접근 제어 (Admin/Viewer)
+- 설정 변경 시 인증 강화
+- 감사 로그
+
+#### 📁 필요한 파일
+1. `apps/web/auth.config.ts` (NextAuth 설정)
+2. `apps/web/src/app/api/auth/[...nextauth]/route.ts`
+3. `apps/web/src/middleware.ts` (보호된 라우트)
+4. `apps/web/src/lib/rbac.ts` (권한 검사)
+5. 데이터베이스 스키마 (사용자, 역할, 감사로그)
+
+#### 🔄 구현 흐름
+```
+로그인 → OAuth
+  ↓
+JWT 토큰 발급
+  ↓
+권한 확인 (RBAC)
+  ↓
+대시보드 접근
+  ↓
+변경사항 감사로그 기록
+```
+
+---
+
+### Sprint 9: Discord Slash Command 통합
+**상태**: 📋 계획 단계
+**예상 소요시간**: 2-3일
+**우선순위**: 낮음
+
+**목표**: Discord 봇 명령어 완전 구현
+
+#### 🎯 구현할 명령어
+- `/status` - 현재 EC2, S3, 비용 상태
+- `/stop <instance-id>` - 인스턴스 중지
+- `/instances` - 실행 중인 인스턴스 목록
+- `/bucket-policy <bucket>` - S3 버킷 정책 수정
+- `/threshold <amount>` - 비용 임계값 변경
+- `/history [hours]` - 최근 이벤트 로그
+
+#### 📁 필요한 파일
+1. `lambda/discord_webhook/handler.py` (ENHANCE)
+2. `lambda/discord_webhook/commands/` (NEW)
+3. `lambda/discord_webhook/responses/` (NEW)
+4. Discord Developer Portal 설정
+
+#### 🔄 구현 흐름
+```
+Discord → Slash Command 실행
+  ↓
+Lambda (discord_webhook) 트리거
+  ↓
+명령어 파싱
+  ↓
+AWS API 호출
+  ↓
+Discord Embed 응답 반환
+```
+
+---
+
+## 📊 스프린트 로드맵
+
+```
+Sprint 5: 프로덕션 배포 실행 (2-3시간)
+  ✓ Terraform 백엔드 설정
+  ✓ GitHub Secret 설정
+  ✓ PR → 배포 승인
+  ✓ 24시간 검증
+
+Sprint 6: AWS 서비스 감시 확장 (3-4일)
+  ✓ CloudTrail 감시
+  ✓ IAM 권한 감시
+  ✓ GuardDuty 위협 통합
+
+Sprint 7: 다중 계정 지원 (3-4일)
+  ✓ Organizations 통합
+  ✓ Cross-account IAM
+  ✓ 계정별 설정
+
+Sprint 8: 대시보드 인증 (4-5일)
+  ✓ NextAuth 통합
+  ✓ RBAC 구현
+  ✓ 감사로그
+
+Sprint 9: Discord 명령어 (2-3일)
+  ✓ Slash Command 구현
+  ✓ 응답 포맷팅
+  ✓ 명령어별 권한 검사
+```
 
 ---
 
