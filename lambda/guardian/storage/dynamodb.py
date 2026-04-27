@@ -29,7 +29,7 @@ class DynamoDBStorage:
         Save an event to DynamoDB
 
         Args:
-            event_type: 'cost', 'ec2', 's3'
+            event_type: 'cost', 'ec2', 's3', 'check_result'
             severity: 'info', 'warning', 'critical'
             details: Event details dictionary
 
@@ -41,10 +41,15 @@ class DynamoDBStorage:
                 print("Warning: DynamoDB table not available")
                 return False
 
+            import uuid
+            from datetime import timezone
+
             item = {
-                'timestamp': datetime.utcnow().isoformat(),
+                'event_id': str(uuid.uuid4()),  # Unique identifier
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'event_type': event_type,
                 'severity': severity,
+                'gsi_pk': 'EVENT',  # For AllEventsIndex GSI
                 'details': json.dumps(details) if isinstance(details, dict) else details
             }
 
@@ -69,7 +74,7 @@ class DynamoDBStorage:
         """
         try:
             item = {
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'action_type': action_type,
                 'resource_id': resource_id,
                 'status': status,
@@ -83,27 +88,56 @@ class DynamoDBStorage:
             return False
 
     def get_recent_events(self, hours: int = 24, event_type: str = None) -> List[Dict]:
-        """Get recent events from DynamoDB"""
+        """Get recent events from DynamoDB using optimized GSI queries"""
         try:
             from boto3.dynamodb.conditions import Key, Attr
             from datetime import timedelta
 
-            cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+            cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
 
-            # Query with filter
             if event_type:
-                response = self.table.scan(
-                    FilterExpression=Attr('timestamp').gt(cutoff_time.isoformat()) &
-                                     Attr('event_type').eq(event_type)
+                # ✅ Use TypeTimestampIndex GSI for efficient lookup
+                response = self.table.query(
+                    IndexName='TypeTimestampIndex',
+                    KeyConditionExpression=Key('event_type').eq(event_type) &
+                                           Key('timestamp').gt(cutoff_time.isoformat()),
+                    ScanIndexForward=False,  # DESC - latest first
+                    Limit=100
                 )
             else:
-                response = self.table.scan(
-                    FilterExpression=Attr('timestamp').gt(cutoff_time.isoformat())
+                # ✅ Use AllEventsIndex GSI for dashboard queries
+                response = self.table.query(
+                    IndexName='AllEventsIndex',
+                    KeyConditionExpression=Key('gsi_pk').eq('EVENT') &
+                                           Key('timestamp').gt(cutoff_time.isoformat()),
+                    ScanIndexForward=False,  # DESC
+                    Limit=100
                 )
 
             return response.get('Items', [])
         except Exception as e:
             print(f"Error getting recent events: {e}")
+            return []
+
+    def get_events_by_severity(self, severity: str, hours: int = 24) -> List[Dict]:
+        """Get events filtered by severity using SeverityTimestampIndex GSI"""
+        try:
+            from boto3.dynamodb.conditions import Key
+            from datetime import timedelta
+
+            cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
+
+            response = self.table.query(
+                IndexName='SeverityTimestampIndex',
+                KeyConditionExpression=Key('severity').eq(severity) &
+                                       Key('timestamp').gt(cutoff_time.isoformat()),
+                ScanIndexForward=False,  # DESC
+                Limit=100
+            )
+
+            return response.get('Items', [])
+        except Exception as e:
+            print(f"Error getting events by severity: {e}")
             return []
 
     def get_event_summary(self, hours: int = 24) -> Dict[str, Any]:
@@ -115,7 +149,7 @@ class DynamoDBStorage:
                 'total_events': len(events),
                 'by_type': {},
                 'by_severity': {},
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }
 
             for event in events:
