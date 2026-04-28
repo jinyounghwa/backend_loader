@@ -98,8 +98,19 @@ attach_policies() {
             "s3:GetBucketPublicAccessBlock",
             "s3:PutPublicAccessBlock",
             "ce:GetCostAndUsage",
+            "cloudtrail:LookupEvents",
+            "iam:ListUsers",
+            "iam:ListAccessKeys",
+            "iam:GetUser",
+            "guardduty:ListDetectors",
+            "guardduty:ListFindings",
+            "guardduty:GetFindings",
             "dynamodb:PutItem",
+            "dynamodb:GetItem",
             "dynamodb:Query",
+            "dynamodb:Scan",
+            "dynamodb:CreateTable",
+            "dynamodb:DescribeTable",
             "ssm:GetParameter"
           ],
           "Resource": "*"
@@ -146,6 +157,41 @@ deploy_lambda() {
             --endpoint-url "$ENDPOINT"
         print_success "Lambda function created"
     fi
+}
+
+# Create DynamoDB tables
+create_dynamodb_tables() {
+    print_header "Creating DynamoDB Tables"
+
+    # Events table
+    print_info "Creating events table..."
+    aws dynamodb create-table \
+        --table-name aws-guardian-events \
+        --attribute-definitions AttributeName=event_id,AttributeType=S AttributeName=timestamp,AttributeType=S \
+        --key-schema AttributeName=event_id,KeyType=HASH AttributeName=timestamp,KeyType=RANGE \
+        --billing-mode PAY_PER_REQUEST \
+        --endpoint-url "$ENDPOINT" 2>/dev/null || print_info "Events table already exists"
+    print_success "Events table created"
+
+    # Responses table
+    print_info "Creating responses table..."
+    aws dynamodb create-table \
+        --table-name aws-guardian-responses \
+        --attribute-definitions AttributeName=timestamp,AttributeType=S AttributeName=action_type,AttributeType=S \
+        --key-schema AttributeName=timestamp,KeyType=HASH AttributeName=action_type,KeyType=RANGE \
+        --billing-mode PAY_PER_REQUEST \
+        --endpoint-url "$ENDPOINT" 2>/dev/null || print_info "Responses table already exists"
+    print_success "Responses table created"
+
+    # IAM baseline table
+    print_info "Creating IAM baseline table..."
+    aws dynamodb create-table \
+        --table-name guardian-iam-baseline \
+        --attribute-definitions AttributeName=baseline_id,AttributeType=S \
+        --key-schema AttributeName=baseline_id,KeyType=HASH \
+        --billing-mode PAY_PER_REQUEST \
+        --endpoint-url "$ENDPOINT" 2>/dev/null || print_info "IAM baseline table already exists"
+    print_success "IAM baseline table created"
 }
 
 # Create EventBridge rules
@@ -246,9 +292,10 @@ print_summary() {
 ${GREEN}✅ AWS Guardian deployed to LocalStack successfully!${NC}
 
 ${BLUE}Deployed Resources:${NC}
-  ✅ IAM Role: $ROLE_NAME
+  ✅ IAM Role: $ROLE_NAME (with CloudTrail, IAM, GuardDuty permissions)
   ✅ Lambda: $LAMBDA_NAME
-  ✅ EventBridge Rules: hourly & daily
+  ✅ DynamoDB Tables: events, responses, guardian-iam-baseline
+  ✅ EventBridge Rules: hourly (EC2/S3) & daily (Cost)
 
 ${BLUE}Test Commands:${NC}
   # Invoke Lambda directly
@@ -277,6 +324,7 @@ main() {
     check_localstack
     create_iam_role
     attach_policies
+    create_dynamodb_tables
     deploy_lambda
     create_eventbridge_rules
     add_targets
