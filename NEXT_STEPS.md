@@ -2,11 +2,49 @@
 
 ---
 
+## ⚡ 빠른 참고 (Sprint 6 최신 상태)
+
+**현재**: Sprint 6 Phase 4-5 진행 중 (2026-04-28 15:00)
+
+**완료된 것**:
+- ✅ Phase 1-3: CloudTrail, IAM, GuardDuty 체커 + Telegram 통합 (~1,160줄)
+- ✅ Phase 4: IAM 권한 추가 + LocalStack 배포 스크립트 업데이트
+- ✅ Phase 5 Part 1: 56개 테스트 케이스 작성
+
+**남은 것**:
+- Phase 5 Part 2: test_orchestrator.py + 실제 테스트 실행
+- Phase 4 검증: LocalStack 배포 테스트
+
+**핵심 파일**:
+```
+lambda/guardian/
+├── checkers/base.py (71줄) - BaseChecker ABC
+├── checkers/cloudtrail.py (333줄)
+├── checkers/iam.py (282줄)
+├── checkers/guardduty.py (223줄)
+├── orchestrator.py (UPDATED: +99줄, registry pattern)
+├── responders/telegram.py (UPDATED: +129줄, send_alert dispatcher)
+
+tests/
+├── test_cloudtrail.py (18 테스트)
+├── test_iam.py (18 테스트)
+├── test_guardduty.py (20 테스트)
+
+terraform/
+├── iam.tf (UPDATED: CloudTrail, IAM, GuardDuty 권한)
+├── dynamodb.tf (UPDATED: guardian-iam-baseline 테이블)
+
+scripts/
+├── deploy-to-localstack.sh (UPDATED: DynamoDB 테이블 자동 생성)
+```
+
+---
+
 ## 🎯 최신 업데이트 (2026-04-28)
 
-### 🚀 Sprint 6 Phase 1-3 완료 (2026-04-28)
+### 🚀 Sprint 6 Phase 1-5 진행 중 (2026-04-28)
 
-**상태**: ✅ Phase 1-3 완료, Phase 4-5 대기
+**상태**: ✅ Phase 1-3 완료, 🔄 Phase 4-5 진행 중
 
 #### Phase 1: 기본 구조 완성 ✅
 ```
@@ -58,41 +96,128 @@ benefits:
 ✅ HTML 포맷으로 일관성 유지
 ```
 
-#### 🔄 Phase 5: 단위 테스트 Part 1 (진행 중 - commit: 864d12f)
+#### ✅ Phase 5: 단위 테스트 Part 1 (진행 중 - commit: 864d12f)
 
 **완료**:
-- ✅ tests/test_cloudtrail.py (18 테스트)
-- ✅ tests/test_iam.py (18 테스트)
-- ✅ tests/test_guardduty.py (20 테스트)
+```
+✅ tests/test_cloudtrail.py (18 테스트)
+  - initialization, error handling
+  - Suspicious API detection (CreateAccessKey, AttachUserPolicy, DeleteBucket)
+  - Root account activity detection
+  - Unauthorized region detection
+  - Event filtering, analysis, severity determination
+  - Remediation suggestions, integration tests
 
-**테스트 범위**:
-- 정상 케이스: 각 체커별 4-5개
-- 에러 처리: 각 체커별 2-3개
-- 통합 테스트: 각 체커별 1-2개
+✅ tests/test_iam.py (18 테스트)
+  - No changes detection
+  - New user, deleted user, access key detection
+  - Baseline tracking (DynamoDB)
+  - Change detection algorithm
+  - Severity determination (HIGH/MEDIUM/LOW)
+  - Error handling, result structure validation
 
-**총 56개 테스트 케이스**
+✅ tests/test_guardduty.py (20 테스트)
+  - No findings detection
+  - Threat findings analysis
+  - Detector management
+  - Finding retrieval and processing
+  - Severity mapping (CRITICAL/HIGH/MEDIUM)
+  - Threat-specific remediation (RDP, SSH, Crypto, Spambot)
+  - Finding details extraction, error handling
+```
 
-**남은 작업**:
-- test_orchestrator.py (registry pattern + dispatcher)
-- 실제 테스트 실행 및 결과 검증
+**테스트 범위 & 통계**:
+- 정상 케이스: 각 체커별 4-5개 (모든 주요 기능 커버)
+- 에러 처리: 각 체커별 2-3개 (API 에러, 예외 상황)
+- 통합 테스트: 각 체커별 1-2개 (CheckResult 구조 검증)
+- **총 56개 테스트 케이스**
+
+**남은 작업 (Phase 5 Part 2)**:
+- test_orchestrator.py (registry pattern + _run_new_check dispatcher)
+- 실제 테스트 실행: `pytest tests/test_*.py -v`
+- 커버리지 리포트: `pytest --cov=lambda.guardian tests/`
 
 ---
 
 ## 📊 Sprint 6 진행 현황
 
-| 항목 | 상태 | 상세 |
-|------|------|------|
-| **Phase 1** | ✅ 완료 | 4개 체커 파일, ~900줄 코드 |
-| **Phase 2** | ✅ 완료 | Orchestrator 레지스트리 패턴 적용 |
-| **Phase 3** | ✅ 완료 | Telegram 포맷팅 (emoji, 컨텍스트, 자동 dispatcher) |
-| **Phase 4** | 📋 대기 | IAM 권한 + 배포 |
-| **Phase 5** | 📋 대기 | 단위 테스트 (Moto/LocalStack) |
+| Phase | 상태 | 상세 | 커밋 |
+|-------|------|------|------|
+| **Phase 1** | ✅ 완료 | 4개 체커 파일, ~900줄 코드 | 303ca5d |
+| **Phase 2** | ✅ 완료 | Orchestrator 레지스트리 패턴 적용 | d52299f |
+| **Phase 3** | ✅ 완료 | Telegram 포맷팅 (emoji, 컨텍스트, 자동 dispatcher) | 6592140 |
+| **Phase 4** | 🔄 진행 중 | IAM 권한 + LocalStack 배포 스크립트 | e87fac6, 1999570 |
+| **Phase 5** | 🔄 진행 중 | 단위 테스트 (56개 테스트 케이스) | 864d12f |
 
-**코드 통계:**
-- 신규 파일: 4개 (base.py, cloudtrail.py, iam.py, guardduty.py)
-- 수정 파일: 2개 (orchestrator.py, telegram.py)
-- 신규 줄 수: ~1,160줄 (Phase 1-3 누적)
-- 예상 완료: 2026-04-29 (1일)
+**📈 코드 통계 (누적)**:
+- 신규 파일: 7개 (base.py, cloudtrail.py, iam.py, guardduty.py, test_*.py 3개)
+- 수정 파일: 5개 (orchestrator.py, telegram.py, iam.tf, dynamodb.tf, deploy-to-localstack.sh)
+- 신규 줄 수: ~2,627줄
+  - Phase 1-3: ~1,160줄 (체커 + Telegram)
+  - Phase 4: ~114줄 (Terraform + 배포 스크립트)
+  - Phase 5: ~867줄 (테스트 케이스)
+- 예상 완료: 2026-04-28 (당일)
+
+---
+
+## 🚀 다음 개발 때 실행 순서
+
+### 1️⃣ 먼저 확인 (2-3분)
+```bash
+# Git 상태 확인
+git log --oneline -10
+
+# Sprint 6 Phase 4-5 커밋 확인
+# e87fac6: IAM 권한 추가 (CloudTrail, IAM, GuardDuty)
+# 1999570: LocalStack 배포 스크립트 (DynamoDB 테이블 자동 생성)
+# 864d12f: 56개 테스트 케이스 추가 (test_cloudtrail.py, test_iam.py, test_guardduty.py)
+```
+
+### 2️⃣ Phase 5 Part 2: Orchestrator 테스트 (15분)
+```bash
+# tests/test_orchestrator.py 작성
+# - registry pattern 테스트
+# - _run_new_check() dispatcher 테스트
+# - check_type 파라미터 테스트 (cost, security, all)
+
+# 실제 테스트 실행
+cd /Users/younghwa.jin/Documents/backend_loader
+pytest tests/test_cloudtrail.py -v
+pytest tests/test_iam.py -v
+pytest tests/test_guardduty.py -v
+pytest tests/ -v --cov=lambda.guardian
+```
+
+### 3️⃣ Phase 4 완료: LocalStack 배포 테스트 (20분)
+```bash
+# 1. LocalStack 실행 확인
+docker-compose up -d
+
+# 2. 배포 스크립트 실행
+./scripts/deploy-to-localstack.sh
+
+# 3. Lambda 권한 검증 (CloudTrail, IAM, GuardDuty API 호출)
+aws lambda invoke \
+  --function-name aws-guardian-monitor \
+  --payload '{"check_type":"security"}' \
+  --endpoint-url http://localhost:4566 \
+  /tmp/response.json
+
+# 4. DynamoDB 테이블 확인
+aws dynamodb list-tables --endpoint-url http://localhost:4566
+# 출력: aws-guardian-events, aws-guardian-responses, guardian-iam-baseline
+```
+
+### 4️⃣ Sprint 6 최종 정리
+```bash
+# 모든 변경사항 확인
+git status
+
+# 최종 커밋 (필요시)
+git commit -m "Sprint 6 Phase 5 Part 2: Orchestrator 테스트 + LocalStack 검증 완료"
+
+# NEXT_STEPS.md 업데이트 (Sprint 7 준비)
+```
 
 ---
 
@@ -912,15 +1037,32 @@ git push origin chore/deploy-to-production
 - ✅ 자동 대응 제안/remediation 포함
 - ✅ HTML 포맷으로 일관성 유지
 
-#### 🔄 Phase 4: IAM 권한 + LocalStack 배포 (진행 중)
+#### ✅ Phase 4: IAM 권한 + LocalStack 배포 (진행 중 - commit: e87fac6, 1999570)
 
-**진행사항**:
-- ✅ terraform/iam.tf: CloudTrail, IAM, GuardDuty 권한 추가
-- ✅ terraform/dynamodb.tf: guardian-iam-baseline 테이블 추가
-- ✅ scripts/deploy-to-localstack.sh: DynamoDB 테이블 자동 생성
+**완료**:
+```
+✅ terraform/iam.tf (3개 새 permission statement 추가)
+  - CloudTrail: cloudtrail:LookupEvents
+  - IAM: iam:ListUsers, iam:ListAccessKeys, iam:GetUser
+  - GuardDuty: guardduty:ListDetectors, guardduty:ListFindings, guardduty:GetFindings
+  - DynamoDB: GetItem 추가 (guardian-iam-baseline 테이블)
+
+✅ terraform/dynamodb.tf (new table 추가)
+  - guardian-iam-baseline 테이블 (IAM baseline 추적용)
+  - hash_key: baseline_id
+  - TTL 활성화 + Point-in-time recovery
+
+✅ scripts/deploy-to-localstack.sh (create_dynamodb_tables 함수 추가)
+  - aws-guardian-events 테이블 자동 생성
+  - aws-guardian-responses 테이블 자동 생성
+  - guardian-iam-baseline 테이블 자동 생성
+  - main()에 함수 호출 추가
+
+✅ terraform fmt 적용
+```
 
 **남은 작업**:
-- LocalStack 배포 테스트
+- LocalStack 배포 테스트 실행
 - 권한 검증 (Lambda → CloudTrail, IAM, GuardDuty API 호출)
 
 #### 🎯 6-1. CloudTrail 비정상 API 호출 감지
