@@ -58,9 +58,23 @@ benefits:
 ✅ HTML 포맷으로 일관성 유지
 ```
 
-#### 다음: Phase 4-5 예정
-- Phase 4: IAM 권한 + LocalStack 배포
-- Phase 5: 단위 테스트 (15-20개 테스트 케이스)
+#### 🔄 Phase 5: 단위 테스트 Part 1 (진행 중 - commit: 864d12f)
+
+**완료**:
+- ✅ tests/test_cloudtrail.py (18 테스트)
+- ✅ tests/test_iam.py (18 테스트)
+- ✅ tests/test_guardduty.py (20 테스트)
+
+**테스트 범위**:
+- 정상 케이스: 각 체커별 4-5개
+- 에러 처리: 각 체커별 2-3개
+- 통합 테스트: 각 체커별 1-2개
+
+**총 56개 테스트 케이스**
+
+**남은 작업**:
+- test_orchestrator.py (registry pattern + dispatcher)
+- 실제 테스트 실행 및 결과 검증
 
 ---
 
@@ -827,10 +841,10 @@ git push origin chore/deploy-to-production
 ---
 
 ### Sprint 6: 추가 AWS 서비스 감시 (기능 확장)
-**상태**: 🔄 진행 중 (Phase 1-3 ✅, Phase 4-5 📋)
-**예상 소요시간**: 1일 (Phase 4-5)
+**상태**: 🔄 진행 중 (Phase 1-3 ✅, Phase 4-5 진행 중)
+**예상 소요시간**: 2-3시간 (Phase 4 테스트 + Phase 5 완료)
 **우선순위**: 중간
-**시작**: 2026-04-28, 예상 완료: 2026-04-29
+**시작**: 2026-04-28, 예상 완료: 2026-04-28 (당일)
 
 **목표**: CloudTrail, IAM, GuardDuty 감시 기능 추가
 
@@ -898,7 +912,16 @@ git push origin chore/deploy-to-production
 - ✅ 자동 대응 제안/remediation 포함
 - ✅ HTML 포맷으로 일관성 유지
 
-#### 📋 Phase 4: IAM 권한 + 배포 (대기 - 다음 세션)
+#### 🔄 Phase 4: IAM 권한 + LocalStack 배포 (진행 중)
+
+**진행사항**:
+- ✅ terraform/iam.tf: CloudTrail, IAM, GuardDuty 권한 추가
+- ✅ terraform/dynamodb.tf: guardian-iam-baseline 테이블 추가
+- ✅ scripts/deploy-to-localstack.sh: DynamoDB 테이블 자동 생성
+
+**남은 작업**:
+- LocalStack 배포 테스트
+- 권한 검증 (Lambda → CloudTrail, IAM, GuardDuty API 호출)
 
 #### 🎯 6-1. CloudTrail 비정상 API 호출 감지
 **파일**:
