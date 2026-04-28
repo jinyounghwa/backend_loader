@@ -1,5 +1,35 @@
 # AWS Guardian - 다음 작업 항목
 
+---
+
+## 🎯 최신 업데이트 (2026-04-28)
+
+### ✨ 새로운 기능: Agentic Workflow 구현 완료
+**상태**: ✅ 활성화됨
+
+Claude Code ↔ Gemini CLI **양방향 협업 프레임워크**가 완성되었습니다:
+
+```
+Propose (Claude) → Review (Gemini) → Iterate (Claude) → Converge (Gemini) → Ship
+```
+
+**사용 사례**:
+- 복잡한 리팩토링 (Lambda 최적화, 아키텍처 변경)
+- 성능 개선 (데이터베이스 쿼리, 캐싱)
+- 새로운 기능 아키텍처 설계
+- 다중 파일 변경 검증
+
+**빠른 시작**:
+```bash
+./scripts/agentic-loop.sh propose --task "your feature" --file modified.py
+./scripts/agentic-loop.sh review
+./scripts/agentic-loop.sh converge
+```
+
+**자세한 가이드**: [AGENTIC_WORKFLOW.md](./AGENTIC_WORKFLOW.md)
+
+---
+
 ## 1. 우선순위 높음 (핵심 기능 완성)
 
 ### ~~1-1. 프론트엔드 실시간 API 연동~~ ✅ 완료
@@ -1021,17 +1051,30 @@ Sprint 9: Discord 명령어 (2-3일)
 
 ## 🔧 개발 워크플로우
 
+### 표준 워크플로우 (일반적인 작업)
 **각 스프린트마다**:
-1. `./scripts/gemini-ask.sh` 실행 → Gemini 분석 수집
-2. `~/.gemini/logs/claude-gemini.log` 확인 → 로그 검토
-3. Claude Code 구현 → 파일 작성/수정
-4. `./start.sh` → 로컬 테스트
-5. git commit → 진행상황 기록
+1. 기능/버그 분석
+2. Claude Code 구현 → 파일 작성/수정
+3. `./start.sh` → 로컬 테스트
+4. git commit → 진행상황 기록
+
+### 🤖 Agentic 워크플로우 (복잡한 리팩토링/아키텍처)
+**복합적인 변경이 필요할 때**:
+1. `./scripts/agentic-loop.sh start` → 세션 시작
+2. `./scripts/agentic-loop.sh propose --task "..." --file ...` → 제안 저장
+3. `./scripts/agentic-loop.sh review` → Gemini 분석 (코드/아키텍처/성능)
+4. Claude Code 피드백 기반 개선
+5. `./scripts/agentic-loop.sh iterate --show-feedback` → 진행상황 확인
+6. `./scripts/agentic-loop.sh converge` → 최종 승인
+7. git commit with `(agentic:approved)` badge
+
+**자세한 가이드**: `AGENTIC_WORKFLOW.md` 참조
 
 ---
 
-## 📝 사용 가능한 Gemini CLI 명령어
+## 📝 Gemini CLI 명령어
 
+### 단방향 분석 (빠른 피드백)
 ```bash
 # 코드 리뷰
 ./scripts/gemini-ask.sh "Review [file] for quality" code_review
@@ -1049,6 +1092,29 @@ Sprint 9: Discord 명령어 (2-3일)
 tail -f ~/.gemini/logs/claude-gemini.log
 ```
 
+### 양방향 Agentic 분석 (반복적 개선)
+```bash
+# 새 세션 시작
+./scripts/agentic-loop.sh start
+
+# 제안 저장
+./scripts/agentic-loop.sh propose --task "refactor handler" --file handler.py
+
+# Gemini 리뷰 (코드/아키텍처/성능)
+./scripts/agentic-loop.sh review --aspect code
+
+# 진행 상황 확인
+./scripts/agentic-loop.sh iterate --show-feedback
+
+# 최종 승인 확인
+./scripts/agentic-loop.sh converge
+
+# 모든 세션 보기
+./scripts/agentic-loop.sh history
+```
+
+**자세한 사용법**: `AGENTIC_WORKFLOW.md` 참조
+
 ---
 
 ## 배포 체크리스트
@@ -1065,4 +1131,3 @@ tail -f ~/.gemini/logs/claude-gemini.log
 
  # 다음 개발 시 이 명령어부터 다시 실행                                                                                                                                                                                           
   ./scripts/gemini-ask.sh --file docker-compose.yml "Review this Docker Compose..." architecture    
-
