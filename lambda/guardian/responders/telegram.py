@@ -136,6 +136,135 @@ class TelegramResponder:
 """
         return self.send_message(message)
 
+    def send_cloudtrail_alert(self, cloudtrail_data: Dict[str, Any]) -> bool:
+        """Send CloudTrail suspicious API alert (Sprint 6)"""
+        severity = cloudtrail_data.get('severity', 'MEDIUM')
+        severity_icon = '🔴' if severity == 'CRITICAL' else '🟠' if severity == 'HIGH' else '🟡'
+
+        message = f"""{severity_icon} <b>CloudTrail: Suspicious API Calls</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━
+📍 Severity: <b>{severity}</b>
+"""
+        anomalies = cloudtrail_data.get('details', {}).get('anomalies', [])
+        if anomalies:
+            message += f"\n🔍 <b>Detected Events ({len(anomalies)}):</b>"
+            for anomaly in anomalies[:5]:  # Show first 5
+                message += f"\n• <b>{anomaly.get('event_name')}</b>"
+                message += f"\n  👤 User: <code>{anomaly.get('username')}</code>"
+                message += f"\n  🌐 IP: <code>{anomaly.get('source_ip')}</code>"
+                message += f"\n  ⏰ Time: {anomaly.get('timestamp', 'N/A')}"
+
+        suggestion = cloudtrail_data.get('suggested_action')
+        if suggestion:
+            message += f"\n\n💡 <b>Suggested Action:</b>\n{suggestion}"
+
+        message += "\n━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+        return self.send_message(message)
+
+    def send_iam_alert(self, iam_data: Dict[str, Any]) -> bool:
+        """Send IAM permission changes alert (Sprint 6)"""
+        severity = iam_data.get('severity', 'MEDIUM')
+        severity_icon = '🔴' if severity == 'CRITICAL' else '🟠' if severity == 'HIGH' else '🟡'
+
+        message = f"""{severity_icon} <b>IAM: Permission Changes Detected</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━
+📍 Severity: <b>{severity}</b>
+"""
+        changes = iam_data.get('details', {}).get('changes', [])
+        if changes:
+            message += f"\n🔐 <b>Changes ({len(changes)}):</b>"
+            for change in changes[:5]:  # Show first 5
+                change_type = change.get('type', 'UNKNOWN')
+                icons = {
+                    'NEW_USER': '👤',
+                    'DELETED_USER': '🚫',
+                    'NEW_ACCESS_KEY': '🔑'
+                }
+                icon = icons.get(change_type, '⚙️')
+                message += f"\n{icon} <b>{change_type}</b>"
+                message += f"\n  📝 {change.get('detail')}"
+
+        suggestion = iam_data.get('suggested_action')
+        if suggestion:
+            message += f"\n\n💡 <b>Suggested Action:</b>\n{suggestion}"
+
+        message += "\n━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+        return self.send_message(message)
+
+    def send_guardduty_alert(self, guardduty_data: Dict[str, Any]) -> bool:
+        """Send GuardDuty threat detection alert (Sprint 6)"""
+        severity = guardduty_data.get('severity', 'MEDIUM')
+        severity_icon = '🔴' if severity == 'CRITICAL' else '🟠' if severity == 'HIGH' else '🟡'
+
+        message = f"""{severity_icon} <b>GuardDuty: Threat Detected</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━
+🛡️  Severity: <b>{severity}</b>
+"""
+        details = guardduty_data.get('details', {})
+        high_findings = details.get('high_severity', [])
+        med_findings = details.get('medium_severity', [])
+
+        if high_findings:
+            message += f"\n\n🔴 <b>High-Severity Threats ({len(high_findings)}):</b>"
+            for finding in high_findings[:3]:  # Show first 3
+                message += f"\n• <b>{finding.get('type', 'Unknown')}</b>"
+                if finding.get('resource_id'):
+                    message += f"\n  🎯 Resource: <code>{finding.get('resource_id')}</code>"
+                message += f"\n  📋 {finding.get('title', 'No title')}"
+
+        if med_findings:
+            message += f"\n\n🟡 <b>Medium-Severity Threats ({len(med_findings)}):</b>"
+            for finding in med_findings[:2]:  # Show first 2
+                message += f"\n• <b>{finding.get('type', 'Unknown')}</b>"
+
+        suggestion = guardduty_data.get('suggested_action')
+        if suggestion:
+            message += f"\n\n💡 <b>Remediation:</b>\n{suggestion}"
+
+        message += "\n━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+        return self.send_message(message)
+
+    def send_alert(self, check_name: str, alert_data: Dict[str, Any]) -> bool:
+        """
+        Generic alert handler for all check types.
+        Dispatches to specific alert method based on check_name.
+        """
+        alert_methods = {
+            'cloudtrail': self.send_cloudtrail_alert,
+            'iam': self.send_iam_alert,
+            'guardduty': self.send_guardduty_alert,
+            'cost': self.send_cost_alert,
+            'ec2': self.send_ec2_alert,
+            's3': self.send_s3_alert,
+        }
+
+        handler = alert_methods.get(check_name)
+        if handler:
+            return handler(alert_data)
+        else:
+            # Fallback generic alert
+            return self._send_generic_alert(check_name, alert_data)
+
+    def _send_generic_alert(self, check_name: str, alert_data: Dict[str, Any]) -> bool:
+        """Fallback generic alert for unknown check types"""
+        severity = alert_data.get('severity', 'INFO')
+        severity_icon = '🔴' if severity == 'CRITICAL' else '🟠' if severity == 'HIGH' else '🟡' if severity == 'MEDIUM' else 'ℹ️'
+
+        message = f"""{severity_icon} <b>{check_name.upper()} Alert</b>
+━━━━━━━━━━━━━━━━━━━
+📍 Severity: {severity}
+📝 Message: {alert_data.get('message', 'No details')}
+"""
+        if alert_data.get('suggested_action'):
+            message += f"\n💡 Action: {alert_data.get('suggested_action')}"
+
+        message += "\n━━━━━━━━━━━━━━━━━━━"
+
+        return self.send_message(message)
+
     def send_summary(self, summary_data: Dict[str, Any]) -> bool:
         """Send daily summary"""
         total = summary_data.get('total_events', 0)
