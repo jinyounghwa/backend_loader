@@ -1,12 +1,10 @@
 """Discord command handler Lambda for AWS Guardian"""
 import json
 import os
+import re
 import sys
-import hmac
-import hashlib
 from datetime import datetime
 
-# Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from guardian.checkers.cost import CostChecker
@@ -15,17 +13,34 @@ from guardian.checkers.s3 import S3Checker
 from guardian.responders.discord import DiscordResponder
 from guardian.storage.dynamodb import DynamoDBStorage
 
+INSTANCE_ID_PATTERN = re.compile(r'^i-[0-9a-f]{8,17}$')
+REGION_PATTERN = re.compile(r'^(us|eu|ap|sa|ca|me|af)-(east|west|south|north|central|southeast|northeast)-[0-9]$')
+MIN_THRESHOLD = 0.01
+MAX_THRESHOLD = 1000000.0
 
-def verify_discord_request(request_body, signature, timestamp):
-    """Verify Discord interaction signature"""
-    public_key = os.getenv('DISCORD_PUBLIC_KEY', '')
-    message = timestamp + request_body
-    expected_signature = hmac.new(
-        public_key.encode(),
-        message.encode(),
-        hashlib.sha256
-    ).hexdigest()
-    return signature == expected_signature
+
+def verify_discord_request(request_body: str, signature: str, timestamp: str) -> bool:
+    """
+    Verify Discord interaction signature using Ed25519 (NaCl).
+    
+    Discord signs requests with Ed25519, not HMAC-SHA256.
+    See: https://discord.com/developers/docs/interactions/receiving-and-responding#security-and-authorization
+    """
+    try:
+        from nacl.signing import VerifyKey
+        from nacl.exceptions import BadSignatureError
+
+        public_key = os.getenv('DISCORD_PUBLIC_KEY', '')
+        if not public_key or not signature or not timestamp:
+            return False
+
+        verify_key = VerifyKey(bytes.fromhex(public_key))
+        message = (timestamp + request_body).encode('utf-8')
+        verify_key.verify(message, bytes.fromhex(signature))
+        return True
+    except (BadSignatureError, ValueError, Exception) as e:
+        print(f"Discord signature verification failed: {e}")
+        return False
 
 
 def create_response(content: str, ephemeral: bool = False):
@@ -85,7 +100,7 @@ def lambda_handler(event, context):
         print(f"Error: {e}")
         return {
             'statusCode': 500,
-            'body': json.dumps({'error': str(e)})
+            'body': json.dumps({'error': 'internal_error'})
         }
 
 
@@ -158,8 +173,8 @@ def handle_status_command(interaction):
             })
         }
 
-    except Exception as e:
-        return create_response(f"Error getting status: {str(e)}", ephemeral=True)
+    except Exception:
+        return create_response("Failed to retrieve status", ephemeral=True)
 
 
 def handle_stop_command(interaction):
@@ -178,8 +193,14 @@ def handle_stop_command(interaction):
         if not instance_id:
             return create_response("Instance ID is required", ephemeral=True)
 
+        if not INSTANCE_ID_PATTERN.match(instance_id):
+            return create_response("Invalid instance ID format", ephemeral=True)
+
         if not region:
             return create_response("Region is required", ephemeral=True)
+
+        if not REGION_PATTERN.match(region):
+            return create_response("Invalid region format", ephemeral=True)
 
         ec2_checker = EC2Checker()
         success = ec2_checker.stop_instance(instance_id, region)
@@ -191,8 +212,8 @@ def handle_stop_command(interaction):
 
         return create_response(message, ephemeral=True)
 
-    except Exception as e:
-        return create_response(f"Error: {str(e)}", ephemeral=True)
+    except Exception:
+        return create_response("Failed to stop instance", ephemeral=True)
 
 
 def handle_budget_command(interaction):
@@ -209,6 +230,8 @@ def handle_budget_command(interaction):
 
             try:
                 amount = float(amount_str)
+                if amount < MIN_THRESHOLD or amount > MAX_THRESHOLD:
+                    return create_response(f"Amount must be between ${MIN_THRESHOLD} and ${MAX_THRESHOLD:,.0f}", ephemeral=True)
                 cost_checker = CostChecker()
                 cost_checker.set_threshold(amount)
                 message = f"✅ Cost threshold set to ${amount:.2f}/day"
@@ -222,8 +245,8 @@ def handle_budget_command(interaction):
 
         return create_response(message, ephemeral=True)
 
-    except Exception as e:
-        return create_response(f"Error: {str(e)}", ephemeral=True)
+    except Exception:
+        return create_response("Failed to set budget", ephemeral=True)
 
 
 def handle_history_command(interaction):
@@ -248,5 +271,5 @@ def handle_history_command(interaction):
 
         return create_response(message, ephemeral=True)
 
-    except Exception as e:
-        return create_response(f"Error: {str(e)}", ephemeral=True)
+    except Exception:
+        return create_response("Failed to retrieve history", ephemeral=True)

@@ -1,7 +1,7 @@
 """AWS Cost Explorer checker for AWS Guardian"""
 import boto3
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Tuple
 
 # Import config
@@ -11,23 +11,27 @@ from config import Config
 
 class CostChecker:
     def __init__(self, cost_threshold: float = 10.0):
-        """Initialize cost checker with optional threshold in USD"""
         boto3_kwargs = Config.get_boto3_kwargs()
-        self.ce_client = boto3.client('ce', **boto3_kwargs)
         self.threshold = cost_threshold
         self.ssm_client = boto3.client('ssm', **boto3_kwargs)
         self.is_localstack = Config.is_localstack()
 
+        if not self.is_localstack:
+            self.ce_client = boto3.client('ce', **boto3_kwargs)
+        else:
+            self.ce_client = None
+
     def get_daily_cost(self, date: str = None) -> float:
         """Get cost for a specific day (YYYY-MM-DD format)"""
         if not date:
-            date = datetime.utcnow().strftime('%Y-%m-%d')
+            date = datetime.now(timezone.utc).strftime('%Y-%m-%d')
 
         try:
             # LocalStack doesn't support Cost Explorer, return mock data
             if self.is_localstack:
-                print(f"[LocalStack] Returning mock daily cost for {date}")
-                return 5.50  # Mock cost
+                mock_cost = float(os.getenv('MOCK_DAILY_COST', '5.50'))
+                print(f"[LocalStack] Returning mock daily cost for {date}: ${mock_cost}")
+                return mock_cost
 
             response = self.ce_client.get_cost_and_usage(
                 TimePeriod={'Start': date, 'End': date},
@@ -43,15 +47,15 @@ class CostChecker:
             print(f"Error getting daily cost: {e}")
             # Return mock data in LocalStack
             if self.is_localstack:
-                return 5.50
+                return float(os.getenv('MOCK_DAILY_COST', '5.50'))
             return 0.0
 
     def get_monthly_cost(self, year: int = None, month: int = None) -> float:
         """Get cost for a specific month"""
         if not year:
-            year = datetime.utcnow().year
+            year = datetime.now(timezone.utc).year
         if not month:
-            month = datetime.utcnow().month
+            month = datetime.now(timezone.utc).month
 
         start_date = f"{year}-{month:02d}-01"
 
@@ -64,8 +68,9 @@ class CostChecker:
         try:
             # LocalStack doesn't support Cost Explorer, return mock data
             if self.is_localstack:
-                print(f"[LocalStack] Returning mock monthly cost for {year}-{month:02d}")
-                return 150.50  # Mock cost
+                mock_cost = float(os.getenv('MOCK_MONTHLY_COST', '150.50'))
+                print(f"[LocalStack] Returning mock monthly cost for {year}-{month:02d}: ${mock_cost}")
+                return mock_cost
 
             response = self.ce_client.get_cost_and_usage(
                 TimePeriod={'Start': start_date, 'End': end_date},
@@ -86,11 +91,11 @@ class CostChecker:
 
     def check_cost_anomaly(self) -> Tuple[bool, Dict[str, Any]]:
         """Check if today's cost exceeds threshold"""
-        today = datetime.utcnow().strftime('%Y-%m-%d')
+        today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
         daily_cost = self.get_daily_cost(today)
 
         # Get yesterday's cost for comparison
-        yesterday = (datetime.utcnow() - timedelta(days=1)).strftime('%Y-%m-%d')
+        yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime('%Y-%m-%d')
         yesterday_cost = self.get_daily_cost(yesterday)
 
         # Get monthly cost
@@ -114,7 +119,7 @@ class CostChecker:
         """Set cost threshold in Parameter Store"""
         try:
             self.ssm_client.put_parameter(
-                Name='/aws-guardian/cost-threshold',
+                Name='/guardian/cost-threshold',
                 Value=str(amount),
                 Type='String',
                 Overwrite=True
@@ -127,7 +132,7 @@ class CostChecker:
         """Get cost threshold from Parameter Store"""
         try:
             response = self.ssm_client.get_parameter(
-                Name='/aws-guardian/cost-threshold'
+                Name='/guardian/cost-threshold'
             )
             self.threshold = float(response['Parameter']['Value'])
             return self.threshold

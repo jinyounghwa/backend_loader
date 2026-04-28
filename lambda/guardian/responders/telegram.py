@@ -34,20 +34,22 @@ class TelegramResponder:
             return False
 
     def send_cost_alert(self, cost_data: Dict[str, Any]) -> bool:
-        """Send cost anomaly alert"""
         today_cost = cost_data.get('today_cost', 0)
         threshold = cost_data.get('threshold', 0)
         increase_percent = cost_data.get('increase_percent', 0)
 
         message = f"""
 🚨 <b>AWS Cost Alert</b>
-━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━
 💰 Today's Cost: ${today_cost:.2f}
 ⚠️ Threshold: ${threshold:.2f}
 📈 Increase: {increase_percent}%
 📅 Date: {cost_data.get('date', 'N/A')}
-━━━━━━━━━━━━━━━━━━━
-<i>Threshold exceeded! Check your AWS account immediately.</i>
+━━━━━━━━━━━━━━━━━━━━
+<i>비용 임계값 초과!</i>
+
+💬 <b>답장으로 자동 수정:</b>
+👉 <code>요금과다 원인수정</code>
 """
         return self.send_message(message)
 
@@ -82,6 +84,10 @@ class TelegramResponder:
 
         message += "\n━━━━━━━━━━━━━━━━━━━\n⚡ Automated response: Stopping instances..."
 
+        if ec2_data.get('anomalies'):
+            message += "\n\n💬 <b>답장으로 자동 수정:</b>"
+            message += "\n👉 <code>해킹우려 수정</code>"
+
         return self.send_message(message)
 
     def send_s3_alert(self, s3_data: Dict[str, Any]) -> bool:
@@ -105,6 +111,10 @@ class TelegramResponder:
                 message += f"\n• <code>{bucket['bucket_name']}</code>"
 
         message += "\n━━━━━━━━━━━━━━━━━━━\n⚡ Automated response: Blocking public access..."
+
+        if s3_data.get('anomalies'):
+            message += "\n\n💬 <b>답장으로 자동 수정:</b>"
+            message += "\n👉 <code>해킹우려 수정</code>"
 
         return self.send_message(message)
 

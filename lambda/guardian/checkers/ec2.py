@@ -76,14 +76,15 @@ class EC2Checker:
         return unauthorized
 
     def check_security_group_exposure(self, instance: Dict) -> List[Dict]:
-        """Check if instance security groups expose ports to 0.0.0.0/0"""
         exposed_rules = []
 
         for sg in instance.get('SecurityGroups', []):
             sg_id = sg['GroupId']
             try:
-                regional_ec2 = boto3.client('ec2',
-                                           region_name=instance['Placement']['AvailabilityZone'][:-1])
+                region = instance['Placement']['AvailabilityZone'][:-1]
+                kwargs = Config.get_boto3_kwargs()
+                kwargs['region_name'] = region
+                regional_ec2 = boto3.client('ec2', **kwargs)
                 sg_response = regional_ec2.describe_security_groups(
                     GroupIds=[sg_id]
                 )
@@ -108,7 +109,7 @@ class EC2Checker:
     def get_new_instances(self) -> List[Dict]:
         """Detect new running instances (launched in last hour)"""
         new_instances = []
-        cutoff_time = datetime.utcnow()
+        cutoff_time = datetime.now(timezone.utc)
         one_hour_ago = cutoff_time.replace(hour=cutoff_time.hour - 1) if cutoff_time.hour > 0 else cutoff_time
 
         all_instances = self.get_all_instances()
@@ -139,7 +140,7 @@ class EC2Checker:
             'unauthorized_region_instances': [],
             'exposed_instances': [],
             'new_instances': [],
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
 
         # Check for unauthorized regions
@@ -174,9 +175,10 @@ class EC2Checker:
         return result['is_anomaly'], result
 
     def stop_instance(self, instance_id: str, region: str) -> bool:
-        """Stop a running EC2 instance"""
         try:
-            regional_ec2 = boto3.client('ec2', region_name=region)
+            kwargs = Config.get_boto3_kwargs()
+            kwargs['region_name'] = region
+            regional_ec2 = boto3.client('ec2', **kwargs)
             regional_ec2.stop_instances(InstanceIds=[instance_id])
             return True
         except Exception as e:
@@ -187,7 +189,7 @@ class EC2Checker:
         """Set authorized regions in Parameter Store"""
         try:
             self.ssm_client.put_parameter(
-                Name='/aws-guardian/authorized-regions',
+                Name='/guardian/authorized-regions',
                 Value=','.join(regions),
                 Type='String',
                 Overwrite=True
@@ -200,7 +202,7 @@ class EC2Checker:
         """Get authorized regions from Parameter Store"""
         try:
             response = self.ssm_client.get_parameter(
-                Name='/aws-guardian/authorized-regions'
+                Name='/guardian/authorized-regions'
             )
             self.authorized_regions = response['Parameter']['Value'].split(',')
             return self.authorized_regions

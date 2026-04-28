@@ -2,7 +2,7 @@
 import boto3
 import os
 from typing import Dict, List, Any, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 
 # Import config
@@ -132,7 +132,7 @@ class S3Checker:
     def get_new_buckets(self, hours: int = 24) -> List[Dict]:
         """Detect new S3 buckets created in the last N hours"""
         new_buckets = []
-        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
 
         try:
             buckets_response = self.s3_client.list_buckets()
@@ -160,7 +160,7 @@ class S3Checker:
             'is_anomaly': False,
             'public_buckets': [],
             'new_buckets': [],
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
 
         # Check for public buckets

@@ -36,27 +36,51 @@ resource "aws_iam_role_policy" "lambda_policy" {
         Resource = "*"
       },
       {
-        Sid    = "EC2"
+        Sid    = "EC2Read"
         Effect = "Allow"
         Action = [
           "ec2:DescribeInstances",
           "ec2:DescribeRegions",
-          "ec2:DescribeSecurityGroups",
-          "ec2:StopInstances"
+          "ec2:DescribeSecurityGroups"
         ]
         Resource = "*"
       },
       {
-        Sid    = "S3"
+        Sid    = "EC2StopInstances"
+        Effect = "Allow"
+        Action = [
+          "ec2:StopInstances"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "ec2:ResourceTag/AutoManaged" = "true"
+          }
+        }
+      },
+      {
+        Sid    = "S3Read"
         Effect = "Allow"
         Action = [
           "s3:ListAllMyBuckets",
           "s3:GetBucketAcl",
           "s3:GetBucketPolicy",
-          "s3:GetPublicAccessBlock",
+          "s3:GetPublicAccessBlock"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "S3WritePublicAccessBlock"
+        Effect = "Allow"
+        Action = [
           "s3:PutPublicAccessBlock"
         ]
         Resource = "*"
+        Condition = {
+          StringEquals = {
+            "s3:ResourceTag/GuardianManaged" = "true"
+          }
+        }
       },
       {
         Sid    = "DynamoDB"
@@ -80,7 +104,7 @@ resource "aws_iam_role_policy" "lambda_policy" {
           "ssm:GetParameter",
           "ssm:PutParameter"
         ]
-        Resource = "arn:aws:ssm:*:*:parameter/aws-guardian/*"
+        Resource = "arn:aws:ssm:*:*:parameter/guardian/*"
       },
       {
         Sid    = "CloudWatch"
@@ -90,7 +114,7 @@ resource "aws_iam_role_policy" "lambda_policy" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:*:*:*"
+        Resource = "arn:aws:logs:*:*:log-group:/aws/lambda/aws-guardian-*"
       }
     ]
   })

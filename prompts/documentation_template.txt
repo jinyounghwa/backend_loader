@@ -1,0 +1,9 @@
+Please generate comprehensive documentation for:
+- Overview
+- Installation/Setup
+- Configuration
+- Usage examples
+- Troubleshooting
+- API reference
+
+[INSERT CODE OR PROJECT DESCRIPTION HERE]

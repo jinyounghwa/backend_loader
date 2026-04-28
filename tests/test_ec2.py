@@ -1,108 +1,88 @@
-"""Tests for EC2 checker"""
+"""Tests for EC2 checker - LocalStack integration tests"""
 import unittest
-from unittest.mock import patch, MagicMock
-import sys
 import os
-from datetime import datetime
+import sys
+import time
+import boto3
 
-# Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'lambda'))
 
 from guardian.checkers.ec2 import EC2Checker
+from guardian.config import Config
 
 
 class TestEC2Checker(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        kwargs = Config.get_boto3_kwargs()
+        cls.ec2_client = boto3.client('ec2', **kwargs)
+        cls.test_instance_ids = []
+        try:
+            response = cls.ec2_client.run_instances(
+                ImageId='ami-12345678',
+                InstanceType='t2.micro',
+                MinCount=2,
+                MaxCount=2,
+                TagSpecifications=[{
+                    'ResourceType': 'instance',
+                    'Tags': [
+                        {'Key': 'Name', 'Value': 'test-guardian-instance'},
+                        {'Key': 'TestSuite', 'Value': 'true'}
+                    ]
+                }]
+            )
+            for instance in response['Instances']:
+                cls.test_instance_ids.append(instance['InstanceId'])
+            time.sleep(1)
+        except Exception as e:
+            print(f"Setup warning (instances may already exist): {e}")
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            if cls.test_instance_ids:
+                cls.ec2_client.terminate_instances(InstanceIds=cls.test_instance_ids)
+        except Exception:
+            pass
+
     def setUp(self):
         self.ec2_checker = EC2Checker(authorized_regions=['us-east-1', 'us-west-2'])
 
-    @patch('guardian.checkers.ec2.boto3.client')
-    def test_get_all_instances(self, mock_boto3):
-        """Test getting all instances"""
-        mock_ec2_client = MagicMock()
-        mock_boto3.return_value = mock_ec2_client
-
-        # Mock regions
-        mock_ec2_client.describe_regions.return_value = {
-            'Regions': [
-                {'RegionName': 'us-east-1'},
-                {'RegionName': 'us-west-2'}
-            ]
-        }
-
-        # Mock instances
-        mock_ec2_client.describe_instances.return_value = {
-            'Reservations': [
-                {
-                    'Instances': [
-                        {
-                            'InstanceId': 'i-12345678',
-                            'InstanceType': 't3.micro',
-                            'State': {'Name': 'running'}
-                        }
-                    ]
-                }
-            ]
-        }
-
+    def test_get_all_instances(self):
         instances = self.ec2_checker.get_all_instances()
         self.assertIsInstance(instances, dict)
+        self.assertIn('us-east-1', instances)
+        self.assertGreaterEqual(len(instances['us-east-1']), 2)
+        for instance in instances['us-east-1']:
+            self.assertIn('InstanceId', instance)
+            self.assertIn('InstanceType', instance)
+            self.assertIn('State', instance)
 
-    @patch('guardian.checkers.ec2.boto3.client')
-    def test_get_unauthorized_regions_instances(self, mock_boto3):
-        """Test detecting instances in unauthorized regions"""
-        mock_ec2_client = MagicMock()
-        mock_boto3.return_value = mock_ec2_client
+    def test_no_unauthorized_when_us_east_1_authorized(self):
+        checker = EC2Checker(authorized_regions=['us-east-1'])
+        unauthorized = checker.get_unauthorized_regions_instances()
+        self.assertEqual(len(unauthorized), 0)
 
-        # Mock regions including unauthorized
-        mock_ec2_client.describe_regions.return_value = {
-            'Regions': [
-                {'RegionName': 'us-east-1'},
-                {'RegionName': 'eu-west-1'}  # Unauthorized
-            ]
-        }
+    def test_unauthorized_detected_when_us_east_1_not_authorized(self):
+        checker = EC2Checker(authorized_regions=['eu-west-1', 'ap-northeast-1'])
+        unauthorized = checker.get_unauthorized_regions_instances()
+        self.assertIn('us-east-1', unauthorized)
 
-        # Mock instances
-        def describe_instances_side_effect(**kwargs):
-            return {
-                'Reservations': [
-                    {
-                        'Instances': [
-                            {
-                                'InstanceId': 'i-12345678',
-                                'InstanceType': 't3.micro'
-                            }
-                        ]
-                    }
-                ]
-            }
-
-        mock_ec2_client.describe_instances.side_effect = describe_instances_side_effect
-
-        unauthorized = self.ec2_checker.get_unauthorized_regions_instances()
-        self.assertIn('eu-west-1', unauthorized)
-
-    @patch('guardian.checkers.ec2.boto3.client')
-    def test_check_ec2_anomalies_no_anomalies(self, mock_boto3):
-        """Test EC2 anomaly check when everything is fine"""
-        mock_ec2_client = MagicMock()
-        mock_boto3.return_value = mock_ec2_client
-
-        # Mock regions
-        mock_ec2_client.describe_regions.return_value = {
-            'Regions': [
-                {'RegionName': 'us-east-1'}
-            ]
-        }
-
-        # Mock no instances
-        mock_ec2_client.describe_instances.return_value = {
-            'Reservations': []
-        }
-
+    def test_check_ec2_anomalies_structure(self):
         is_anomaly, data = self.ec2_checker.check_ec2_anomalies()
+        self.assertIsInstance(is_anomaly, bool)
+        for key in ['is_anomaly', 'unauthorized_region_instances',
+                     'exposed_instances', 'new_instances', 'anomalies', 'timestamp']:
+            self.assertIn(key, data)
 
-        self.assertFalse(is_anomaly)
-        self.assertEqual(len(data['anomalies']), 0)
+    def test_stop_instance(self):
+        if not self.test_instance_ids:
+            self.skipTest("No test instances available")
+        success = self.ec2_checker.stop_instance(
+            self.test_instance_ids[0], 'us-east-1'
+        )
+        self.assertTrue(success)
 
 
 if __name__ == '__main__':

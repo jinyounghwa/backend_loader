@@ -481,56 +481,114 @@ getEventsByGSI() → AllEventsIndex Query
 - 모든 문서 작성 완료
 - 배포 체크리스트 생성
 
-### Sprint 5: 프로덕션 배포 실행 (다음 단계)
-**상태**: 📋 Ready to execute
+### 🚀 Sprint 5: 프로덕션 배포 실행 - IN PROGRESS
+**상태**: 🔄 실행 중 (2026-04-28 시작)
 **예상 소요시간**: 2-3시간 (인프라 설정) + 배포 + 모니터링
+**담당**: Gemini + Claude Code 협업
 
-#### 📋 Phase 2: Terraform 백엔드 설정
+#### 📋 Phase 2: Terraform 백엔드 설정 (자동화 스크립트)
+
+**추천 방법 (자동화):**
 ```bash
-# 1. S3 버킷 생성
-aws s3 mb s3://aws-guardian-terraform-state-$(date +%s)
-aws s3api put-bucket-versioning --bucket ... --versioning-configuration Status=Enabled
-aws s3api put-public-access-block --bucket ... --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+# 1. AWS 인프라 자동 설정 (S3, DynamoDB, IAM OIDC)
+./scripts/deploy-infrastructure.sh <GITHUB_ORG>
 
-# 2. DynamoDB Lock 테이블 생성
-aws dynamodb create-table --table-name terraform-locks \
-  --attribute-definitions AttributeName=LockID,AttributeType=S \
-  --key-schema AttributeName=LockID,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST
+# Example:
+./scripts/deploy-infrastructure.sh your-github-org
 
-# 3. GitHub OIDC 역할 설정
-# PRODUCTION_DEPLOYMENT_CHECKLIST.md의 Phase 2-3 참조
+# 이 스크립트가 자동으로 수행할 작업:
+# ✅ GitHub OIDC Provider 확인/생성
+# ✅ S3 버킷 생성 (Terraform state)
+# ✅ DynamoDB 테이블 생성 (state lock)
+# ✅ IAM 역할 생성 (GitHub OIDC 신뢰)
+# ✅ IAM 정책 연결 (최소 권한)
 ```
 
-#### 📋 Phase 3: GitHub Secret 설정 (9개)
-- AWS_ROLE_TO_ASSUME
-- TERRAFORM_STATE_BUCKET
-- TERRAFORM_STATE_KEY
-- TERRAFORM_LOCK_TABLE
-- TELEGRAM_BOT_TOKEN
-- TELEGRAM_CHAT_ID
-- DISCORD_WEBHOOK_URL
-- DISCORD_PUBLIC_KEY
-- SLACK_WEBHOOK (선택)
+**수동 방법 (필요시):**
+- PRODUCTION_DEPLOYMENT_CHECKLIST.md의 Phase 2 전체 단계 참조
 
-#### 📋 Phase 5: 프로덕션 배포
+#### 📋 Phase 3: GitHub Secret 설정 (자동화 스크립트)
+
+**추천 방법 (자동화):**
 ```bash
-# 1. Feature branch 생성
-git checkout -b chore/deploy-to-production
+# GitHub CLI 로그인 (처음 1회만)
+gh auth login
 
-# 2. Push 및 PR 생성
+# GitHub 시크릿 자동 설정 (Phase 2 완료 후)
+./scripts/configure-github-secrets.sh
+
+# 이 스크립트가 자동으로 수행할 작업:
+# ✅ GitHub CLI 인증 확인
+# ✅ Phase 2에서 생성된 값들 자동로드
+# ✅ AWS 필수 시크릿 4개 설정
+# ✅ Telegram/Discord 시크릿 설정 (옵션)
+# ✅ 모든 시크릿 검증 및 확인
+```
+
+**시크릿 목록:**
+- 필수 (4개):
+  - AWS_ROLE_TO_ASSUME
+  - TERRAFORM_STATE_BUCKET
+  - TERRAFORM_STATE_KEY
+  - TERRAFORM_LOCK_TABLE
+- 선택 (5개):
+  - TELEGRAM_BOT_TOKEN
+  - TELEGRAM_CHAT_ID
+  - DISCORD_WEBHOOK_URL
+  - DISCORD_PUBLIC_KEY
+  - SLACK_WEBHOOK
+
+#### 📋 Phase 5: 프로덕션 배포 실행
+
+**Step 1: 로컬 검증**
+```bash
+# 1. 모든 변경사항 커밋됨 확인
+git status
+
+# 2. Terraform 로컬 검증
+cd terraform
+terraform fmt -check
+terraform validate
+cd ..
+
+# 3. Python 린트 확인
+flake8 lambda/ tests/
+black --check lambda/
+isort --check-only lambda/
+```
+
+**Step 2: GitHub에 푸시**
+```bash
+# Feature branch 생성 및 푸시
+git checkout -b chore/deploy-to-production
 git push origin chore/deploy-to-production
 
-# 3. GitHub Actions 확인
-# - Lint 통과
-# - Test 통과
-# - Build 완료
-
-# 4. PR 병합 (자동으로 deploy 트리거)
-
-# 5. 프로덕션 승인
-# GitHub → Actions → Latest run → Review deployments → Approve
+# GitHub에서 PR 생성
+# - 제목: "Deploy AWS Guardian to production"
+# - 설명: PRODUCTION_DEPLOYMENT_CHECKLIST.md 링크
 ```
+
+**Step 3: GitHub Actions 확인**
+- GitHub → Repository → Actions 탭 확인
+- 다음 단계들이 자동으로 실행됨:
+  - 🔵 Lint 단계 (2-3분)
+  - 🔵 Test 단계 (3-5분)
+  - 🔵 Build 단계 (2-3분)
+- 모든 단계가 ✅ 통과하면 다음으로 진행
+
+**Step 4: PR 병합**
+```bash
+# PR 리뷰 → Approve → Merge to main
+# (GitHub 웹 인터페이스에서)
+```
+
+**Step 5: 프로덕션 배포 승인**
+- GitHub → Actions → 최신 워크플로우 실행 클릭
+- "Review deployments" 클릭
+- `production` 환경 선택
+- "Approve and deploy" 클릭
+- Deploy 단계 시작 (1-2분)
+- ✅ 배포 완료
 
 #### 📋 Phase 6: 24시간 검증
 - Lambda 함수 배포 확인

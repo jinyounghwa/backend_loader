@@ -63,7 +63,7 @@ aws ec2 run-instances \
 # Create SSM parameters
 echo "⚙️  Creating SSM parameters..."
 aws ssm put-parameter \
-    --name /aws-guardian/cost-threshold \
+    --name /guardian/cost-threshold \
     --value 10.0 \
     --type String \
     --endpoint-url http://localhost:4566 \

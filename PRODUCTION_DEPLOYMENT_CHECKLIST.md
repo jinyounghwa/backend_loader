@@ -91,6 +91,28 @@ aws dynamodb wait table-exists \
 echo "Lock table created: terraform-locks"
 ```
 
+### Step 2.5: Verify GitHub OIDC Provider (선행 단계)
+
+```bash
+# GitHub OIDC Provider 확인
+aws iam list-open-id-connect-providers | grep -q 'token.actions.githubusercontent.com'
+
+if [ $? -ne 0 ]; then
+    echo "Creating GitHub OIDC Provider..."
+    aws iam create-open-id-connect-provider \
+      --url https://token.actions.githubusercontent.com \
+      --client-id-list sts.amazonaws.com \
+      --thumbprint-list 6938fd4d98bab03faadb97b34396831e3780aea1
+    echo "GitHub OIDC Provider created"
+else
+    echo "GitHub OIDC Provider already exists"
+fi
+```
+
+**주의**: 이 단계는 계정에서 **최초 1회만** 필요합니다.
+
+---
+
 ### Step 3: Create GitHub Actions IAM Role (OIDC)
 
 ```bash

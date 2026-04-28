@@ -1,83 +1,76 @@
-"""Tests for cost checker"""
+"""Tests for cost checker - LocalStack integration tests"""
 import unittest
-from unittest.mock import patch, MagicMock
-import sys
 import os
+import sys
 
-# Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'lambda'))
 
 from guardian.checkers.cost import CostChecker
 
 
 class TestCostChecker(unittest.TestCase):
+
     def setUp(self):
-        self.cost_checker = CostChecker(cost_threshold=10.0)
+        self._orig_daily = os.environ.get('MOCK_DAILY_COST')
+        self._orig_monthly = os.environ.get('MOCK_MONTHLY_COST')
 
-    @patch('guardian.checkers.cost.boto3.client')
-    def test_get_daily_cost(self, mock_boto3):
-        """Test getting daily cost"""
-        mock_ce_client = MagicMock()
-        mock_boto3.return_value = mock_ce_client
+    def tearDown(self):
+        if self._orig_daily is not None:
+            os.environ['MOCK_DAILY_COST'] = self._orig_daily
+        elif 'MOCK_DAILY_COST' in os.environ:
+            del os.environ['MOCK_DAILY_COST']
+        if self._orig_monthly is not None:
+            os.environ['MOCK_MONTHLY_COST'] = self._orig_monthly
+        elif 'MOCK_MONTHLY_COST' in os.environ:
+            del os.environ['MOCK_MONTHLY_COST']
 
-        # Mock response
-        mock_ce_client.get_cost_and_usage.return_value = {
-            'ResultsByTime': [
-                {
-                    'Total': {
-                        'UnblendedCost': {
-                            'Amount': '25.50'
-                        }
-                    }
-                }
-            ]
-        }
+    def test_get_daily_cost_default(self):
+        checker = CostChecker(cost_threshold=10.0)
+        cost = checker.get_daily_cost('2024-01-01')
+        self.assertEqual(cost, 5.50)
 
-        cost = self.cost_checker.get_daily_cost('2024-01-01')
+    def test_get_daily_cost_custom_env(self):
+        os.environ['MOCK_DAILY_COST'] = '25.50'
+        checker = CostChecker(cost_threshold=10.0)
+        cost = checker.get_daily_cost('2024-01-01')
         self.assertEqual(cost, 25.50)
 
-    @patch('guardian.checkers.cost.boto3.client')
-    def test_check_cost_anomaly_exceeds_threshold(self, mock_boto3):
-        """Test cost anomaly detection when threshold is exceeded"""
-        mock_ce_client = MagicMock()
-        mock_boto3.return_value = mock_ce_client
+    def test_get_monthly_cost_default(self):
+        checker = CostChecker(cost_threshold=10.0)
+        cost = checker.get_monthly_cost(2024, 1)
+        self.assertEqual(cost, 150.50)
 
-        # Mock responses
-        mock_ce_client.get_cost_and_usage.side_effect = [
-            # Today
-            {'ResultsByTime': [{'Total': {'UnblendedCost': {'Amount': '15.00'}}}]},
-            # Yesterday
-            {'ResultsByTime': [{'Total': {'UnblendedCost': {'Amount': '5.00'}}}]},
-            # Monthly
-            {'ResultsByTime': [{'Total': {'UnblendedCost': {'Amount': '100.00'}}}]}
-        ]
+    def test_get_monthly_cost_custom_env(self):
+        os.environ['MOCK_MONTHLY_COST'] = '300.00'
+        checker = CostChecker(cost_threshold=10.0)
+        cost = checker.get_monthly_cost(2024, 1)
+        self.assertEqual(cost, 300.00)
 
-        is_anomaly, data = self.cost_checker.check_cost_anomaly()
+    def test_check_cost_anomaly_exceeds_threshold(self):
+        os.environ['MOCK_DAILY_COST'] = '15.00'
+        checker = CostChecker(cost_threshold=10.0)
+        is_anomaly, data = checker.check_cost_anomaly()
 
         self.assertTrue(is_anomaly)
         self.assertEqual(data['today_cost'], 15.00)
-        self.assertEqual(data['yesterday_cost'], 5.00)
+        self.assertEqual(data['yesterday_cost'], 15.00)
+        self.assertEqual(data['threshold'], 10.0)
 
-    @patch('guardian.checkers.cost.boto3.client')
-    def test_check_cost_anomaly_within_threshold(self, mock_boto3):
-        """Test cost anomaly detection when threshold is not exceeded"""
-        mock_ce_client = MagicMock()
-        mock_boto3.return_value = mock_ce_client
-
-        # Mock responses
-        mock_ce_client.get_cost_and_usage.side_effect = [
-            # Today
-            {'ResultsByTime': [{'Total': {'UnblendedCost': {'Amount': '5.00'}}}]},
-            # Yesterday
-            {'ResultsByTime': [{'Total': {'UnblendedCost': {'Amount': '4.00'}}}]},
-            # Monthly
-            {'ResultsByTime': [{'Total': {'UnblendedCost': {'Amount': '50.00'}}}]}
-        ]
-
-        is_anomaly, data = self.cost_checker.check_cost_anomaly()
+    def test_check_cost_anomaly_within_threshold(self):
+        os.environ['MOCK_DAILY_COST'] = '5.00'
+        checker = CostChecker(cost_threshold=10.0)
+        is_anomaly, data = checker.check_cost_anomaly()
 
         self.assertFalse(is_anomaly)
         self.assertEqual(data['today_cost'], 5.00)
+        self.assertEqual(data['yesterday_cost'], 5.00)
+        self.assertEqual(data['monthly_cost'], 150.50)
+
+    def test_increase_percent_zero_when_costs_equal(self):
+        os.environ['MOCK_DAILY_COST'] = '10.00'
+        checker = CostChecker(cost_threshold=10.0)
+        _, data = checker.check_cost_anomaly()
+        self.assertEqual(data['increase_percent'], 0.0)
 
 
 if __name__ == '__main__':

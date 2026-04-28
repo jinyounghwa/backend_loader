@@ -1,0 +1,8 @@
+Please review this system architecture for:
+1. Design patterns and best practices
+2. Scalability considerations
+3. Security and reliability
+4. Performance optimization
+5. Technology selection
+
+[INSERT ARCHITECTURE DESCRIPTION HERE]

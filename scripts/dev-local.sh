@@ -1,67 +1,61 @@
 #!/bin/bash
 set -e
 
-echo "🛠️  AWS Guardian Local Development Setup"
-echo "========================================"
-
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-# Check if Docker is running
-echo "🐳 Checking Docker..."
+echo "AWS Guardian - LocalStack Development"
+echo "======================================="
+
 if ! docker info > /dev/null 2>&1; then
-    echo "❌ Docker is not running. Please start Docker."
+    echo "Docker is not running. Please start Docker first."
     exit 1
 fi
 
-# Start LocalStack
-echo "🚀 Starting LocalStack container..."
+echo ""
+echo "[1/4] Starting LocalStack..."
 docker-compose up -d
 
-# Wait and initialize
-echo ""
-echo "⏳ Waiting for LocalStack to be healthy..."
-sleep 10
+echo "[2/4] Waiting for LocalStack..."
+for i in $(seq 1 30); do
+    if curl -s http://localhost:4566/_localstack/health 2>/dev/null | grep -q '"services"'; then
+        echo "  LocalStack ready."
+        break
+    fi
+    if [ "$i" = "30" ]; then
+        echo "  LocalStack did not start. Check: docker-compose logs"
+        exit 1
+    fi
+    sleep 2
+done
 
-chmod +x scripts/localstack-init.sh
-source scripts/localstack-init.sh
+echo "[3/4] Initializing LocalStack resources..."
+if [ ! -d "venv" ]; then
+    python3 -m venv venv
+fi
+source venv/bin/activate
+pip install -r requirements.txt --quiet 2>/dev/null
+python3 scripts/init_localstack.py
 
-# Install dependencies
-echo ""
-echo "📦 Installing Python dependencies..."
-pip install -r requirements.txt --quiet
-
-# Setup environment
-echo ""
-echo "🔧 Setting up environment variables..."
+echo "[4/4] Setting environment..."
+export AWS_ENV=localstack
 export LOCALSTACK_ENDPOINT=http://localhost:4566
-export AWS_DEFAULT_REGION=us-east-1
 export AWS_ACCESS_KEY_ID=test
 export AWS_SECRET_ACCESS_KEY=test
-export TELEGRAM_BOT_TOKEN=test_token
-export TELEGRAM_CHAT_ID=test_chat
-export DISCORD_WEBHOOK_URL=http://localhost:9999
-export DISCORD_PUBLIC_KEY=test_key
-export GLM_API_KEY=${GLM_API_KEY:-5fafb543164c452bacbb13aaafdd31a4.yEj71FHKcqNB8o2f}
+export AWS_DEFAULT_REGION=us-east-1
 export DYNAMODB_TABLE_NAME=aws-guardian-events
 
+if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
+    echo "  Telegram: configured"
+else
+    echo "  Telegram: not configured (set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)"
+fi
+
 echo ""
-echo "✅ Local development environment ready!"
+echo "Ready. Commands:"
 echo ""
-echo "📚 Available commands:"
-echo ""
-echo "  Test all:"
-echo "    python -m pytest tests/ -v"
-echo ""
-echo "  Test specific module:"
-echo "    python -m pytest tests/test_cost.py -v"
-echo ""
-echo "  Run guardian handler (local):"
-echo "    python lambda/guardian/handler.py"
-echo ""
-echo "  View LocalStack logs:"
-echo "    docker-compose logs -f localstack"
-echo ""
-echo "  Stop LocalStack:"
-echo "    docker-compose down"
+echo "  Run guardian:       python3 lambda/guardian/handler.py"
+echo "  Run tests:          python -m pytest tests/ -v"
+echo "  Start dashboard:    cd apps/web && npm run dev"
+echo "  Stop LocalStack:    docker-compose down"
 echo ""

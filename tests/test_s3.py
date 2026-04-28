@@ -1,28 +1,56 @@
-"""Tests for S3 checker"""
+"""Tests for S3 checker - LocalStack integration tests"""
 import unittest
-from unittest.mock import patch, MagicMock
-import sys
 import os
-from datetime import datetime
+import sys
+import boto3
+from unittest.mock import patch, MagicMock
 
-# Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'lambda'))
 
 from guardian.checkers.s3 import S3Checker
+from guardian.config import Config
 
 
 class TestS3Checker(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        kwargs = Config.get_boto3_kwargs()
+        cls.s3_client = boto3.client('s3', **kwargs)
+
+        cls.private_bucket = 'guardian-test-private'
+        cls.test_bucket = 'guardian-test-integ'
+
+        for bucket in [cls.private_bucket, cls.test_bucket]:
+            try:
+                cls.s3_client.create_bucket(Bucket=bucket)
+            except cls.s3_client.exceptions.BucketAlreadyOwnedByYou:
+                pass
+            except Exception as e:
+                if 'BucketAlreadyExists' not in str(e):
+                    print(f"Setup warning for {bucket}: {e}")
+
+    @classmethod
+    def tearDownClass(cls):
+        for bucket in [cls.private_bucket, cls.test_bucket]:
+            try:
+                objects = cls.s3_client.list_objects_v2(Bucket=bucket)
+                if 'Contents' in objects:
+                    for obj in objects['Contents']:
+                        cls.s3_client.delete_object(Bucket=bucket, Key=obj['Key'])
+                cls.s3_client.delete_bucket(Bucket=bucket)
+            except Exception:
+                pass
+
     def setUp(self):
         self.s3_checker = S3Checker()
 
-    @patch('guardian.checkers.s3.boto3.client')
-    def test_is_bucket_public_acl_true(self, mock_boto3):
-        """Test public ACL detection"""
-        mock_s3_client = MagicMock()
-        mock_boto3.return_value = mock_s3_client
+    def test_private_bucket_not_public_acl(self):
+        is_public = self.s3_checker.is_bucket_public_acl(self.private_bucket)
+        self.assertFalse(is_public)
 
-        # Mock public ACL response
-        mock_s3_client.get_bucket_acl.return_value = {
+    def test_public_acl_detection_logic(self):
+        self.s3_checker.s3_client.get_bucket_acl = MagicMock(return_value={
             'Grants': [
                 {
                     'Grantee': {
@@ -32,70 +60,56 @@ class TestS3Checker(unittest.TestCase):
                     'Permission': 'READ'
                 }
             ]
-        }
-
-        is_public = self.s3_checker.is_bucket_public_acl('test-bucket')
+        })
+        is_public = self.s3_checker.is_bucket_public_acl('any-bucket')
         self.assertTrue(is_public)
 
-    @patch('guardian.checkers.s3.boto3.client')
-    def test_is_bucket_public_acl_false(self, mock_boto3):
-        """Test private ACL detection"""
-        mock_s3_client = MagicMock()
-        mock_boto3.return_value = mock_s3_client
-
-        # Mock private ACL response
-        mock_s3_client.get_bucket_acl.return_value = {
+    def test_authenticated_users_acl_detected(self):
+        self.s3_checker.s3_client.get_bucket_acl = MagicMock(return_value={
             'Grants': [
                 {
                     'Grantee': {
-                        'Type': 'CanonicalUser',
-                        'ID': '123456'
+                        'Type': 'Group',
+                        'URI': 'http://acs.amazonaws.com/groups/s3/AuthenticatedUsers'
                     },
-                    'Permission': 'FULL_CONTROL'
+                    'Permission': 'READ'
                 }
             ]
-        }
-
-        is_public = self.s3_checker.is_bucket_public_acl('test-bucket')
-        self.assertFalse(is_public)
-
-    @patch('guardian.checkers.s3.boto3.client')
-    def test_is_bucket_public_policy(self, mock_boto3):
-        """Test public policy detection"""
-        mock_s3_client = MagicMock()
-        mock_boto3.return_value = mock_s3_client
-
-        # Mock public policy response
-        policy = {
-            'Statement': [
-                {
-                    'Effect': 'Allow',
-                    'Principal': '*',
-                    'Action': 's3:GetObject',
-                    'Resource': 'arn:aws:s3:::test-bucket/*'
-                }
-            ]
-        }
-        mock_s3_client.get_bucket_policy.return_value = {
-            'Policy': str(policy)
-        }
-
-        is_public, statement = self.s3_checker.is_bucket_public_policy('test-bucket')
+        })
+        is_public = self.s3_checker.is_bucket_public_acl('any-bucket')
         self.assertTrue(is_public)
 
-    @patch('guardian.checkers.s3.boto3.client')
-    def test_block_public_access(self, mock_boto3):
-        """Test blocking public access"""
-        mock_s3_client = MagicMock()
-        mock_boto3.return_value = mock_s3_client
+    def test_bucket_without_policy_not_public(self):
+        is_public, statement = self.s3_checker.is_bucket_public_policy(self.private_bucket)
+        self.assertFalse(is_public)
+        self.assertEqual(statement, {})
 
-        mock_s3_client.put_public_access_block.return_value = {}
+    def test_public_policy_detection_logic(self):
+        self.s3_checker.s3_client.get_bucket_policy = MagicMock(return_value={
+            'Policy': '{"Statement":[{"Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"arn:aws:s3:::bucket/*"}]}'
+        })
+        is_public, statement = self.s3_checker.is_bucket_public_policy('any-bucket')
+        self.assertTrue(is_public)
+        self.assertEqual(statement['Effect'], 'Allow')
 
-        success = self.s3_checker.block_public_access('test-bucket')
+    def test_block_public_access(self):
+        success = self.s3_checker.block_public_access(self.private_bucket)
         self.assertTrue(success)
 
-        # Verify the call was made with correct parameters
-        mock_s3_client.put_public_access_block.assert_called_once()
+        kwargs = Config.get_boto3_kwargs()
+        s3 = boto3.client('s3', **kwargs)
+        result = s3.get_public_access_block(Bucket=self.private_bucket)
+        config = result['PublicAccessBlockConfiguration']
+        self.assertTrue(config['BlockPublicAcls'])
+        self.assertTrue(config['IgnorePublicAcls'])
+        self.assertTrue(config['BlockPublicPolicy'])
+        self.assertTrue(config['RestrictPublicBuckets'])
+
+    def test_check_s3_anomalies_structure(self):
+        is_anomaly, data = self.s3_checker.check_s3_anomalies()
+        self.assertIsInstance(is_anomaly, bool)
+        for key in ['is_anomaly', 'public_buckets', 'new_buckets', 'anomalies', 'timestamp']:
+            self.assertIn(key, data)
 
 
 if __name__ == '__main__':

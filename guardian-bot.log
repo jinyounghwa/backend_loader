@@ -1,0 +1,6 @@
+[Bot] AWS Guardian Telegram Bot 시작
+[Bot] 감시 중인 명령어: 요금과다 원인수정, 해킹우려 수정
+[Bot] 종료하려면 Ctrl+C
+
+[Bot] Command received from 진영화: 요금과다 원인수정
+[Bot] Error polling updates: ('Connection aborted.', ConnectionResetError(54, 'Connection reset by peer'))

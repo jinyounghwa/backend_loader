@@ -127,8 +127,8 @@ def init_ssm():
         )
 
         params = {
-            '/aws-guardian/cost-threshold': '10.0',
-            '/aws-guardian/authorized-regions': 'us-east-1,us-west-2'
+            '/guardian/cost-threshold': '10.0',
+            '/guardian/authorized-regions': 'us-east-1,us-west-2'
         }
 
         for param_name, param_value in params.items():

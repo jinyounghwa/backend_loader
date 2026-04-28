@@ -12,7 +12,7 @@ resource "aws_lambda_function" "guardian" {
       TELEGRAM_BOT_TOKEN  = aws_ssm_parameter.telegram_bot_token.value
       TELEGRAM_CHAT_ID    = aws_ssm_parameter.telegram_chat_id.value
       DISCORD_WEBHOOK_URL = aws_ssm_parameter.discord_webhook_url.value
-      GLM_API_KEY         = aws_ssm_parameter.glm_api_key.value
+
     }
   }
 
@@ -28,7 +28,7 @@ resource "aws_lambda_function" "discord_webhook" {
   filename         = "lambda_discord.zip"
   function_name    = "aws-guardian-discord-webhook"
   role            = aws_iam_role.lambda_role.arn
-  handler         = "lambda.discord_webhook.handler.lambda_handler"
+  handler         = "discord_webhook.handler.lambda_handler"
   runtime         = "python3.12"
   timeout         = 30
   memory_size     = 128

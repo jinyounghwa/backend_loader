@@ -30,15 +30,18 @@ zip -r -q "$TERRAFORM_DIR/python_dependencies.zip" python/
 cd "$PROJECT_ROOT"
 
 # Package guardian function
+# The zip must contain guardian/ at root so the handler path "guardian.handler.lambda_handler" resolves.
+# We also include shared modules that guardian imports.
 echo "   Packaging Guardian Lambda..."
 cd "$LAMBDA_DIR"
-zip -r -q "$TERRAFORM_DIR/lambda_guardian.zip" guardian/
+zip -r -q "$TERRAFORM_DIR/lambda_guardian.zip" guardian/ -x "guardian/__pycache__/*" "guardian/*/__pycache__/*"
 cd "$PROJECT_ROOT"
 
 # Package discord webhook function
+# discord_webhook imports from guardian.* so we include both packages.
 echo "   Packaging Discord Webhook Lambda..."
 cd "$LAMBDA_DIR"
-zip -r -q "$TERRAFORM_DIR/lambda_discord.zip" discord_webhook/
+zip -r -q "$TERRAFORM_DIR/lambda_discord.zip" discord_webhook/ guardian/ -x "*/__pycache__/*"
 cd "$PROJECT_ROOT"
 
 # Step 2: Deploy with Terraform

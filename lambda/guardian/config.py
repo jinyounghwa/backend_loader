@@ -3,26 +3,28 @@ import os
 from typing import Optional
 
 class Config:
-    """Configuration for AWS Guardian"""
+
+    @staticmethod
+    def get_endpoint_url() -> str:
+        return os.getenv('LOCALSTACK_ENDPOINT', 'http://localhost:4566')
 
     @staticmethod
     def get_boto3_kwargs() -> dict:
-        """Get boto3 client kwargs based on environment"""
         kwargs = {
             'region_name': os.getenv('AWS_REGION', 'us-east-1'),
+            'aws_access_key_id': os.getenv('AWS_ACCESS_KEY_ID', 'test'),
+            'aws_secret_access_key': os.getenv('AWS_SECRET_ACCESS_KEY', 'test'),
         }
 
-        # Use LocalStack endpoint if available
-        localstack_endpoint = os.getenv('LOCALSTACK_ENDPOINT')
-        if localstack_endpoint:
-            kwargs['endpoint_url'] = localstack_endpoint
+        endpoint = Config.get_endpoint_url()
+        if endpoint:
+            kwargs['endpoint_url'] = endpoint
 
         return kwargs
 
     @staticmethod
     def is_localstack() -> bool:
-        """Check if running in LocalStack mode"""
-        return os.getenv('LOCALSTACK_ENDPOINT') is not None
+        return os.getenv('AWS_ENV', 'localstack') == 'localstack'
 
     @staticmethod
     def get_cost_threshold() -> float:
