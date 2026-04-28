@@ -1,15 +1,16 @@
 services:
   localstack:
-    image: localstack/localstack:3.0.0  # Pin version for reproducibility
+    image: localstack/localstack:2.1.0  # Use stable community version
     container_name: aws-guardian-localstack
     ports:
       - "4566:4566"  # LocalStack Edge endpoint
       - "4571:4571"  # Elasticsearch (unused, but kept for compatibility)
-    env_file:
-      - .env
     environment:
+      # LocalStack Edition (Community = free, no license needed)
+      - LOCALSTACK_EDITION=community
+
       # Debug Mode (LOCAL DEVELOPMENT ONLY)
-      - DEBUG=1
+      - DEBUG=0
 
       # Lambda Execution
       - LAMBDA_EXECUTOR=docker
@@ -19,6 +20,7 @@ services:
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
       - AWS_DEFAULT_REGION=us-east-1
+      - AWS_REGION=us-east-1
 
       # Enabled Services
       - SERVICES=lambda,ec2,s3,dynamodb,logs,ssm,events,apigateway,iam
@@ -26,9 +28,12 @@ services:
       # Performance Optimization
       - LOCALSTACK_LAMBDA_STUB_ECR=false
 
+      # Disable AWS Profile requirement
+      - SKIP_SSL_CERT_DOWNLOAD=1
+
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
-      - ./data/localstack:/tmp/localstack  # Persistent storage
+      - ./data/localstack:/var/lib/localstack  # Persistent storage
 
     networks:
       - guardian-network
