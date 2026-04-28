@@ -4,9 +4,9 @@
 
 ## 🎯 최신 업데이트 (2026-04-28)
 
-### 🚀 Sprint 6 Phase 1-2 완료 (2026-04-28)
+### 🚀 Sprint 6 Phase 1-3 완료 (2026-04-28)
 
-**상태**: ✅ Phase 1-2 완료, Phase 3-5 대기
+**상태**: ✅ Phase 1-3 완료, Phase 4-5 대기
 
 #### Phase 1: 기본 구조 완성 ✅
 ```
@@ -42,8 +42,23 @@ benefits:
 커밋: d52299f
 ```
 
-#### 다음: Phase 3-5 예정
-- Phase 3: Telegram 포맷팅 (아이콘, 사용자 컨텍스트, 자동 대응)
+#### ✅ Phase 3: Telegram 포맷팅 (완료 - commit: 6592140)
+```
+✅ send_cloudtrail_alert() - 의심 API 호출 (severity 아이콘, 이벤트, 사용자, IP)
+✅ send_iam_alert() - IAM 변경 (유형 아이콘, 변경사항)
+✅ send_guardduty_alert() - 위협 탐지 (고위험/중위험 분리, 자동 제안)
+✅ send_alert() - Generic dispatcher (check_name 기반 라우팅)
+✅ _send_generic_alert() - Fallback handler (알 수 없는 체커 타입)
+
+포맷팅 표준:
+✅ Severity별 emoji 아이콘 (🔴 CRITICAL, 🟠 HIGH, 🟡 MEDIUM)
+✅ 사용자 컨텍스트 (username, source_ip, resource_id)
+✅ 메시지 폭주 방지 (3-5개 항목만 표시)
+✅ 자동 대응 제안/remediation 포함
+✅ HTML 포맷으로 일관성 유지
+```
+
+#### 다음: Phase 4-5 예정
 - Phase 4: IAM 권한 + LocalStack 배포
 - Phase 5: 단위 테스트 (15-20개 테스트 케이스)
 
@@ -55,15 +70,15 @@ benefits:
 |------|------|------|
 | **Phase 1** | ✅ 완료 | 4개 체커 파일, ~900줄 코드 |
 | **Phase 2** | ✅ 완료 | Orchestrator 레지스트리 패턴 적용 |
-| **Phase 3** | 📋 대기 | Telegram 포맷팅 (emoji, 컨텍스트) |
+| **Phase 3** | ✅ 완료 | Telegram 포맷팅 (emoji, 컨텍스트, 자동 dispatcher) |
 | **Phase 4** | 📋 대기 | IAM 권한 + 배포 |
 | **Phase 5** | 📋 대기 | 단위 테스트 (Moto/LocalStack) |
 
 **코드 통계:**
 - 신규 파일: 4개 (base.py, cloudtrail.py, iam.py, guardduty.py)
-- 수정 파일: 1개 (orchestrator.py)
-- 신규 줄 수: ~1,030줄
-- 예상 완료: 2026-04-30 (2-3일)
+- 수정 파일: 2개 (orchestrator.py, telegram.py)
+- 신규 줄 수: ~1,160줄 (Phase 1-3 누적)
+- 예상 완료: 2026-04-29 (1일)
 
 ---
 
@@ -812,10 +827,10 @@ git push origin chore/deploy-to-production
 ---
 
 ### Sprint 6: 추가 AWS 서비스 감시 (기능 확장)
-**상태**: 🔄 진행 중 (Phase 1-2 ✅, Phase 3-5 📋)
-**예상 소요시간**: 2-3일 (Phase 3-5)
+**상태**: 🔄 진행 중 (Phase 1-3 ✅, Phase 4-5 📋)
+**예상 소요시간**: 1일 (Phase 4-5)
 **우선순위**: 중간
-**시작**: 2026-04-28, 예상 완료: 2026-04-30
+**시작**: 2026-04-28, 예상 완료: 2026-04-29
 
 **목표**: CloudTrail, IAM, GuardDuty 감시 기능 추가
 
@@ -853,7 +868,37 @@ git push origin chore/deploy-to-production
 - 유지보수: 중앙화된 체크 실행 로직
 - 유연성: 선택적 체크 실행 (check_type 파라미터)
 
-#### 📋 Phase 3: Telegram 포맷팅 (대기 - 다음 세션)
+#### ✅ Phase 3: Telegram 포맷팅 (완료 - commit: 6592140)
+**telegram.py 확장** (+129 줄):
+
+**3개 새 alert 메서드:**
+1. `send_cloudtrail_alert()` (CloudTrail 의심 API 호출)
+   - 이벤트명, 사용자명, 소스 IP, 시간 표시
+   - Severity 아이콘 (🔴 CRITICAL, 🟠 HIGH, 🟡 MEDIUM)
+   - 최대 5개 anomaly 표시
+
+2. `send_iam_alert()` (IAM 권한 변경)
+   - 변경 유형 (NEW_USER, DELETED_USER, NEW_ACCESS_KEY)
+   - 아이콘 구분 (👤 사용자, 🚫 삭제, 🔑 키)
+   - 최대 5개 변경사항 표시
+
+3. `send_guardduty_alert()` (GuardDuty 위협 탐지)
+   - 고위험/중위험 위협 분리 표시
+   - 리소스 ID, 위협 설명 포함
+   - 자동 대응 제안 (remediation)
+
+**추가 메서드:**
+- `send_alert()` - 모든 check_type의 generic dispatcher
+- `_send_generic_alert()` - 알 수 없는 체커 타입의 fallback
+
+**포맷팅 표준:**
+- ✅ Severity별 emoji 아이콘
+- ✅ 사용자 컨텍스트 포함 (username, source IP, resource ID)
+- ✅ 메시지 폭주 방지 (3-5개 항목만 표시)
+- ✅ 자동 대응 제안/remediation 포함
+- ✅ HTML 포맷으로 일관성 유지
+
+#### 📋 Phase 4: IAM 권한 + 배포 (대기 - 다음 세션)
 
 #### 🎯 6-1. CloudTrail 비정상 API 호출 감지
 **파일**:
