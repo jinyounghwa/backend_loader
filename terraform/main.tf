@@ -9,7 +9,26 @@ terraform {
 }
 
 provider "aws" {
-  region = var.aws_region
+  region              = var.aws_region
+  allowed_account_ids = ["000000000000"]
+
+  skip_credentials_validation = true
+  skip_metadata_api_check     = true
+  skip_requesting_account_id  = true
+
+  endpoints {
+    apigateway     = "http://localhost:4566"
+    cloudwatch     = "http://localhost:4566"
+    dynamodb       = "http://localhost:4566"
+    ec2            = "http://localhost:4566"
+    events         = "http://localhost:4566"
+    iam            = "http://localhost:4566"
+    lambda         = "http://localhost:4566"
+    s3             = "http://localhost:4566"
+    ssm            = "http://localhost:4566"
+    sts            = "http://localhost:4566"
+    logs           = "http://localhost:4566"
+  }
 
   default_tags {
     tags = {
@@ -24,6 +43,12 @@ variable "aws_region" {
   description = "AWS region"
   type        = string
   default     = "us-east-1"
+}
+
+variable "use_localstack" {
+  description = "Use LocalStack for local development/testing"
+  type        = bool
+  default     = false
 }
 
 variable "environment" {

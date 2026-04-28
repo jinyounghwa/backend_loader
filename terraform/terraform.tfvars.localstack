@@ -1,0 +1,3 @@
+aws_region  = "us-east-1"
+environment = "localstack"
+use_localstack = true
