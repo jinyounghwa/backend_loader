@@ -548,22 +548,38 @@ aws events list-targets-by-rule --rule aws-guardian-hourly --endpoint-url http:/
 
 ---
 
-#### 📋 Phase 2: Terraform 백엔드 설정 (자동화 스크립트) - NEXT
+#### 📋 Phase 2: Terraform 백엔드 설정 (자동화 스크립트) - READY
 
-**추천 방법 (자동화):**
+**전제 조건:**
+- ✅ AWS CLI 설치 및 자격증명 설정 필요
+- ✅ GitHub 리포지토리 생성 필요 (현재: 로컬만 존재)
+- ✅ GitHub 조직 또는 사용자명 필요
+
+**프로덕션 AWS 배포 준비 상태:**
+```
+✅ LocalStack 배포 완료 → 실제 AWS 배포 준비 완료
+⏳ Phase 2 대기: AWS 자격증명 및 GitHub 저장소 설정 필요
+```
+
+**자동화 스크립트 실행 (Phase 2 시작 시):**
 ```bash
 # 1. AWS 인프라 자동 설정 (S3, DynamoDB, IAM OIDC)
 ./scripts/deploy-infrastructure.sh <GITHUB_ORG>
 
-# Example:
-./scripts/deploy-infrastructure.sh your-github-org
+# Example (GitHub 사용자명: jinyounghwa):
+./scripts/deploy-infrastructure.sh jinyounghwa
 
 # 이 스크립트가 자동으로 수행할 작업:
-# ✅ GitHub OIDC Provider 확인/생성
-# ✅ S3 버킷 생성 (Terraform state)
-# ✅ DynamoDB 테이블 생성 (state lock)
-# ✅ IAM 역할 생성 (GitHub OIDC 신뢰)
-# ✅ IAM 정책 연결 (최소 권한)
+# ✅ GitHub OIDC Provider 확인/생성 (AWS IAM)
+# ✅ S3 버킷 생성 (terraform state 저장)
+# ✅ DynamoDB 테이블 생성 (terraform state lock)
+# ✅ IAM 역할 생성 (GitHub OIDC 신뢰 관계)
+# ✅ IAM 정책 연결 (최소 권한 원칙)
+
+# 이후 화면에 표시되는 값들:
+# - S3_BUCKET_NAME (Terraform 상태 저장소)
+# - ROLE_ARN (GitHub Actions가 가정할 IAM 역할)
+# - 이 값들을 GitHub Secrets에 저장해야 함
 ```
 
 **수동 방법 (필요시):**
@@ -670,10 +686,41 @@ git push origin chore/deploy-to-production
 
 ---
 
+### ✅ Sprint 5 요약: LocalStack → 실제 AWS 배포 준비
+**상태**: 🔄 진행 중 (Phase 1 완료, Phase 2-6 대기)
+**완료일**: 2026-04-28
+**담당**: Claude Code + Gemini 협업
+
+**Sprint 5 성과:**
+| 항목 | 상태 | 상세 |
+|------|------|------|
+| Phase 1: LocalStack | ✅ 완료 | Lambda, EventBridge, IAM 배포 완료 |
+| Phase 2: Terraform 백엔드 | ⏳ 준비 | deploy-infrastructure.sh 준비 완료 |
+| Phase 3: GitHub Secrets | ⏳ 준비 | configure-github-secrets.sh 준비 완료 |
+| Phase 5: 프로덕션 배포 | ⏳ 준비 | GitHub Actions 워크플로우 준비 완료 |
+| Phase 6: 검증 | ⏳ 계획 | 모니터링 가이드 문서화 완료 |
+
+**Phase별 소요시간 (예상):**
+- Phase 2 (AWS 인프라): 15-20분
+- Phase 3 (GitHub Secrets): 10-15분
+- Phase 5 (프로덕션 배포): 10-15분
+- Phase 6 (검증): 24시간
+
+**다음 실행 단계:**
+1. AWS 계정 및 CLI 설정 완료
+2. GitHub 리포지토리 생성/연결
+3. `./scripts/deploy-infrastructure.sh jinyounghwa` 실행
+4. `./scripts/configure-github-secrets.sh` 실행
+5. PR 생성 및 GitHub Actions 실행
+6. 24시간 모니터링
+
+---
+
 ### Sprint 6: 추가 AWS 서비스 감시 (기능 확장)
 **상태**: 📋 계획 단계
 **예상 소요시간**: 3-4일
 **우선순위**: 중간
+**시작 예정**: 2026-04-29 (Phase 5 완료 후)
 
 **목표**: CloudTrail, IAM, GuardDuty 감시 기능 추가
 
@@ -726,6 +773,82 @@ class IAMChecker:
 - GuardDuty 발견사항 조회
 - 심각도별 분류 (Low, Medium, High)
 - 자동 대응 (격리/차단)
+
+---
+
+### Sprint 7: 고급 분석 및 AI 통합
+**상태**: 📋 계획 단계
+**예상 소요시간**: 4-5일
+**우선순위**: 낮음
+**시작 예정**: 2026-05-01
+
+**목표**: 
+- Gemini API를 통한 자동 위협 분석
+- 이상 탐지 기계학습 (CloudWatch Logs 분석)
+- 자동 생성 보고서 (일일/주간)
+
+#### 🎯 7-1. Gemini API 통합 (위협 분석)
+**파일**:
+- `lambda/guardian/analyzers/gemini_threat_analyzer.py` (NEW)
+- `lambda/guardian/responders/gemini.py` (NEW)
+
+**기능**:
+- 탐지된 위협을 Gemini에 전달
+- 자동 위협 분석 및 대응 제안
+- 자연스러운 Telegram 메시지 생성
+
+#### 🎯 7-2. 이상 탐지 (Machine Learning)
+**파일**:
+- `lambda/guardian/analyzers/anomaly_detector.py` (NEW)
+
+**기능**:
+- CloudWatch 로그 패턴 분석
+- 이전 7일 대비 현재 행동 비교
+- 자동 임계값 조정 (적응형)
+
+#### 🎯 7-3. 자동 보고서 생성
+**파일**:
+- `lambda/guardian/reporters/daily_report.py` (NEW)
+- `lambda/guardian/reporters/weekly_report.py` (NEW)
+
+**기능**:
+- 일일 보고서: 탐지된 이벤트 요약
+- 주간 보고서: 비용 추이, 상위 위협, 개선 항목
+- PDF/이메일 전송
+
+---
+
+## 📊 개발 로드맵 (전체)
+
+| 스프린트 | 상태 | 목표 | 완료일 |
+|---------|------|------|--------|
+| Sprint 1 | ✅ | 기본 기능 (EC2/S3/Cost) | 2026-04-26 |
+| Sprint 2 | ✅ | Docker 최적화 | 2026-04-27 |
+| Sprint 3 | ✅ | DynamoDB GSI 최적화 | 2026-04-27 |
+| Sprint 4 | ✅ | 프로덕션 준비 | 2026-04-27 |
+| Sprint 5 | 🔄 | LocalStack → AWS 배포 | 2026-04-28~ |
+| Sprint 6 | 📋 | 추가 AWS 서비스 감시 | 2026-04-29~ |
+| Sprint 7 | 📋 | AI 통합 & 고급 분석 | 2026-05-01~ |
+
+---
+
+## 🎯 주요 KPI (성공 지표)
+
+### Phase 1 (LocalStack) - ✅ 완료
+- ✅ Lambda 배포: ACTIVE
+- ✅ EventBridge: 2개 규칙 ENABLED
+- ✅ DynamoDB: 이벤트 저장 확인
+
+### Phase 2-6 (프로덕션) - ⏳ 진행 중
+- ⏳ Lambda 월 비용: < $0.50
+- ⏳ 이상 탐지 → 알림 시간: < 5분
+- ⏳ 자동 대응 성공률: > 95%
+- ⏳ Telegram 응답 시간: < 2초
+
+### Phase 7 (AI) - 📋 계획 중
+- 📋 Gemini 분석 정확도: > 90%
+- 📋 자동 보고서 생성률: 100%
+- 📋 사용자 만족도: > 4.5/5
 
 **구현**:
 ```python
