@@ -1,11 +1,11 @@
 resource "aws_lambda_function" "guardian" {
-  filename         = "lambda_guardian.zip"
-  function_name    = "aws-guardian-monitor"
-  role            = aws_iam_role.lambda_role.arn
-  handler         = "lambda.guardian.handler.lambda_handler"
-  runtime         = "python3.12"
-  timeout         = 300
-  memory_size     = 256
+  filename      = "lambda_guardian.zip"
+  function_name = "aws-guardian-monitor"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "lambda.guardian.handler.lambda_handler"
+  runtime       = "python3.12"
+  timeout       = 300
+  memory_size   = 256
 
   environment {
     variables = {
@@ -25,13 +25,13 @@ resource "aws_lambda_function" "guardian" {
 }
 
 resource "aws_lambda_function" "discord_webhook" {
-  filename         = "lambda_discord.zip"
-  function_name    = "aws-guardian-discord-webhook"
-  role            = aws_iam_role.lambda_role.arn
-  handler         = "discord_webhook.handler.lambda_handler"
-  runtime         = "python3.12"
-  timeout         = 30
-  memory_size     = 128
+  filename      = "lambda_discord.zip"
+  function_name = "aws-guardian-discord-webhook"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "discord_webhook.handler.lambda_handler"
+  runtime       = "python3.12"
+  timeout       = 30
+  memory_size   = 128
 
   environment {
     variables = {
@@ -96,19 +96,19 @@ resource "aws_api_gateway_resource" "discord_resource" {
 }
 
 resource "aws_api_gateway_method" "discord_post" {
-  rest_api_id      = aws_api_gateway_rest_api.discord_api.id
-  resource_id      = aws_api_gateway_resource.discord_resource.id
-  http_method      = "POST"
-  authorization    = "NONE"
+  rest_api_id   = aws_api_gateway_rest_api.discord_api.id
+  resource_id   = aws_api_gateway_resource.discord_resource.id
+  http_method   = "POST"
+  authorization = "NONE"
 }
 
 resource "aws_api_gateway_integration" "discord_integration" {
-  rest_api_id      = aws_api_gateway_rest_api.discord_api.id
-  resource_id      = aws_api_gateway_resource.discord_resource.id
-  http_method      = aws_api_gateway_method.discord_post.http_method
-  type             = "AWS_PROXY"
+  rest_api_id             = aws_api_gateway_rest_api.discord_api.id
+  resource_id             = aws_api_gateway_resource.discord_resource.id
+  http_method             = aws_api_gateway_method.discord_post.http_method
+  type                    = "AWS_PROXY"
   integration_http_method = "POST"
-  uri              = aws_lambda_function.discord_webhook.invoke_arn
+  uri                     = aws_lambda_function.discord_webhook.invoke_arn
 }
 
 resource "aws_api_gateway_deployment" "discord_deployment" {

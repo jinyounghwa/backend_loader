@@ -1,8 +1,8 @@
 resource "aws_dynamodb_table" "events" {
-  name           = "aws-guardian-events"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "event_id"
-  range_key      = "timestamp"
+  name         = "aws-guardian-events"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "event_id"
+  range_key    = "timestamp"
 
   attribute {
     name = "event_id"
@@ -85,10 +85,10 @@ resource "aws_dynamodb_table" "events" {
 }
 
 resource "aws_dynamodb_table" "responses" {
-  name           = "aws-guardian-responses"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "timestamp"
-  range_key      = "action_type"
+  name         = "aws-guardian-responses"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "timestamp"
+  range_key    = "action_type"
 
   attribute {
     name = "timestamp"
@@ -110,6 +110,32 @@ resource "aws_dynamodb_table" "responses" {
   }
 }
 
+resource "aws_dynamodb_table" "iam_baseline" {
+  name         = "guardian-iam-baseline"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "baseline_id"
+
+  attribute {
+    name = "baseline_id"
+    type = "S"
+  }
+
+  ttl {
+    attribute_name = "expiration_time"
+    enabled        = true
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  tags = {
+    Name        = "guardian-iam-baseline"
+    Environment = var.environment
+    Purpose     = "Baseline state for IAM permission change detection"
+  }
+}
+
 output "events_table_name" {
   value       = aws_dynamodb_table.events.name
   description = "Name of the events DynamoDB table"
@@ -118,4 +144,9 @@ output "events_table_name" {
 output "responses_table_name" {
   value       = aws_dynamodb_table.responses.name
   description = "Name of the responses DynamoDB table"
+}
+
+output "iam_baseline_table_name" {
+  value       = aws_dynamodb_table.iam_baseline.name
+  description = "Name of the IAM baseline tracking table"
 }

@@ -83,10 +83,39 @@ resource "aws_iam_role_policy" "lambda_policy" {
         }
       },
       {
+        Sid    = "CloudTrail"
+        Effect = "Allow"
+        Action = [
+          "cloudtrail:LookupEvents"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "IAM"
+        Effect = "Allow"
+        Action = [
+          "iam:ListUsers",
+          "iam:ListAccessKeys",
+          "iam:GetUser"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "GuardDuty"
+        Effect = "Allow"
+        Action = [
+          "guardduty:ListDetectors",
+          "guardduty:ListFindings",
+          "guardduty:GetFindings"
+        ]
+        Resource = "*"
+      },
+      {
         Sid    = "DynamoDB"
         Effect = "Allow"
         Action = [
           "dynamodb:PutItem",
+          "dynamodb:GetItem",
           "dynamodb:Query",
           "dynamodb:Scan",
           "dynamodb:CreateTable",
@@ -94,7 +123,8 @@ resource "aws_iam_role_policy" "lambda_policy" {
         ]
         Resource = [
           aws_dynamodb_table.events.arn,
-          aws_dynamodb_table.responses.arn
+          aws_dynamodb_table.responses.arn,
+          "arn:aws:dynamodb:*:*:table/guardian-iam-baseline"
         ]
       },
       {

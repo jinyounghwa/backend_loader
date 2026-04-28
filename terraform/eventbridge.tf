@@ -16,7 +16,7 @@
 resource "aws_cloudwatch_event_rule" "hourly_security_check" {
   name                = "aws-guardian-hourly-security"
   description         = "Hourly EC2 and S3 security checks (no cost check)"
-  schedule_expression = "cron(0 * * * ? *)"  # Every hour at :00
+  schedule_expression = "cron(0 * * * ? *)" # Every hour at :00
   is_enabled          = true
 
   tags = {
@@ -33,7 +33,7 @@ resource "aws_cloudwatch_event_target" "hourly_security_lambda" {
   input = jsonencode({
     time       = "$.time"
     source     = "aws.events"
-    check_type = "security"  # Tells Lambda to skip cost check
+    check_type = "security" # Tells Lambda to skip cost check
   })
 }
 
@@ -43,7 +43,7 @@ resource "aws_cloudwatch_event_target" "hourly_security_lambda" {
 resource "aws_cloudwatch_event_rule" "daily_cost_check" {
   name                = "aws-guardian-daily-cost"
   description         = "Daily Cost Explorer check only"
-  schedule_expression = "cron(0 0 * * ? *)"  # Every day at 00:00 UTC
+  schedule_expression = "cron(0 0 * * ? *)" # Every day at 00:00 UTC
   is_enabled          = true
 
   tags = {
@@ -60,7 +60,7 @@ resource "aws_cloudwatch_event_target" "daily_cost_lambda" {
   input = jsonencode({
     time       = "$.time"
     source     = "aws.events"
-    check_type = "cost"  # Tells Lambda to run cost check only
+    check_type = "cost" # Tells Lambda to run cost check only
   })
 }
 
