@@ -1,0 +1,88 @@
+"""Base class for all AWS Guardian checkers."""
+
+from abc import ABC, abstractmethod
+from typing import Dict, Any, Optional
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class CheckResult:
+    """Standard result format for all checkers."""
+
+    SEVERITY_LEVELS = ['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
+
+    def __init__(
+        self,
+        severity: str,
+        title: str,
+        message: str,
+        details: Optional[Dict[str, Any]] = None,
+        suggested_action: Optional[str] = None
+    ):
+        assert severity in self.SEVERITY_LEVELS, f"Invalid severity: {severity}"
+
+        self.severity = severity
+        self.title = title
+        self.message = message
+        self.details = details or {}
+        self.suggested_action = suggested_action
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            'severity': self.severity,
+            'title': self.title,
+            'message': self.message,
+            'details': self.details,
+            'suggested_action': self.suggested_action
+        }
+
+    @classmethod
+    def info(cls, title: str, message: str) -> 'CheckResult':
+        """Create INFO result."""
+        return cls('INFO', title, message)
+
+    @classmethod
+    def error(cls, title: str, message: str) -> 'CheckResult':
+        """Create ERROR result."""
+        return cls('HIGH', title, message, suggested_action='Manual investigation required')
+
+
+class BaseChecker(ABC):
+    """Abstract base class for all checkers."""
+
+    def __init__(self, clients: Dict[str, Any], config: Dict[str, Any]):
+        """
+        Initialize checker with AWS clients and configuration.
+
+        Args:
+            clients: Dict of boto3 clients (ec2, s3, cloudtrail, etc.)
+            config: Configuration dict with settings like regions, thresholds
+        """
+        self.clients = clients
+        self.config = config
+
+    @abstractmethod
+    def check(self) -> CheckResult:
+        """
+        Run the check and return result.
+
+        Must be implemented by subclasses.
+
+        Returns:
+            CheckResult with severity, title, message, details, suggested_action
+        """
+        pass
+
+    def _log_check_start(self, check_name: str):
+        """Log check start."""
+        logger.info(f"Starting {check_name} check")
+
+    def _log_check_end(self, check_name: str, severity: str):
+        """Log check completion."""
+        logger.info(f"Completed {check_name} check: {severity}")
+
+    def _log_error(self, check_name: str, error: Exception):
+        """Log error."""
+        logger.error(f"Error in {check_name}: {str(error)}")
