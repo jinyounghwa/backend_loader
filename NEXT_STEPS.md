@@ -481,12 +481,74 @@ getEventsByGSI() → AllEventsIndex Query
 - 모든 문서 작성 완료
 - 배포 체크리스트 생성
 
-### 🚀 Sprint 5: 프로덕션 배포 실행 - IN PROGRESS
+### 🚀 Sprint 5: LocalStack 배포 & 프로덕션 준비 - IN PROGRESS
 **상태**: 🔄 실행 중 (2026-04-28 시작)
 **예상 소요시간**: 2-3시간 (인프라 설정) + 배포 + 모니터링
 **담당**: Gemini + Claude Code 협업
 
-#### 📋 Phase 2: Terraform 백엔드 설정 (자동화 스크립트)
+#### ✅ Phase 1: LocalStack 배포 완료 (2026-04-28)
+
+**완료 항목**:
+- ✅ Terraform 프로바이더 LocalStack 엔드포인트 설정
+- ✅ deploy-to-localstack.sh 스크립트 작성 (AWS CLI 기반, Terraform 대체)
+- ✅ Lambda 함수 배포: aws-guardian-monitor (python3.10, 256MB, 60s timeout)
+- ✅ EventBridge 규칙 설정: hourly (1시간 주기, EC2/S3) + daily (1일 주기, 비용)
+- ✅ IAM 역할 생성: aws-guardian-role (EC2, S3, Cost Explorer, DynamoDB 권한)
+- ✅ Lambda <-> EventBridge 통합 검증
+
+**배포된 리소스 (LocalStack)**:
+```
+Lambda:
+  - FunctionName: aws-guardian-monitor
+  - Runtime: python3.10
+  - Handler: lambda.guardian.handler.lambda_handler
+  - Role: arn:aws:iam::000000000000:role/aws-guardian-role
+  - State: Active (CodeSize: 22.8MB)
+
+EventBridge Rules:
+  - aws-guardian-hourly: rate(1 hour) → Lambda
+  - aws-guardian-daily: rate(1 day) → Lambda
+
+IAM Role:
+  - aws-guardian-role: Lambda 실행 역할
+  - Permissions: EC2, S3, Cost Explorer, DynamoDB, SSM
+```
+
+**기술적 문제 및 해결**:
+1. Terraform AWS Provider 초기화 실패 (InvalidClientTokenId)
+   - **원인**: LocalStack STS 토큰 검증 이슈
+   - **해결**: AWS CLI 기반 직접 배포 (deploy-to-localstack.sh)
+   - **장점**: Terraform 종속성 제거, 빠른 배포, 디버깅 용이
+
+2. EventBridge targets JSON 파싱 에러
+   - **원인**: AWS CLI 파라미터 포맷팅 문제
+   - **해결**: JSON 배열 형식 사용 ([{...}])
+
+3. Lambda runtime python3.12 미지원
+   - **원인**: LocalStack 2.1.0 Community Edition 제약
+   - **해결**: python3.10으로 다운그레이드
+
+**테스트 명령어**:
+```bash
+export AWS_ACCESS_KEY_ID="LKIAQAAAAAAAFDDEIMEA"
+export AWS_SECRET_ACCESS_KEY="8TORaGyHmPAJAfP3vBebnpKpuepjEmqiRuftAPQD"
+
+# Lambda 직접 호출
+aws lambda invoke \
+  --function-name aws-guardian-monitor \
+  --cli-binary-format raw-in-base64-out \
+  --payload '{"check_type":"hourly"}' \
+  --endpoint-url http://localhost:4566 \
+  /tmp/response.json
+
+# EventBridge 규칙 확인
+aws events list-rules --endpoint-url http://localhost:4566
+aws events list-targets-by-rule --rule aws-guardian-hourly --endpoint-url http://localhost:4566
+```
+
+---
+
+#### 📋 Phase 2: Terraform 백엔드 설정 (자동화 스크립트) - NEXT
 
 **추천 방법 (자동화):**
 ```bash
