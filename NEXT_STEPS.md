@@ -4,6 +4,71 @@
 
 ## 🎯 최신 업데이트 (2026-04-28)
 
+### 🚀 Sprint 6 Phase 1-2 완료 (2026-04-28)
+
+**상태**: ✅ Phase 1-2 완료, Phase 3-5 대기
+
+#### Phase 1: 기본 구조 완성 ✅
+```
+3개 새로운 보안 체커 모듈 구현:
+✅ checkers/base.py (71줄) - BaseChecker ABC + CheckResult
+✅ checkers/cloudtrail.py (333줄) - 의심스러운 API 호출 감지
+✅ checkers/iam.py (282줄) - IAM 권한 변경 감지
+✅ checkers/guardduty.py (223줄) - 위협 탐지 통합
+
+아키텍처:
+✅ Modular Pattern - 각 체커 독립 클래스
+✅ ABC 기반 표준 인터페이스 (check() → CheckResult)
+✅ 에러 핸들링 + 로깅 포함
+✅ Gemini 아키텍처 검증 완료
+
+커밋: 303ca5d
+```
+
+#### Phase 2: Orchestrator 레지스트리 패턴 ✅
+```
+orchestrator.py 리팩토링 완료:
+✅ 3개 새 체커 import + registry 등록
+✅ _get_checks_for_type() - 동적 체크 선택
+✅ _run_legacy_check() - 기존 체커 호환성
+✅ _run_new_check() - Sprint 6 체커 통합
+✅ _save_check_results() - 모든 체크 데이터 저장
+
+benefits:
+✅ 확장성 - 새 체커 추가 시 registry만 수정
+✅ 유지보수성 - 중앙화된 체크 실행 로직
+✅ 유연성 - check_type 파라미터로 선택적 실행
+
+커밋: d52299f
+```
+
+#### 다음: Phase 3-5 예정
+- Phase 3: Telegram 포맷팅 (아이콘, 사용자 컨텍스트, 자동 대응)
+- Phase 4: IAM 권한 + LocalStack 배포
+- Phase 5: 단위 테스트 (15-20개 테스트 케이스)
+
+---
+
+## 📊 Sprint 6 진행 현황
+
+| 항목 | 상태 | 상세 |
+|------|------|------|
+| **Phase 1** | ✅ 완료 | 4개 체커 파일, ~900줄 코드 |
+| **Phase 2** | ✅ 완료 | Orchestrator 레지스트리 패턴 적용 |
+| **Phase 3** | 📋 대기 | Telegram 포맷팅 (emoji, 컨텍스트) |
+| **Phase 4** | 📋 대기 | IAM 권한 + 배포 |
+| **Phase 5** | 📋 대기 | 단위 테스트 (Moto/LocalStack) |
+
+**코드 통계:**
+- 신규 파일: 4개 (base.py, cloudtrail.py, iam.py, guardduty.py)
+- 수정 파일: 1개 (orchestrator.py)
+- 신규 줄 수: ~1,030줄
+- 예상 완료: 2026-04-30 (2-3일)
+
+---
+
+## 🎯 최신 업데이트 (2026-04-28)
+
 ### ✨ 새로운 기능: Agentic Workflow 구현 완료
 **상태**: ✅ 활성화됨
 
@@ -747,12 +812,48 @@ git push origin chore/deploy-to-production
 ---
 
 ### Sprint 6: 추가 AWS 서비스 감시 (기능 확장)
-**상태**: 📋 계획 단계
-**예상 소요시간**: 3-4일
+**상태**: 🔄 진행 중 (Phase 1-2 ✅, Phase 3-5 📋)
+**예상 소요시간**: 2-3일 (Phase 3-5)
 **우선순위**: 중간
-**시작 예정**: 2026-04-29 (Phase 5 완료 후)
+**시작**: 2026-04-28, 예상 완료: 2026-04-30
 
 **목표**: CloudTrail, IAM, GuardDuty 감시 기능 추가
+
+#### ✅ Phase 1: 기본 구조 (완료 - commit: 303ca5d)
+**4개 새 파일 생성** (~900줄):
+1. **checkers/base.py** (71줄)
+   - `BaseChecker` ABC (모든 체커의 기본 인터페이스)
+   - `CheckResult` 표준 포맷 (severity, title, message, details, suggested_action)
+
+2. **checkers/cloudtrail.py** (333줄)
+   - CloudTrail 의심스러운 API 호출 감지
+   - 루트 계정 활동, 권한 상승, 리소스 삭제 감지
+   - LookupEvents 페이지네이션 + ReadOnly 필터
+
+3. **checkers/iam.py** (282줄)
+   - IAM 권한 변경 감지 (새 사용자, 액세스 키, 정책)
+   - DynamoDB baseline tracking으로 증분식 변경 감지
+   - Global 서비스 (us-east-1 only)
+
+4. **checkers/guardduty.py** (223줄)
+   - GuardDuty 위협 탐지 통합
+   - Severity 매핑 (7.0+ = CRITICAL, 4.0-6.9 = HIGH)
+   - 자동 대응 제안 생성
+
+#### ✅ Phase 2: Orchestrator 레지스트리 (완료 - commit: d52299f)
+**orchestrator.py 리팩토링** (+99 줄):
+- 3개 체커 import + registry 등록
+- `_get_checks_for_type()` - 동적 체크 선택 (cost, security, all)
+- `_run_legacy_check()` - 기존 체커 호환성 유지 (cost, ec2, s3)
+- `_run_new_check()` - Sprint 6 체커 통합 (cloudtrail, iam, guardduty)
+- `_save_check_results()` - 모든 체크 데이터 저장
+
+**이점:**
+- 확장성: 새 체커 추가 시 registry만 수정
+- 유지보수: 중앙화된 체크 실행 로직
+- 유연성: 선택적 체크 실행 (check_type 파라미터)
+
+#### 📋 Phase 3: Telegram 포맷팅 (대기 - 다음 세션)
 
 #### 🎯 6-1. CloudTrail 비정상 API 호출 감지
 **파일**:
@@ -1030,7 +1131,7 @@ Sprint 8: 대시보드 인증 (4-5일)
   ✓ RBAC 구현
   ✓ 감사로그
 
-Sprint 9: Discord 명령어 (2-3일)
+Sprint 9: telegram 봇 명령어 (2-3일)
   ✓ Slash Command 구현
   ✓ 응답 포맷팅
   ✓ 명령어별 권한 검사
