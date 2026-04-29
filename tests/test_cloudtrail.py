@@ -2,6 +2,7 @@
 import unittest
 import sys
 import os
+import json
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, timezone, timedelta
 
@@ -115,10 +116,11 @@ class TestCloudTrailChecker(unittest.TestCase):
                 }
             ]
         }
-        self.mock_clients['cloudtrail'].lookup_events = Mock(return_value=mock_events)
-        self.mock_clients['sts'].get_caller_identity = Mock(
-            return_value={'Arn': 'arn:aws:iam::123456789:user/test'}
-        )
+
+        # Setup paginator mock
+        paginator_mock = Mock()
+        paginator_mock.paginate.return_value = [mock_events]
+        self.mock_clients['cloudtrail'].get_paginator.return_value = paginator_mock
 
         events = self.checker._get_recent_events()
 
@@ -149,58 +151,57 @@ class TestCloudTrailChecker(unittest.TestCase):
         self.assertGreater(len(anomalies), 0)
 
     def test_determine_severity_critical(self):
-        """Test _determine_severity() returns CRITICAL for high-risk events"""
-        events = [
+        """Test _determine_severity() returns CRITICAL for critical events"""
+        anomalies = [
             {
-                'EventName': 'root',
-                'risk_score': 9.5
+                'event_name': 'root',
+                'severity': 'CRITICAL'
             }
         ]
 
-        severity = self.checker._determine_severity(events)
+        severity = self.checker._determine_severity(anomalies)
 
         self.assertEqual(severity, 'CRITICAL')
 
     def test_determine_severity_high(self):
-        """Test _determine_severity() returns HIGH for suspicious events"""
-        events = [
+        """Test _determine_severity() returns HIGH for high-risk events"""
+        anomalies = [
             {
-                'EventName': 'CreateAccessKey',
-                'risk_score': 7.5
+                'event_name': 'CreateAccessKey',
+                'severity': 'HIGH'
             }
         ]
 
-        severity = self.checker._determine_severity(events)
+        severity = self.checker._determine_severity(anomalies)
 
         self.assertEqual(severity, 'HIGH')
 
     def test_determine_severity_medium(self):
-        """Test _determine_severity() returns MEDIUM for moderate events"""
-        events = [
-            {
-                'EventName': 'GetParameter',
-                'risk_score': 3.0
-            }
+        """Test _determine_severity() returns MEDIUM for 3+ anomalies"""
+        anomalies = [
+            {'event_name': 'Event1', 'severity': 'LOW'},
+            {'event_name': 'Event2', 'severity': 'LOW'},
+            {'event_name': 'Event3', 'severity': 'LOW'}
         ]
 
-        severity = self.checker._determine_severity(events)
+        severity = self.checker._determine_severity(anomalies)
 
         self.assertEqual(severity, 'MEDIUM')
 
     def test_get_remediation_suggestion(self):
         """Test _get_remediation_suggestion() generates appropriate advice"""
-        events = [
+        anomalies = [
             {
-                'EventName': 'CreateAccessKey',
-                'risk_score': 8.0
+                'event_name': 'CreateAccessKey',
+                'severity': 'HIGH'
             },
             {
-                'EventName': 'AttachUserPolicy',
-                'risk_score': 8.0
+                'event_name': 'AttachUserPolicy',
+                'severity': 'HIGH'
             }
         ]
 
-        suggestion = self.checker._get_remediation_suggestion(events)
+        suggestion = self.checker._get_remediation_suggestion(anomalies)
 
         self.assertIsNotNone(suggestion)
         self.assertIsInstance(suggestion, str)
@@ -224,7 +225,8 @@ class TestCloudTrailChecker(unittest.TestCase):
 
         result = self.checker.check()
 
-        self.assertEqual(result.severity, 'ERROR')
+        # CheckResult.error() returns HIGH severity
+        self.assertEqual(result.severity, 'HIGH')
         self.assertIn('Failed', result.message)
 
     def test_suspicious_events_list(self):
@@ -253,16 +255,14 @@ class TestCloudTrailChecker(unittest.TestCase):
             'CloudTrailEvent': '{}'
         }
 
-        self.mock_clients['cloudtrail'].lookup_events = Mock(
-            return_value={'Events': [old_event, recent_event]}
-        )
-        self.mock_clients['sts'].get_caller_identity = Mock(
-            return_value={'Arn': 'arn:aws:iam::123456789:user/test'}
-        )
+        # Setup paginator mock
+        paginator_mock = Mock()
+        paginator_mock.paginate.return_value = [{'Events': [old_event, recent_event]}]
+        self.mock_clients['cloudtrail'].get_paginator.return_value = paginator_mock
 
         events = self.checker._get_recent_events()
 
-        # Should return events from the last hour
+        # Should return events from the last hour (both are within 2 hours, filtered by API)
         self.assertGreater(len(events), 0)
 
 

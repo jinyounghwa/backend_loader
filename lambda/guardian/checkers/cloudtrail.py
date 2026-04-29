@@ -4,7 +4,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, timezone
 import logging
 
-from base import BaseChecker, CheckResult
+from guardian.checkers.base import BaseChecker, CheckResult
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +30,12 @@ class CloudTrailChecker(BaseChecker):
     }
 
     # Authorized regions (customize as needed)
-    AUTHORIZED_REGIONS = {'us-east-1', 'us-west-2', 'eu-west-1'}
-
     def __init__(self, clients: Dict[str, Any], config: Dict[str, Any]):
         super().__init__(clients, config)
         self.cloudtrail = clients.get('cloudtrail')
+        self.sts = clients.get('sts')
         self.hours_lookback = config.get('cloudtrail_hours', 1)
+        self.authorized_regions = set(config.get('authorized_regions', ['us-east-1', 'us-west-2', 'eu-west-1']))
 
     def check(self) -> CheckResult:
         """Check for suspicious CloudTrail events."""
@@ -123,11 +123,18 @@ class CloudTrailChecker(BaseChecker):
         for event in events:
             severity = self._analyze_event(event)
             if severity:
+                event_time = event.get('EventTime')
+                # Handle both datetime objects and strings
+                if event_time and hasattr(event_time, 'isoformat'):
+                    timestamp = event_time.isoformat()
+                else:
+                    timestamp = event_time
+
                 anomalies.append({
                     'event_name': event.get('EventName'),
                     'username': event.get('Username'),
                     'source_ip': event.get('SourceIPAddress'),
-                    'timestamp': event.get('EventTime').isoformat() if event.get('EventTime') else None,
+                    'timestamp': timestamp,
                     'severity': severity
                 })
 
@@ -152,9 +159,27 @@ class CloudTrailChecker(BaseChecker):
         """Determine overall severity based on anomalies."""
         if any(a['severity'] == 'CRITICAL' for a in anomalies):
             return 'CRITICAL'
-        elif len(anomalies) >= 5:
+        elif any(a['severity'] == 'HIGH' for a in anomalies):
             return 'HIGH'
         elif len(anomalies) >= 3:
             return 'MEDIUM'
         else:
             return 'LOW'
+
+    def _get_remediation_suggestion(self, anomalies: List[Dict[str, Any]]) -> str:
+        """Generate remediation suggestion based on anomalies."""
+        if not anomalies:
+            return 'Review CloudTrail logs for suspicious activity'
+
+        event_names = {a.get('event_name') for a in anomalies}
+
+        if 'CreateAccessKey' in event_names or 'CreateUser' in event_names:
+            return 'Review and rotate access keys. Enable MFA for affected users.'
+        elif 'AttachUserPolicy' in event_names or 'PutUserPolicy' in event_names:
+            return 'Review IAM permission changes. Check for unauthorized policy modifications.'
+        elif 'TerminateInstances' in event_names or 'StopInstances' in event_names:
+            return 'Verify EC2 instance changes. Review if changes were authorized.'
+        elif 'DeleteBucket' in event_names or 'DeleteTable' in event_names:
+            return 'Alert: Critical resource deletion detected. Review deletion logs immediately.'
+        else:
+            return 'Review CloudTrail findings and take appropriate action'
