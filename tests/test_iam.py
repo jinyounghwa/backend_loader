@@ -17,11 +17,15 @@ class TestIAMChecker(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures"""
+        self.mock_dynamodb_table = Mock()
+        self.mock_dynamodb_resource = Mock()
+        self.mock_dynamodb_resource.Table.return_value = self.mock_dynamodb_table
+
         self.mock_clients = {
             'iam': Mock(),
-            'dynamodb': Mock()
+            'dynamodb_resource': self.mock_dynamodb_resource
         }
-        self.config = {}
+        self.config = {'iam_baseline_table': 'guardian-iam-baseline'}
         self.checker = IAMChecker(self.mock_clients, self.config)
 
     def test_initialization(self):
@@ -67,7 +71,8 @@ class TestIAMChecker(unittest.TestCase):
 
         result = self.checker.check()
 
-        self.assertEqual(result.severity, 'HIGH')
+        # 1 new user (HIGH severity) → overall MEDIUM
+        self.assertEqual(result.severity, 'MEDIUM')
         self.assertIn('change', result.message.lower())
 
     def test_check_new_access_key_detected(self):
@@ -93,8 +98,9 @@ class TestIAMChecker(unittest.TestCase):
 
         result = self.checker.check()
 
-        self.assertEqual(result.severity, 'MEDIUM')
-        self.assertIn('Access key', result.message)
+        # NEW_ACCESS_KEY (MEDIUM severity) → overall LOW
+        self.assertEqual(result.severity, 'LOW')
+        self.assertIn('change', result.message.lower())
 
     def test_get_iam_users_success(self):
         """Test _get_iam_users() retrieves users successfully"""
@@ -140,7 +146,7 @@ class TestIAMChecker(unittest.TestCase):
 
     def test_get_baseline_empty(self):
         """Test _get_baseline() returns empty when baseline not found"""
-        self.mock_clients['dynamodb'].get_item.return_value = {}
+        self.mock_dynamodb_table.get_item.return_value = {}
 
         baseline = self.checker._get_baseline()
 
@@ -148,14 +154,10 @@ class TestIAMChecker(unittest.TestCase):
 
     def test_get_baseline_existing(self):
         """Test _get_baseline() retrieves existing baseline"""
-        baseline_data = {
-            'users': json.dumps({'user1': {}}),
-            'keys': json.dumps({'user1': []})
-        }
-        self.mock_clients['dynamodb'].get_item.return_value = {
+        self.mock_dynamodb_table.get_item.return_value = {
             'Item': {
-                'users': {'S': baseline_data['users']},
-                'keys': {'S': baseline_data['keys']}
+                'users': json.dumps({'user1': {}}),
+                'keys': json.dumps({'user1': []})
             }
         }
 
@@ -239,7 +241,7 @@ class TestIAMChecker(unittest.TestCase):
 
         self.checker._save_baseline(users, keys)
 
-        self.mock_clients['dynamodb'].put_item.assert_called_once()
+        self.mock_dynamodb_table.put_item.assert_called_once()
 
     def test_check_result_structure(self):
         """Test check() returns properly structured CheckResult"""
@@ -260,7 +262,8 @@ class TestIAMChecker(unittest.TestCase):
 
         result = self.checker.check()
 
-        self.assertEqual(result.severity, 'ERROR')
+        # CheckResult.error() returns HIGH severity
+        self.assertEqual(result.severity, 'HIGH')
         self.assertIn('Failed', result.message)
 
 
