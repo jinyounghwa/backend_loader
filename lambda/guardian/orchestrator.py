@@ -4,18 +4,18 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from logging import Logger
 
-from checkers.cost import CostChecker
-from checkers.ec2 import EC2Checker
-from checkers.s3 import S3Checker
-from checkers.cloudtrail import CloudTrailChecker
-from checkers.iam import IAMChecker
-from checkers.guardduty import GuardDutyChecker
-from responders.telegram import TelegramResponder
-from responders.discord import DiscordResponder
-from responders.auto_remediation import AutoRemediationResponder
-from storage.dynamodb import DynamoDBStorage
-from config import Config
-from logging_config import log_check_result, log_remediation
+from guardian.checkers.cost import CostChecker
+from guardian.checkers.ec2 import EC2Checker
+from guardian.checkers.s3 import S3Checker
+from guardian.checkers.cloudtrail import CloudTrailChecker
+from guardian.checkers.iam import IAMChecker
+from guardian.checkers.guardduty import GuardDutyChecker
+from guardian.responders.telegram import TelegramResponder
+from guardian.responders.discord import DiscordResponder
+from guardian.responders.remediation_service import AutoRemediationResponder
+from guardian.storage.dynamodb import DynamoDBStorage
+from guardian.config import Config
+from guardian.logging_config import log_check_result, log_remediation
 
 
 class GuardianOrchestrator:
@@ -88,7 +88,7 @@ class GuardianOrchestrator:
             Aggregated results dictionary
         """
         check_type = event.get('check_type', 'all').lower()
-        self.logger.info(f"AWS Guardian orchestration started (check_type={check_type})")
+        self.logger.info("AWS Guardian orchestration started (check_type=%s)", check_type)
 
         results = {
             'timestamp': event.get('time', datetime.now(timezone.utc).isoformat()),
@@ -113,7 +113,7 @@ class GuardianOrchestrator:
                         check_data = self._run_new_check(check_name, results)
                     all_check_data[check_name] = check_data
                 except Exception as e:
-                    self.logger.error(f"Error running {check_name} check: {e}")
+                    self.logger.error("Error running %s check: %s", check_name, e)
                     results['checks'][check_name] = {'error': f'{check_name}_check_failed'}
 
         # Determine system health (legacy method - will be enhanced later)
@@ -129,7 +129,7 @@ class GuardianOrchestrator:
         # Send summary
         self._send_summary()
 
-        self.logger.info(f"AWS Guardian orchestration completed. Health: {system_health}")
+        self.logger.info("AWS Guardian orchestration completed. Health: %s", system_health)
         return {
             'statusCode': 200,
             'body': json.dumps(results)
@@ -202,7 +202,7 @@ class GuardianOrchestrator:
             return cost_data
 
         except Exception as e:
-            self.logger.error(f"Error checking costs: {e}")
+            self.logger.error("Error checking costs: %s", e)
             results['checks']['cost'] = {'error': 'cost_check_failed'}
             return {}
 
@@ -227,7 +227,7 @@ class GuardianOrchestrator:
             return ec2_data
 
         except Exception as e:
-            self.logger.error(f"Error checking EC2: {e}")
+            self.logger.error("Error checking EC2: %s", e)
             results['checks']['ec2'] = {'error': 'ec2_check_failed'}
             return {}
 
@@ -252,7 +252,7 @@ class GuardianOrchestrator:
             return s3_data
 
         except Exception as e:
-            self.logger.error(f"Error checking S3: {e}")
+            self.logger.error("Error checking S3: %s", e)
             results['checks']['s3'] = {'error': 's3_check_failed'}
             return {}
 
@@ -299,9 +299,9 @@ class GuardianOrchestrator:
                 'system_health': system_health,
             }
             self.storage.save_event('check_result', 'info', check_details)
-            self.logger.info(f"Check result saved. Health: {system_health}")
+            self.logger.info("Check result saved. Health: %s", system_health)
         except Exception as e:
-            self.logger.warning(f"Could not save check result: {e}")
+            self.logger.warning("Could not save check result: %s", e)
 
     def _send_summary(self):
         """Send 24-hour event summary."""
@@ -315,7 +315,7 @@ class GuardianOrchestrator:
                     self.discord.send_summary_embed(summary)
 
             self.storage.save_event('summary', 'info', summary)
-            self.logger.info(f"Summary sent. Total events: {summary.get('total_events', 0)}")
+            self.logger.info("Summary sent. Total events: %d", summary.get('total_events', 0))
 
         except Exception as e:
-            self.logger.warning(f"Could not send summary: {e}")
+            self.logger.warning("Could not send summary: %s", e)
