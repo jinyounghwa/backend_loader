@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'lambda'))
 
 from guardian.checkers.s3 import S3Checker
 from guardian.config import Config
+from guardian.aws_client_provider import AWSClientProvider
 
 
 class TestS3Checker(unittest.TestCase):
@@ -57,7 +58,13 @@ class TestS3Checker(unittest.TestCase):
                 pass
 
     def setUp(self):
+        # Clear client cache to ensure fresh instances
+        AWSClientProvider.clear_cache()
         self.s3_checker = S3Checker()
+
+    def tearDown(self):
+        # Clear cache after each test
+        AWSClientProvider.clear_cache()
 
     def test_private_bucket_not_public_acl(self):
         is_public = self.s3_checker.is_bucket_public_acl(self.private_bucket)
