@@ -2,20 +2,29 @@
 
 ---
 
-## ⚡ 빠른 참고 (Sprint 6 최종 상태)
+## ⚡ 빠른 참고 (현재 상태)
 
-**현재**: Sprint 6 Phase 5 Part 3 완료 (2026-04-29 완료) ✨
+**현재**: Sprint 7 Phase 1-2 진행 중 (2026-04-30) 🚀
 
-**완료된 것**:
+**완료된 것 (Sprint 6)**:
 - ✅ Phase 1-3: CloudTrail, IAM, GuardDuty 체커 + Telegram 통합 (~1,160줄)
-- ✅ Phase 4: IAM 권한 추가 + LocalStack 배포 스크립트 + **실제 배포 검증 완료**
+- ✅ Phase 4: IAM 권한 추가 + LocalStack 배포 스크립트 + 실제 배포 검증
 - ✅ Phase 5 Part 1: 56개 테스트 케이스 작성
 - ✅ Phase 5 Part 2: test_orchestrator.py 18개 테스트 추가 + 모두 통과
-- ✅ Phase 5 Part 3: **test_cloudtrail.py (16/16), test_iam.py (17/17) 모두 통과** ✨
+- ✅ Phase 5 Part 3: test_cloudtrail.py (16/16), test_iam.py (17/17) 모두 통과
+- ✅ 전체 테스트: 102/116 통과 (88%) → 추가 테스트 수정 필요 (GuardDuty, Auto Remediation, S3)
 
-**남은 것**:
-- test_guardduty.py (13/20 통과), test_auto_remediation.py, test_s3.py 일부 실패
-- 전체 테스트: 102/116 통과 (88%)
+**현재 작업 (Sprint 7)**:
+- ✅ Phase 1-2: Organizations API + STS AssumeRole 구현 완료
+  - ✅ config.py: organizations_enabled, organization_arn, cross_account_role_name 설정 추가
+  - ✅ orchestrator.py: _get_accounts(), _assume_role_for_account() 메서드 추가
+  - ✅ run_all_checks(): 단일/다중 계정 모드 지원 + account_id 기반 결과 저장
+  - ✅ _save_check_results(): account_id 필드 추가
+
+**다음 세션에서 구현**:
+- 📋 Phase 3: 임시 자격증명을 체커에 주입
+- 📋 Phase 4: DynamoDB 스키마 account_id 추가
+- 📋 Phase 5: Telegram 계정 알림 포맷팅
 
 **핵심 파일**:
 ```
@@ -1245,15 +1254,15 @@ class IAMChecker:
 
 ## 📊 개발 로드맵 (전체)
 
-| 스프린트 | 상태 | 목표 | 완료일 |
+| 스프린트 | 상태 | 목표 | 진행 상황 |
 |---------|------|------|--------|
-| Sprint 1 | ✅ | 기본 기능 (EC2/S3/Cost) | 2026-04-26 |
-| Sprint 2 | ✅ | Docker 최적화 | 2026-04-27 |
-| Sprint 3 | ✅ | DynamoDB GSI 최적화 | 2026-04-27 |
-| Sprint 4 | ✅ | 프로덕션 준비 | 2026-04-27 |
-| Sprint 5 | 🔄 | LocalStack → AWS 배포 | 2026-04-28~ |
-| Sprint 6 | 📋 | 추가 AWS 서비스 감시 | 2026-04-29~ |
-| Sprint 7 | 📋 | AI 통합 & 고급 분석 | 2026-05-01~ |
+| Sprint 1 | ✅ | 기본 기능 (EC2/S3/Cost) | 완료 (2026-04-26) |
+| Sprint 2 | ✅ | Docker 최적화 | 완료 (2026-04-27) |
+| Sprint 3 | ✅ | DynamoDB GSI 최적화 | 완료 (2026-04-27) |
+| Sprint 4 | ✅ | 프로덕션 준비 | 완료 (2026-04-27) |
+| Sprint 5 | ✅ | LocalStack → AWS 배포 | 완료 (2026-04-28) |
+| Sprint 6 | ✅ | 추가 AWS 서비스 감시 | 완료 (2026-04-29) - 116개 테스트 대부분 통과 |
+| Sprint 7 | 🔄 | 다중 계정 지원 (Organizations) | Phase 1-2 완료 (2026-04-30), Phase 3-5 예정 |
 
 ---
 
@@ -1294,38 +1303,118 @@ class GuardDutyChecker:
 
 ---
 
-### Sprint 7: 다중 AWS 계정 지원
-**상태**: 📋 계획 단계
-**예상 소요시간**: 3-4일
+### 🚀 Sprint 7: 다중 AWS 계정 지원
+**상태**: 🔄 진행 중 (Phase 1-2 ✅, Phase 3-5 진행 예정)
+**예상 총 소요시간**: 3-4일
 **우선순위**: 중간
+**시작**: 2026-04-30
 
 **목표**: Organizations 기반 다중 계정 모니터링
 
-#### 🎯 기능 요구사항
-- 조직 내 모든 계정 감시
-- 계정별 독립 임계값
-- 계정별 알림 채널 분리
-- Cross-account IAM Role 자동 구성
+#### ✅ Phase 1-2: Organizations API + STS AssumeRole 완료 (2026-04-30)
 
-#### 📁 필요한 변경
-1. `config.py` - ACCOUNT_ID 지원 추가
-2. `handler.py` - 다중 계정 루프 추가
-3. `terraform/main.tf` - STS AssumeRole 설정
-4. `terraform/iam.tf` - Cross-account 역할 정책
-5. 대시보드 - 계정별 필터 추가
+**Phase 1: Organizations API 통합** ✅
+```
+✅ config.py:
+  - is_organizations_enabled() - 다중 계정 활성화 여부
+  - get_organization_arn() - Organizations ARN 설정
+  - get_cross_account_role_name() - 교차 계정 역할 이름
+
+✅ orchestrator.py:
+  - _get_accounts() - Organizations에서 계정 목록 조회 (pagination)
+  - 단일 계정 (current) 또는 다중 계정 모드 지원
+```
+
+**Phase 2: STS AssumeRole 구현** ✅
+```
+✅ orchestrator.py:
+  - _assume_role_for_account() - 대상 계정의 역할 가정
+  - STS 자격증명 임시 발급 (SessionToken)
+  - 크로스 계정 권한 확인
+  
+✅ run_all_checks() 개선:
+  - 계정별 루프 처리
+  - account_id 기반 결과 저장
+  - 단일 계정 하위호환성 유지
+  
+✅ _save_check_results() 향상:
+  - DynamoDB에 account_id 필드 추가
+  - 계정별 독립적 결과 저장
+  - 하위호환성 (현재 계정 모드)
+```
+
+#### 📋 Phase 3-5: 다음 세션에서 구현 예정
+
+**Phase 3: 교차 계정 자격증명 처리 (예상 1시간)**
+```
+📋 구현 내용:
+  - 가정된 역할의 임시 자격증명을 개별 checker에 전달
+  - AWSClientProvider에서 계정별 클라이언트 캐싱
+  - 각 계정의 EC2/S3/CloudTrail 독립적 확인
+
+📋 수정 파일:
+  - orchestrator.py: 체커 생성 시 credentials 주입
+  - aws_client_provider.py: 계정별 클라이언트 세션 지원
+  - 각 checker: credentials 파라미터 지원
+```
+
+**Phase 4: DynamoDB 스키마 확장 (예상 30분)**
+```
+📋 구현 내용:
+  - dynamodb.tf: account_id 속성 추가
+  - account_id + timestamp를 복합키로 변경 (현재: timestamp만)
+  - GSI 업데이트: account별 필터링 지원
+  - 계정별 이벤트 조회 메서드 추가
+
+📋 수정 파일:
+  - terraform/dynamodb.tf
+  - lambda/guardian/storage/dynamodb.py (schema 변경)
+```
+
+**Phase 5: Telegram 계정 알림 (예상 1시간)**
+```
+📋 구현 내용:
+  - 알림 메시지에 계정명 추가
+  - 계정별 심각도 요약
+  - 다중 계정 대시보드 지원
+
+📋 수정 파일:
+  - lambda/guardian/responders/telegram.py
+  - send_alert() 메서드에 account_id/account_name 파라미터
+```
 
 #### 🔄 구현 흐름
 ```
-Organizations → List Accounts
+Organizations API → List Accounts
+  ↓ (각 계정마다)
+STS AssumeRole → 임시 자격증명 획득
   ↓
-각 계정마다:
-  - STS AssumeRole
-  - EC2/S3/비용 확인
-  - 결과 통합
+EC2/S3/CloudTrail 확인 (계정 격리)
   ↓
-DynamoDB 저장 (account_id 필드 추가)
+DynamoDB 저장 (account_id 포함)
   ↓
-Telegram: 계정명 명시
+Telegram 알림 (계정명 명시)
+```
+
+#### ⚙️ 필수 AWS IAM 설정 (terraform/iam.tf)
+```
+필요한 권한:
+1. Organizations 권한 (주계정):
+   - organizations:ListAccounts
+   - organizations:DescribeAccount
+
+2. STS 권한 (주계정):
+   - sts:AssumeRole (교차 계정 역할용)
+
+3. 교차 계정 역할 (멤버 계정):
+   - Role Name: aws-guardian-cross-account-role
+   - Trust Policy: 주계정 Lambda Role 신뢰
+   - Permissions: EC2, S3, CloudTrail, IAM, GuardDuty 읽기
+
+환경변수:
+  - ORGANIZATIONS_ENABLED=true
+  - ORGANIZATION_ARN=arn:aws:organizations::xxx:organization/o-xxx
+  - CROSS_ACCOUNT_ROLE_NAME=aws-guardian-cross-account-role
 ```
 
 ---

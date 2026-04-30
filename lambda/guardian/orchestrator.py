@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from logging import Logger
 
+from guardian.aws_client_provider import AWSClientProvider
 from guardian.checkers.cost import CostChecker
 from guardian.checkers.ec2 import EC2Checker
 from guardian.checkers.s3 import S3Checker
@@ -77,6 +78,7 @@ class GuardianOrchestrator:
     def run_all_checks(self, event: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute AWS Guardian checks based on check_type parameter.
+        Supports multi-account monitoring via Organizations API.
 
         Args:
             event: Lambda event object. Supports 'check_type' parameter:
@@ -94,33 +96,67 @@ class GuardianOrchestrator:
             'timestamp': event.get('time', datetime.now(timezone.utc).isoformat()),
             'status': 'success',
             'checks': {},
-            'check_type': check_type
+            'check_type': check_type,
+            'accounts': []
         }
+
+        # Get accounts to check (single account or multi-account via Organizations)
+        accounts = self._get_accounts() if Config.is_organizations_enabled() else [
+            {'account_id': 'current', 'account_name': 'Current Account'}
+        ]
 
         # Determine which checks to run
         checks_to_run = self._get_checks_for_type(check_type)
 
-        # Execute all relevant checks
+        # Execute checks for all accounts
         all_check_data = {}
-        for check_name in checks_to_run:
-            if check_name in self.checkers and self.checkers[check_name]:
-                try:
-                    if check_name in ('cost', 'ec2', 's3'):
-                        # Legacy checkers: return (anomaly, data) tuple
-                        check_data = self._run_legacy_check(check_name, results)
-                    else:
-                        # New checkers (Sprint 6): return CheckResult object
-                        check_data = self._run_new_check(check_name, results)
-                    all_check_data[check_name] = check_data
-                except Exception as e:
-                    self.logger.error("Error running %s check: %s", check_name, e)
-                    results['checks'][check_name] = {'error': f'{check_name}_check_failed'}
+        for account in accounts:
+            account_id = account['account_id']
+            account_name = account.get('account_name', account_id)
+            self.logger.info("Running checks for account: %s (%s)", account_name, account_id)
+
+            # For cross-account monitoring, assume role in target account
+            if Config.is_organizations_enabled() and account_id != 'current':
+                assumed_role = self._assume_role_for_account(account_id)
+                if not assumed_role:
+                    self.logger.warning("Skipping account %s - role assumption failed", account_id)
+                    continue
+                # TODO: Use assumed role credentials for checks (Phase 3)
+
+            # Execute all relevant checks for this account
+            account_check_data = {}
+            for check_name in checks_to_run:
+                if check_name in self.checkers and self.checkers[check_name]:
+                    try:
+                        if check_name in ('cost', 'ec2', 's3'):
+                            check_data = self._run_legacy_check(check_name, results)
+                        else:
+                            check_data = self._run_new_check(check_name, results)
+                        account_check_data[check_name] = check_data
+                    except Exception as e:
+                        self.logger.error("Error running %s check for account %s: %s",
+                                        check_name, account_id, e)
+                        results['checks'][f'{check_name}_{account_id}'] = {
+                            'error': f'{check_name}_check_failed'
+                        }
+
+            # Store account results with account_id
+            account_result = {
+                'account_id': account_id,
+                'account_name': account_name,
+                'checks': account_check_data,
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }
+            all_check_data[account_id] = account_result
+            results['accounts'].append(account_result)
 
         # Determine system health (legacy method - will be enhanced later)
+        first_account_data = list(all_check_data.values())[0] if all_check_data else {}
+        checks = first_account_data.get('checks', {})
         system_health = self._determine_system_health(
-            all_check_data.get('cost', {}),
-            all_check_data.get('ec2', {}),
-            all_check_data.get('s3', {})
+            checks.get('cost', {}),
+            checks.get('ec2', {}),
+            checks.get('s3', {})
         )
 
         # Save comprehensive check results
@@ -129,7 +165,8 @@ class GuardianOrchestrator:
         # Send summary
         self._send_summary()
 
-        self.logger.info("AWS Guardian orchestration completed. Health: %s", system_health)
+        self.logger.info("AWS Guardian orchestration completed. Health: %s. Accounts: %d",
+                        system_health, len(all_check_data))
         return {
             'statusCode': 200,
             'body': json.dumps(results)
@@ -256,6 +293,65 @@ class GuardianOrchestrator:
             results['checks']['s3'] = {'error': 's3_check_failed'}
             return {}
 
+    def _get_accounts(self) -> List[Dict[str, str]]:
+        """Get list of AWS accounts from Organizations."""
+        try:
+            if not Config.is_organizations_enabled():
+                return []
+
+            orgs_client = AWSClientProvider.get_client('organizations')
+            accounts = []
+
+            # Paginate through all accounts in the organization
+            paginator = orgs_client.get_paginator('list_accounts')
+            for page in paginator.paginate():
+                for account in page.get('Accounts', []):
+                    accounts.append({
+                        'account_id': account['Id'],
+                        'account_name': account['Name'],
+                        'status': account['Status']
+                    })
+
+            self.logger.info("Retrieved %d accounts from Organizations", len(accounts))
+            return accounts
+
+        except Exception as e:
+            self.logger.warning("Failed to get accounts from Organizations: %s", e)
+            return []
+
+    def _assume_role_for_account(
+        self, account_id: str, role_name: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Assume a role in a target account for cross-account access."""
+        try:
+            if not role_name:
+                role_name = Config.get_cross_account_role_name()
+
+            sts_client = AWSClientProvider.get_client('sts')
+
+            # Assume role in target account
+            assume_role_arn = f"arn:aws:iam::{account_id}:role/{role_name}"
+            response = sts_client.assume_role(
+                RoleArn=assume_role_arn,
+                RoleSessionName=f"guardian-cross-account-{account_id}"
+            )
+
+            credentials = response['Credentials']
+            self.logger.info("Assumed role for account %s", account_id)
+
+            return {
+                'account_id': account_id,
+                'credentials': {
+                    'aws_access_key_id': credentials['AccessKeyId'],
+                    'aws_secret_access_key': credentials['SecretAccessKey'],
+                    'aws_session_token': credentials['SessionToken']
+                }
+            }
+
+        except Exception as e:
+            self.logger.warning("Failed to assume role for account %s: %s", account_id, e)
+            return None
+
     def _determine_system_health(self, cost_data: Dict, ec2_data: Dict, s3_data: Dict) -> str:
         """Determine overall system health based on check results."""
         has_critical = (
@@ -291,15 +387,29 @@ class GuardianOrchestrator:
             self.discord.send_s3_alert(s3_data)
 
     def _save_check_results(self, all_check_data: Dict[str, Any], system_health: str):
-        """Save comprehensive check results to storage."""
+        """Save comprehensive check results to storage with account_id support."""
         try:
-            check_details = {
-                **all_check_data,
-                'last_check': datetime.now(timezone.utc).isoformat(),
-                'system_health': system_health,
-            }
-            self.storage.save_event('check_result', 'info', check_details)
-            self.logger.info("Check result saved. Health: %s", system_health)
+            # For single account (backward compatibility), save as before
+            if len(all_check_data) == 1 and 'current' in all_check_data:
+                check_details = {
+                    **all_check_data['current'].get('checks', {}),
+                    'last_check': datetime.now(timezone.utc).isoformat(),
+                    'system_health': system_health,
+                }
+                self.storage.save_event('check_result', 'info', check_details)
+            else:
+                # For multi-account, save each account's results with account_id
+                for account_id, account_data in all_check_data.items():
+                    check_details = {
+                        'account_id': account_id,
+                        'account_name': account_data.get('account_name'),
+                        **account_data.get('checks', {}),
+                        'last_check': datetime.now(timezone.utc).isoformat(),
+                        'system_health': system_health,
+                    }
+                    self.storage.save_event('check_result', 'info', check_details)
+
+            self.logger.info("Check results saved. Health: %s", system_health)
         except Exception as e:
             self.logger.warning("Could not save check result: %s", e)
 

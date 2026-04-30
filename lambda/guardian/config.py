@@ -69,6 +69,21 @@ class Config:
     def get_dynamodb_table_name() -> str:
         return os.getenv('DYNAMODB_TABLE_NAME', 'aws-guardian-events')
 
+    @staticmethod
+    def is_organizations_enabled() -> bool:
+        """Check if multi-account monitoring is enabled via Organizations."""
+        return os.getenv('ORGANIZATIONS_ENABLED', 'false').lower() == 'true'
+
+    @staticmethod
+    def get_organization_arn() -> str:
+        """Get the Organizations root account ARN for cross-account role assumption."""
+        return os.getenv('ORGANIZATION_ARN', '')
+
+    @staticmethod
+    def get_cross_account_role_name() -> str:
+        """Get the cross-account role name for STS AssumeRole."""
+        return os.getenv('CROSS_ACCOUNT_ROLE_NAME', 'aws-guardian-cross-account-role')
+
     @classmethod
     def reset_cache(cls) -> None:
         """Reset cached values (useful for testing)."""
