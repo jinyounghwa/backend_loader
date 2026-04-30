@@ -1,47 +1,34 @@
 """EC2 security checker for AWS Guardian"""
-import boto3
-import os
+import logging
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Tuple
-from datetime import datetime
 
-# Import config
-import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from config import Config
+from guardian.config import Config
+from guardian.aws_client_provider import AWSClientProvider
+
+logger = logging.getLogger(__name__)
+
 
 class EC2Checker:
     def __init__(self, authorized_regions: List[str] = None):
-        """
-        Initialize EC2 checker
-
-        Args:
-            authorized_regions: List of allowed regions (default: all regions)
-        """
-        boto3_kwargs = Config.get_boto3_kwargs()
-        self.ec2_client = boto3.client('ec2', **boto3_kwargs)
+        self.ec2_client = AWSClientProvider.get_client('ec2')
         self.authorized_regions = authorized_regions or []
-        self.ssm_client = boto3.client('ssm', **boto3_kwargs)
+        self.ssm_client = AWSClientProvider.get_client('ssm')
         self.is_localstack = Config.is_localstack()
 
     def get_all_instances(self) -> Dict[str, List[Dict]]:
-        """Get all running EC2 instances across regions"""
         instances_by_region = {}
 
         try:
-            # In LocalStack, only use single region
             if self.is_localstack:
-                region = 'us-east-1'
-                regions = [region]
-                print(f"[LocalStack] Using single region: {region}")
+                regions = ['us-east-1']
+                logger.info("[LocalStack] Using single region: %s", regions[0])
             else:
-                # Get all regions
                 regions_response = self.ec2_client.describe_regions()
                 regions = [r['RegionName'] for r in regions_response['Regions']]
 
             for region in regions:
-                boto3_kwargs = Config.get_boto3_kwargs()
-                boto3_kwargs['region_name'] = region
-                regional_ec2 = boto3.client('ec2', **boto3_kwargs)
+                regional_ec2 = AWSClientProvider.get_client('ec2', region=region)
                 try:
                     response = regional_ec2.describe_instances(
                         Filters=[{'Name': 'instance-state-name', 'Values': ['running']}]
@@ -54,26 +41,23 @@ class EC2Checker:
                     if instances:
                         instances_by_region[region] = instances
                 except Exception as e:
-                    print(f"Error checking region {region}: {e}")
+                    logger.error("Error checking region %s: %s", region, e)
 
             return instances_by_region
         except Exception as e:
-            print(f"Error getting all instances: {e}")
+            logger.error("Error getting all instances: %s", e)
             return {}
 
     def get_unauthorized_regions_instances(self) -> Dict[str, List[Dict]]:
-        """Get instances running in unauthorized regions"""
         if not self.authorized_regions:
             return {}
 
         all_instances = self.get_all_instances()
-        unauthorized = {}
-
-        for region, instances in all_instances.items():
-            if region not in self.authorized_regions:
-                unauthorized[region] = instances
-
-        return unauthorized
+        return {
+            region: instances
+            for region, instances in all_instances.items()
+            if region not in self.authorized_regions
+        }
 
     def check_security_group_exposure(self, instance: Dict) -> List[Dict]:
         exposed_rules = []
@@ -82,12 +66,8 @@ class EC2Checker:
             sg_id = sg['GroupId']
             try:
                 region = instance['Placement']['AvailabilityZone'][:-1]
-                kwargs = Config.get_boto3_kwargs()
-                kwargs['region_name'] = region
-                regional_ec2 = boto3.client('ec2', **kwargs)
-                sg_response = regional_ec2.describe_security_groups(
-                    GroupIds=[sg_id]
-                )
+                regional_ec2 = AWSClientProvider.get_client('ec2', region=region)
+                sg_response = regional_ec2.describe_security_groups(GroupIds=[sg_id])
 
                 for sg_detail in sg_response['SecurityGroups']:
                     for rule in sg_detail.get('IpPermissions', []):
@@ -102,25 +82,23 @@ class EC2Checker:
                                     'cidr': '0.0.0.0/0'
                                 })
             except Exception as e:
-                print(f"Error checking security group {sg_id}: {e}")
+                logger.error("Error checking security group %s: %s", sg_id, e)
 
         return exposed_rules
 
     def get_new_instances(self) -> List[Dict]:
-        """Detect new running instances (launched in last hour)"""
-        new_instances = []
-        cutoff_time = datetime.now(timezone.utc)
-        one_hour_ago = cutoff_time.replace(hour=cutoff_time.hour - 1) if cutoff_time.hour > 0 else cutoff_time
+        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=1)
 
         all_instances = self.get_all_instances()
+        new_instances = []
 
         for region, instances in all_instances.items():
             for instance in instances:
                 launch_time = instance['LaunchTime']
-                if hasattr(launch_time, 'replace'):
+                if hasattr(launch_time, 'replace') and launch_time.tzinfo is not None:
                     launch_time = launch_time.replace(tzinfo=None)
 
-                if launch_time > one_hour_ago:
+                if launch_time > cutoff_time.replace(tzinfo=None):
                     new_instances.append({
                         'instance_id': instance['InstanceId'],
                         'instance_type': instance['InstanceType'],
@@ -133,7 +111,6 @@ class EC2Checker:
         return new_instances
 
     def check_ec2_anomalies(self) -> Tuple[bool, Dict[str, Any]]:
-        """Check for EC2 security anomalies"""
         anomalies = []
         result = {
             'is_anomaly': False,
@@ -143,14 +120,12 @@ class EC2Checker:
             'timestamp': datetime.now(timezone.utc).isoformat()
         }
 
-        # Check for unauthorized regions
         if self.authorized_regions:
             unauthorized = self.get_unauthorized_regions_instances()
             if unauthorized:
                 result['unauthorized_region_instances'] = unauthorized
                 anomalies.append(f"Instances running in unauthorized regions: {list(unauthorized.keys())}")
 
-        # Check for security group exposure
         all_instances = self.get_all_instances()
         for region, instances in all_instances.items():
             for instance in instances:
@@ -163,7 +138,6 @@ class EC2Checker:
                     })
                     anomalies.append(f"Instance {instance['InstanceId']} has 0.0.0.0/0 exposure")
 
-        # Check for new instances
         new_instances = self.get_new_instances()
         if new_instances:
             result['new_instances'] = new_instances
@@ -176,17 +150,14 @@ class EC2Checker:
 
     def stop_instance(self, instance_id: str, region: str) -> bool:
         try:
-            kwargs = Config.get_boto3_kwargs()
-            kwargs['region_name'] = region
-            regional_ec2 = boto3.client('ec2', **kwargs)
+            regional_ec2 = AWSClientProvider.get_client('ec2', region=region)
             regional_ec2.stop_instances(InstanceIds=[instance_id])
             return True
         except Exception as e:
-            print(f"Error stopping instance {instance_id}: {e}")
+            logger.error("Error stopping instance %s: %s", instance_id, e)
             return False
 
     def set_authorized_regions(self, regions: List[str]) -> None:
-        """Set authorized regions in Parameter Store"""
         try:
             self.ssm_client.put_parameter(
                 Name='/guardian/authorized-regions',
@@ -196,15 +167,17 @@ class EC2Checker:
             )
             self.authorized_regions = regions
         except Exception as e:
-            print(f"Error setting authorized regions: {e}")
+            logger.error("Error setting authorized regions: %s", e)
 
     def get_authorized_regions(self) -> List[str]:
-        """Get authorized regions from Parameter Store"""
         try:
             response = self.ssm_client.get_parameter(
                 Name='/guardian/authorized-regions'
             )
             self.authorized_regions = response['Parameter']['Value'].split(',')
             return self.authorized_regions
-        except:
+        except self.ssm_client.exceptions.ParameterNotFound:
+            return self.authorized_regions
+        except Exception as e:
+            logger.warning("Error getting authorized regions from SSM: %s", e)
             return self.authorized_regions

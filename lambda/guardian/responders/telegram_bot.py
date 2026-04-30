@@ -3,17 +3,20 @@ import os
 import sys
 import json
 import time
-import requests
+import logging
 import signal
-import boto3
+import requests
 from datetime import datetime, timedelta, timezone
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from responders.telegram import TelegramResponder
-from responders.auto_remediation import remediate_cost_overrun, remediate_hacking_suspicion
-from config import Config
-from storage.dynamodb import DynamoDBStorage
+from guardian.responders.telegram import TelegramResponder
+from guardian.responders.auto_remediation import remediate_cost_overrun, remediate_hacking_suspicion
+from guardian.config import Config
+from guardian.aws_client_provider import AWSClientProvider
+from guardian.storage.dynamodb import DynamoDBStorage
+
+logger = logging.getLogger('telegram_bot')
 
 COMMANDS = {
     '요금과다 원인수정': remediate_cost_overrun,
@@ -22,14 +25,10 @@ COMMANDS = {
 
 
 def get_status() -> dict:
-    """Get current system status"""
     try:
-        kwargs = Config.get_boto3_kwargs()
-        ec2 = boto3.client('ec2', **kwargs)
-        s3 = boto3.client('s3', **kwargs)
-        ce = boto3.client('ce', **kwargs)
+        ec2 = AWSClientProvider.get_client('ec2')
+        s3 = AWSClientProvider.get_client('s3')
 
-        # Get EC2 status
         ec2_response = ec2.describe_instances(
             Filters=[{'Name': 'instance-state-name', 'Values': ['running']}]
         )
@@ -38,37 +37,23 @@ def get_status() -> dict:
             for r in ec2_response.get('Reservations', [])
         )
 
-        # Get S3 status
         s3_response = s3.list_buckets()
         total_buckets = len(s3_response.get('Buckets', []))
-
-        # Get cost
-        today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
-        cost_response = ce.get_cost_and_usage(
-            TimePeriod={'Start': today, 'End': (datetime.now(timezone.utc) + timedelta(days=1)).strftime('%Y-%m-%d')},
-            Granularity='DAILY',
-            Metrics=['UnblendedCost']
-        )
-        today_cost = 0
-        if cost_response.get('ResultsByTime'):
-            today_cost = float(cost_response['ResultsByTime'][0]['Total']['UnblendedCost']['Amount'])
 
         return {
             'timestamp': datetime.now(timezone.utc).isoformat(),
             'ec2_running': running_instances,
             's3_buckets': total_buckets,
-            'today_cost': today_cost,
             'threshold': Config.get_cost_threshold()
         }
     except Exception as e:
+        logger.error("Error getting status: %s", e)
         return {'error': str(e), 'timestamp': datetime.now(timezone.utc).isoformat()}
 
 
 def get_instances() -> dict:
-    """Get list of running EC2 instances"""
     try:
-        kwargs = Config.get_boto3_kwargs()
-        ec2 = boto3.client('ec2', **kwargs)
+        ec2 = AWSClientProvider.get_client('ec2')
 
         response = ec2.describe_instances(
             Filters=[{'Name': 'instance-state-name', 'Values': ['running']}]
@@ -90,15 +75,13 @@ def get_instances() -> dict:
             'count': len(instances)
         }
     except Exception as e:
+        logger.error("Error getting instances: %s", e)
         return {'error': str(e), 'timestamp': datetime.now(timezone.utc).isoformat()}
 
 
 def stop_instance(instance_id: str) -> dict:
-    """Stop a specific EC2 instance"""
     try:
-        kwargs = Config.get_boto3_kwargs()
-        ec2 = boto3.client('ec2', **kwargs)
-
+        ec2 = AWSClientProvider.get_client('ec2')
         ec2.stop_instances(InstanceIds=[instance_id])
 
         return {
@@ -108,15 +91,14 @@ def stop_instance(instance_id: str) -> dict:
             'status': 'stopped'
         }
     except Exception as e:
+        logger.error("Error stopping instance %s: %s", instance_id, e)
         return {'error': str(e), 'timestamp': datetime.now(timezone.utc).isoformat()}
 
 
 def set_threshold(amount: str) -> dict:
-    """Set cost threshold"""
     try:
         threshold = float(amount)
-        kwargs = Config.get_boto3_kwargs()
-        ssm = boto3.client('ssm', **kwargs)
+        ssm = AWSClientProvider.get_client('ssm')
 
         ssm.put_parameter(
             Name='/guardian/cost-threshold',
@@ -134,19 +116,16 @@ def set_threshold(amount: str) -> dict:
     except ValueError:
         return {'error': 'Invalid amount', 'timestamp': datetime.now(timezone.utc).isoformat()}
     except Exception as e:
+        logger.error("Error setting threshold: %s", e)
         return {'error': str(e), 'timestamp': datetime.now(timezone.utc).isoformat()}
 
 
 def get_history(hours: int = 24) -> dict:
-    """Get recent event history"""
     try:
         storage = DynamoDBStorage()
         since = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
 
-        # Get latest check results
-        items = storage.get_latest_check_result(
-            time_filter=since
-        )
+        items = storage.get_latest_check_result(time_filter=since)
 
         return {
             'timestamp': datetime.now(timezone.utc).isoformat(),
@@ -155,6 +134,7 @@ def get_history(hours: int = 24) -> dict:
             'count': len(items) if items else 0
         }
     except Exception as e:
+        logger.error("Error getting history: %s", e)
         return {'error': str(e), 'timestamp': datetime.now(timezone.utc).isoformat()}
 
 
@@ -171,7 +151,7 @@ class TelegramBotListener:
         signal.signal(signal.SIGTERM, self._handle_signal)
 
     def _handle_signal(self, signum, frame):
-        print(f"\n[Bot] Shutdown signal received. Stopping...")
+        logger.info("Shutdown signal received. Stopping...")
         self.running = False
 
     def get_updates(self):
@@ -186,7 +166,7 @@ class TelegramBotListener:
         except requests.exceptions.ReadTimeout:
             return []
         except Exception as e:
-            print(f"[Bot] Error polling updates: {e}")
+            logger.error("Error polling updates: %s", e)
             time.sleep(5)
         return []
 
@@ -195,11 +175,9 @@ class TelegramBotListener:
             return None
         text = text.strip()
 
-        # Handle legacy commands
         if text in COMMANDS:
             return COMMANDS[text], text
 
-        # Handle slash commands
         if text.startswith('/'):
             parts = text.split()
             command = parts[0].lstrip('/')
@@ -222,7 +200,6 @@ class TelegramBotListener:
             elif command == 'help':
                 return self._show_help, '/help'
 
-        # Handle legacy keywords
         for keyword, handler in COMMANDS.items():
             if keyword in text:
                 return handler, keyword
@@ -230,7 +207,6 @@ class TelegramBotListener:
         return None
 
     def _show_help(self) -> dict:
-        """Show available commands"""
         help_text = """
 <b>📖 AWS Guardian 명령어</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -266,22 +242,20 @@ class TelegramBotListener:
             return
 
         handler, command_text = parsed
-        print(f"[Bot] Command received from {from_user}: {command_text}")
+        logger.info("Command received from %s: %s", from_user, command_text)
 
         try:
             result = handler()
             self._format_response(result, command_text)
         except Exception as e:
-            print(f"[Bot] Command error: {e}")
+            logger.error("Command error: %s", e)
             self.telegram.send_message(f"❌ <b>명령 실패</b>\n명령: {command_text}\n오류: {str(e)}")
 
     def _format_response(self, result: dict, command_text: str):
-        """Format and send response based on command result type"""
         if 'error' in result:
             self.telegram.send_message(f"❌ <b>오류</b>\n{result['error']}")
             return
 
-        # Auto-remediation result (steps)
         if 'steps' in result:
             lines = [
                 f"✅ <b>자동 수정 완료</b>",
@@ -302,26 +276,24 @@ class TelegramBotListener:
 
             self.telegram.send_message('\n'.join(lines))
 
-        # Status result
         elif 'ec2_running' in result:
-            threshold_icon = "🟢" if result['today_cost'] < result['threshold'] else "🔴"
+            threshold_icon = "🟢" if result.get('today_cost', 0) < result['threshold'] else "🔴"
             lines = [
                 "<b>📊 현재 상태</b>",
                 "━━━━━━━━━━━━━━━━━━━",
                 f"🖥️  EC2: {result['ec2_running']}개 실행 중",
                 f"🪣 S3: {result['s3_buckets']}개 버킷",
-                f"{threshold_icon} 비용: ${result['today_cost']:.2f} / ${result['threshold']:.2f}",
+                f"{threshold_icon} 임계값: ${result['threshold']:.2f}",
                 "━━━━━━━━━━━━━━━━━━━",
             ]
             self.telegram.send_message('\n'.join(lines))
 
-        # Instances list
         elif 'instances' in result and result.get('count', 0) > 0:
             lines = [
                 f"<b>🖥️  실행 중인 인스턴스 ({result['count']})</b>",
                 "━━━━━━━━━━━━━━━━━━━",
             ]
-            for inst in result['instances'][:10]:  # Show first 10
+            for inst in result['instances'][:10]:
                 lines.append(f"• <code>{inst['instance_id']}</code>")
                 lines.append(f"  타입: {inst['instance_type']} | 상태: {inst['state']}")
             if result['count'] > 10:
@@ -331,21 +303,18 @@ class TelegramBotListener:
         elif 'instances' in result:
             self.telegram.send_message("✅ 실행 중인 인스턴스가 없습니다.")
 
-        # Stop instance result
         elif result.get('action') == 'stop_instance':
             self.telegram.send_message(f"✅ <b>인스턴스 중지</b>\nID: <code>{result['instance_id']}</code>\n상태: {result['status']}")
 
-        # Set threshold result
         elif result.get('action') == 'set_threshold':
             self.telegram.send_message(f"✅ <b>임계값 변경</b>\n새 임계값: ${result['new_threshold']:.2f}")
 
-        # History result
         elif 'events' in result and result.get('count', 0) > 0:
             lines = [
                 f"<b>📜 최근 이벤트 ({result['count']})</b> (최근 {result['hours']}시간)",
                 "━━━━━━━━━━━━━━━━━━━",
             ]
-            for event in result['events'][:10]:  # Show first 10
+            for event in result['events'][:10]:
                 lines.append(f"• {event.get('check_type', 'unknown')}: {event.get('status', 'N/A')}")
             if result['count'] > 10:
                 lines.append(f"\n... 외 {result['count'] - 10}개")
@@ -355,13 +324,9 @@ class TelegramBotListener:
             self.telegram.send_message(f"✅ 최근 {result.get('hours', 24)}시간 이벤트가 없습니다.")
 
     def run(self):
-        print(f"[Bot] AWS Guardian Telegram Bot 시작")
-        print(f"[Bot] 사용 가능한 명령어:")
-        print(f"  상태: /status, /instances, /history [시간]")
-        print(f"  제어: /stop <id>, /threshold <금액>")
-        print(f"  자동: 요금과다 원인수정, 해킹우려 수정")
-        print(f"  도움: /help")
-        print(f"[Bot] 종료하려면 Ctrl+C\n")
+        logger.info("AWS Guardian Telegram Bot 시작")
+        logger.info("사용 가능한 명령어: /status, /instances, /history, /stop, /threshold, /help")
+        logger.info("종료하려면 Ctrl+C")
 
         while self.running:
             updates = self.get_updates()
@@ -372,13 +337,18 @@ class TelegramBotListener:
                 if 'message' in update:
                     self.handle_message(update['message'])
 
-        print("[Bot] Stopped.")
+        logger.info("Bot stopped.")
 
 
 if __name__ == '__main__':
     if not os.getenv('TELEGRAM_BOT_TOKEN'):
         print("TELEGRAM_BOT_TOKEN 환경변수가 필요합니다.")
         sys.exit(1)
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format='[%(asctime)s] %(levelname)-8s [%(name)s] %(message)s'
+    )
 
     bot = TelegramBotListener()
     bot.run()

@@ -2,11 +2,11 @@
 from typing import Dict, Any, Optional
 from logging import Logger
 
-from storage.dynamodb import DynamoDBStorage
-from checkers.ec2 import EC2Checker
-from checkers.s3 import S3Checker
-from config import Config
-from logging_config import log_remediation
+from guardian.storage.dynamodb import DynamoDBStorage
+from guardian.checkers.ec2 import EC2Checker
+from guardian.checkers.s3 import S3Checker
+from guardian.config import Config
+from guardian.logging_config import log_remediation
 
 
 class AutoRemediationResponder:

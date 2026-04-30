@@ -30,6 +30,20 @@ class TestS3Checker(unittest.TestCase):
                 if 'BucketAlreadyExists' not in str(e):
                     print(f"Setup warning for {bucket}: {e}")
 
+        # Ensure private bucket is actually private
+        try:
+            cls.s3_client.put_public_access_block(
+                Bucket=cls.private_bucket,
+                PublicAccessBlockConfiguration={
+                    'BlockPublicAcls': True,
+                    'IgnorePublicAcls': True,
+                    'BlockPublicPolicy': True,
+                    'RestrictPublicBuckets': True
+                }
+            )
+        except Exception as e:
+            print(f"Setup warning: Could not set public access block for {cls.private_bucket}: {e}")
+
     @classmethod
     def tearDownClass(cls):
         for bucket in [cls.private_bucket, cls.test_bucket]:

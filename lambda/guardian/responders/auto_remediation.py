@@ -1,13 +1,9 @@
 """Auto-remediation actions for AWS Guardian Telegram commands"""
-import os
-import sys
-import boto3
 import logging
-from datetime import datetime
-from datetime import timezone as tz
+from datetime import datetime, timezone as tz
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from config import Config
+from guardian.config import Config
+from guardian.aws_client_provider import AWSClientProvider
 
 logger = logging.getLogger('auto_remediation')
 
@@ -38,8 +34,7 @@ def remediate_cost_overrun() -> dict:
                 'status': 'done'
             })
 
-            kwargs = Config.get_boto3_kwargs()
-            ssm = boto3.client('ssm', **kwargs)
+            ssm = AWSClientProvider.get_client('ssm')
             ssm.put_parameter(
                 Name='/guardian/cost-threshold',
                 Value='20.0',
@@ -54,8 +49,7 @@ def remediate_cost_overrun() -> dict:
                 '- 불필요한 인스턴스 중지 권장'
             )
         else:
-            kwargs = Config.get_boto3_kwargs()
-            ce = boto3.client('ce', **kwargs)
+            ce = AWSClientProvider.get_client('ce')
             today = datetime.now(tz.utc).strftime('%Y-%m-%d')
             yesterday = (datetime.now(tz.utc).replace(hour=0, minute=0, second=0)).strftime('%Y-%m-%d')
 
@@ -79,7 +73,7 @@ def remediate_cost_overrun() -> dict:
                     'status': 'analyzed'
                 })
             except Exception as ce_error:
-                logger.warning(f"Cost Explorer API failed: {ce_error}")
+                logger.warning("Cost Explorer API failed: %s", ce_error)
                 results['steps'].append({
                     'name': '비용 상세 분석',
                     'detail': 'Cost Explorer API 조회 실패 (권한 확인)',
@@ -87,7 +81,7 @@ def remediate_cost_overrun() -> dict:
                 })
 
             try:
-                ssm = boto3.client('ssm', **kwargs)
+                ssm = AWSClientProvider.get_client('ssm')
                 current = float(ssm.get_parameter(Name='/guardian/cost-threshold')['Parameter']['Value'])
                 new_threshold = current * 2
                 ssm.put_parameter(Name='/guardian/cost-threshold', Value=str(new_threshold), Type='String', Overwrite=True)
@@ -105,7 +99,7 @@ def remediate_cost_overrun() -> dict:
                     f'- 불필요한 리소스 정리 권장'
                 )
             except Exception as ssm_error:
-                logger.error(f"SSM parameter update failed: {ssm_error}")
+                logger.error("SSM parameter update failed: %s", ssm_error)
                 results['steps'].append({
                     'name': '임계값 상향',
                     'detail': f'SSM 업데이트 실패: {str(ssm_error)}',
@@ -114,7 +108,7 @@ def remediate_cost_overrun() -> dict:
                 results['summary'] = '일부 단계가 실패했습니다. 콘솔에서 수동 확인 필요.'
 
     except Exception as e:
-        logger.error(f"Cost remediation error: {e}")
+        logger.error("Cost remediation error: %s", e)
         results['steps'].append({
             'name': '자동 수정',
             'detail': f'오류: {str(e)}',
@@ -134,16 +128,13 @@ def remediate_hacking_suspicion() -> dict:
     }
 
     try:
-        kwargs = Config.get_boto3_kwargs()
         stopped_instances = []
         blocked_buckets = []
 
-        # 1. Stop ALL running EC2 instances
         regions = ['us-east-1'] if Config.is_localstack() else _get_all_regions()
 
         for region in regions:
-            regional_kwargs = {**kwargs, 'region_name': region}
-            ec2 = boto3.client('ec2', **regional_kwargs)
+            ec2 = AWSClientProvider.get_client('ec2', region=region)
 
             try:
                 response = ec2.describe_instances(
@@ -159,9 +150,9 @@ def remediate_hacking_suspicion() -> dict:
                     ec2.stop_instances(InstanceIds=instance_ids)
                     for iid in instance_ids:
                         stopped_instances.append(f"{iid} ({region})")
-                        logger.info(f"Stopped instance: {iid} in {region}")
+                        logger.info("Stopped instance: %s in %s", iid, region)
             except Exception as e:
-                logger.error(f"Failed to stop instances in {region}: {e}")
+                logger.error("Failed to stop instances in %s: %s", region, e)
                 results['steps'].append({
                     'name': f'EC2 중지 ({region})',
                     'detail': str(e),
@@ -175,8 +166,7 @@ def remediate_hacking_suspicion() -> dict:
                 'status': 'done'
             })
 
-        # 2. Block ALL S3 bucket public access
-        s3 = boto3.client('s3', **kwargs)
+        s3 = AWSClientProvider.get_client('s3')
 
         try:
             buckets_response = s3.list_buckets()
@@ -193,9 +183,9 @@ def remediate_hacking_suspicion() -> dict:
                         }
                     )
                     blocked_buckets.append(bucket_name)
-                    logger.info(f"Blocked public access for bucket: {bucket_name}")
+                    logger.info("Blocked public access for bucket: %s", bucket_name)
                 except Exception as bucket_error:
-                    logger.warning(f"Failed to block public access for {bucket_name}: {bucket_error}")
+                    logger.warning("Failed to block public access for %s: %s", bucket_name, bucket_error)
 
             if blocked_buckets:
                 results['steps'].append({
@@ -204,14 +194,13 @@ def remediate_hacking_suspicion() -> dict:
                     'status': 'done'
                 })
         except Exception as s3_error:
-            logger.error(f"S3 list buckets failed: {s3_error}")
+            logger.error("S3 list buckets failed: %s", s3_error)
             results['steps'].append({
                 'name': 'S3 퍼블릭 액세스 차단',
                 'detail': str(s3_error),
                 'status': 'failed'
             })
 
-        # 3. Summary
         results['summary'] = (
             f'보안 위협 자동 수정 완료.\n'
             f'- EC2: {len(stopped_instances)}개 인스턴스 중지\n'
@@ -220,7 +209,7 @@ def remediate_hacking_suspicion() -> dict:
         )
 
     except Exception as e:
-        logger.error(f"Hacking suspicion remediation error: {e}")
+        logger.error("Hacking suspicion remediation error: %s", e)
         results['steps'].append({
             'name': '자동 수정',
             'detail': f'오류: {str(e)}',
@@ -232,7 +221,6 @@ def remediate_hacking_suspicion() -> dict:
 
 
 def _get_all_regions() -> list:
-    kwargs = Config.get_boto3_kwargs()
-    ec2 = boto3.client('ec2', **kwargs)
+    ec2 = AWSClientProvider.get_client('ec2')
     response = ec2.describe_regions()
     return [r['RegionName'] for r in response['Regions']]

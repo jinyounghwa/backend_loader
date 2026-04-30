@@ -269,16 +269,11 @@ class TestCloudTrailChecker(unittest.TestCase):
 class TestCloudTrailCheckerIntegration(unittest.TestCase):
     """Integration tests for CloudTrailChecker with mocked AWS"""
 
-    @patch('guardian.checkers.cloudtrail.boto3')
-    def test_full_check_workflow(self, mock_boto3):
+    def test_full_check_workflow(self):
         """Test complete check workflow"""
         # Setup mocks
         mock_cloudtrail = Mock()
         mock_sts = Mock()
-        mock_boto3.client.side_effect = lambda svc, *args, **kwargs: {
-            'cloudtrail': mock_cloudtrail,
-            'sts': mock_sts
-        }.get(svc)
 
         mock_sts.get_caller_identity.return_value = {
             'Arn': 'arn:aws:iam::123456789:user/test'

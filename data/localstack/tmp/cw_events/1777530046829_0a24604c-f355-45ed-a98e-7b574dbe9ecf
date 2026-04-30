@@ -1,0 +1,1 @@
+{"Source": "aws.ssm", "Detail": "{\"name\": \"/guardian/cost-threshold\", \"operation\": \"Create\"}", "DetailType": "Parameter Store Change"}

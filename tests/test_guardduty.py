@@ -220,7 +220,8 @@ class TestGuardDutyChecker(unittest.TestCase):
 
         result = self.checker.check()
 
-        self.assertEqual(result.severity, 'ERROR')
+        # CheckResult.error() returns HIGH severity
+        self.assertEqual(result.severity, 'HIGH')
         self.assertIn('Failed', result.message)
 
     def test_finding_details_extraction(self):

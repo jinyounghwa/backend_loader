@@ -1,7 +1,11 @@
 """Telegram notification responder for AWS Guardian"""
-import requests
+import logging
 import os
+import requests
 from typing import Dict, Any, List
+
+logger = logging.getLogger(__name__)
+
 
 class TelegramResponder:
     def __init__(self, bot_token: str = None, chat_id: str = None):
@@ -30,7 +34,7 @@ class TelegramResponder:
             )
             return response.status_code == 200
         except Exception as e:
-            print(f"Error sending Telegram message: {e}")
+            logger.error("Error sending Telegram message: %s", e)
             return False
 
     def send_cost_alert(self, cost_data: Dict[str, Any]) -> bool:

@@ -57,7 +57,7 @@ def setup_logger(name: str, log_file: str = None, level: int = logging.INFO) -> 
             file_handler.setFormatter(JSONFormatter())
             logger.addHandler(file_handler)
         except Exception as e:
-            logger.warning(f"Could not set up file logging: {e}")
+            logger.warning("Could not set up file logging: %s", e)
 
     return logger
 

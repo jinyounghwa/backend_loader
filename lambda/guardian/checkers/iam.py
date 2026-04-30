@@ -1,43 +1,36 @@
 """IAM checker for permission changes detection."""
 
-from typing import Dict, Any, List, Set, Optional
-from datetime import datetime, timezone
+import json
 import logging
+from datetime import datetime, timezone
+from typing import Dict, Any, List, Set, Optional
 
-from base import BaseChecker, CheckResult
+from guardian.checkers.base import BaseChecker, CheckResult
 
 logger = logging.getLogger(__name__)
 
 
 class IAMChecker(BaseChecker):
-    """Detect IAM permission changes and access key creation."""
 
     def __init__(self, clients: Dict[str, Any], config: Dict[str, Any]):
         super().__init__(clients, config)
         self.iam = clients.get('iam')
-        self.dynamodb = clients.get('dynamodb')
+        self.dynamodb_resource = clients.get('dynamodb_resource')
         self.baseline_key = 'iam-baseline'
+        self.table_name = config.get('iam_baseline_table', 'guardian-iam-baseline')
 
     def check(self) -> CheckResult:
-        """Check for IAM permission changes."""
         self._log_check_start('IAM')
 
         try:
-            # Get current IAM state
             current_users = self._get_iam_users()
             current_keys = self._get_access_keys(current_users)
-
-            # Get baseline from DynamoDB
             baseline = self._get_baseline()
-
-            # Detect changes
             changes = self._detect_changes(current_users, current_keys, baseline)
 
             if changes:
                 severity = self._determine_severity(changes)
                 self._log_check_end('IAM', severity)
-
-                # Save current state as new baseline
                 self._save_baseline(current_users, current_keys)
 
                 return CheckResult(
@@ -62,7 +55,6 @@ class IAMChecker(BaseChecker):
             )
 
     def _get_iam_users(self) -> Dict[str, Dict[str, Any]]:
-        """Get all IAM users."""
         if not self.iam:
             return {}
 
@@ -77,12 +69,11 @@ class IAMChecker(BaseChecker):
                         'path': user.get('Path', '/')
                     }
         except Exception as e:
-            logger.warning(f"Error fetching IAM users: {str(e)}")
+            logger.warning("Error fetching IAM users: %s", e)
 
         return users
 
-    def _get_access_keys(self, users: Dict[str, Dict[str, Any]]) -> Dict[str, List[str]]:
-        """Get access keys for each user."""
+    def _get_access_keys(self, users: Dict[str, Dict[str, Any]]) -> Dict[str, List[Dict[str, str]]]:
         if not self.iam:
             return {}
 
@@ -100,29 +91,27 @@ class IAMChecker(BaseChecker):
                         })
                 keys[username] = user_keys
         except Exception as e:
-            logger.warning(f"Error fetching IAM access keys: {str(e)}")
+            logger.warning("Error fetching IAM access keys: %s", e)
 
         return keys
 
     def _get_baseline(self) -> Dict[str, Any]:
-        """Get baseline IAM state from DynamoDB."""
-        if not self.dynamodb:
+        if not self.dynamodb_resource:
             return {'users': {}, 'keys': {}}
 
         try:
-            response = self.dynamodb.get_item(
-                TableName='guardian-iam-baseline',
-                Key={'baseline_id': {'S': self.baseline_key}}
+            table = self.dynamodb_resource.Table(self.table_name)
+            response = table.get_item(
+                Key={'baseline_id': self.baseline_key}
             )
             if 'Item' in response:
-                import json
                 item = response['Item']
                 return {
-                    'users': json.loads(item.get('users', {}).get('S', '{}')),
-                    'keys': json.loads(item.get('keys', {}).get('S', '{}'))
+                    'users': json.loads(item.get('users', '{}')),
+                    'keys': json.loads(item.get('keys', '{}'))
                 }
         except Exception as e:
-            logger.warning(f"Error fetching IAM baseline: {str(e)}")
+            logger.warning("Error fetching IAM baseline: %s", e)
 
         return {'users': {}, 'keys': {}}
 
@@ -132,13 +121,11 @@ class IAMChecker(BaseChecker):
         current_keys: Dict[str, List[Dict[str, str]]],
         baseline: Dict[str, Any]
     ) -> List[Dict[str, str]]:
-        """Detect IAM changes."""
         changes = []
 
         baseline_users = set(baseline.get('users', {}).keys())
         current_user_set = set(current_users.keys())
 
-        # New users
         for username in current_user_set - baseline_users:
             changes.append({
                 'type': 'NEW_USER',
@@ -146,7 +133,6 @@ class IAMChecker(BaseChecker):
                 'severity': 'HIGH'
             })
 
-        # Deleted users
         for username in baseline_users - current_user_set:
             changes.append({
                 'type': 'DELETED_USER',
@@ -154,7 +140,6 @@ class IAMChecker(BaseChecker):
                 'severity': 'MEDIUM'
             })
 
-        # New access keys
         baseline_keys = baseline.get('keys', {})
         for username in current_keys:
             current_key_ids = {k['key_id'] for k in current_keys[username]}
@@ -172,7 +157,6 @@ class IAMChecker(BaseChecker):
         return changes
 
     def _determine_severity(self, changes: List[Dict[str, str]]) -> str:
-        """Determine overall severity."""
         high_severity_count = sum(1 for c in changes if c['severity'] == 'HIGH')
 
         if high_severity_count >= 2:
@@ -187,20 +171,16 @@ class IAMChecker(BaseChecker):
         users: Dict[str, Dict[str, Any]],
         keys: Dict[str, List[Dict[str, str]]]
     ):
-        """Save current state as baseline to DynamoDB."""
-        if not self.dynamodb:
+        if not self.dynamodb_resource:
             return
 
         try:
-            import json
-            self.dynamodb.put_item(
-                TableName='guardian-iam-baseline',
-                Item={
-                    'baseline_id': {'S': self.baseline_key},
-                    'users': {'S': json.dumps(users)},
-                    'keys': {'S': json.dumps(keys)},
-                    'timestamp': {'S': datetime.now(timezone.utc).isoformat()}
-                }
-            )
+            table = self.dynamodb_resource.Table(self.table_name)
+            table.put_item(Item={
+                'baseline_id': self.baseline_key,
+                'users': json.dumps(users),
+                'keys': json.dumps(keys),
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            })
         except Exception as e:
-            logger.warning(f"Error saving IAM baseline: {str(e)}")
+            logger.warning("Error saving IAM baseline: %s", e)

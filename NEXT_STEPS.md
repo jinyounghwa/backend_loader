@@ -425,11 +425,11 @@ Propose (Claude) → Review (Gemini) → Iterate (Claude) → Converge (Gemini) 
 - 역할별 권한 (관리자 / 읽기 전용)
 - 설정 변경 시 인증 요구
 
-### 3-4. Discord Slash Command 연동
-- `lambda/discord_webhook/handler.py` 실제 연동
-- Discord Developer Portal 봇 설정
-- API Gateway + Lambda 배포
-- `/status`, `/stop`, `/budget set`, `/history` 명령어 활성화
+### 3-4. Telegram 명령어 확장
+- 기존 `/status`, `/instances`, `/stop`, `/threshold`, `/history` 강화
+- `/remediate` - 자동 대응 옵션 제공
+- `/insights` - AI 기반 위협 분석
+- `/export` - 보고서 PDF 생성
 
 ---
 
@@ -1353,38 +1353,39 @@ JWT 토큰 발급
 
 ---
 
-### Sprint 9: Discord Slash Command 통합
+### Sprint 9: Telegram 명령어 고급 기능 추가
 **상태**: 📋 계획 단계
 **예상 소요시간**: 2-3일
-**우선순위**: 낮음
+**우선순위**: 중간
 
-**목표**: Discord 봇 명령어 완전 구현
+**목표**: Telegram 봇 명령어 고급 기능 완전 구현
 
 #### 🎯 구현할 명령어
-- `/status` - 현재 EC2, S3, 비용 상태
-- `/stop <instance-id>` - 인스턴스 중지
-- `/instances` - 실행 중인 인스턴스 목록
-- `/bucket-policy <bucket>` - S3 버킷 정책 수정
-- `/threshold <amount>` - 비용 임계값 변경
-- `/history [hours]` - 최근 이벤트 로그
+- `/status` - 현재 EC2, S3, 비용 상태 (✅ 기존)
+- `/stop <instance-id>` - 인스턴스 중지 (✅ 기존)
+- `/instances` - 실행 중인 인스턴스 목록 (✅ 기존)
+- `/remediate <finding-id>` - 자동 대응 실행 (NEW)
+- `/threshold <amount>` - 비용 임계값 변경 (✅ 기존)
+- `/history [hours]` - 최근 이벤트 로그 (✅ 기존)
+- `/insights` - Gemini AI 위협 분석 (NEW)
+- `/export [format]` - 보고서 생성 (CSV/PDF) (NEW)
 
 #### 📁 필요한 파일
-1. `lambda/discord_webhook/handler.py` (ENHANCE)
-2. `lambda/discord_webhook/commands/` (NEW)
-3. `lambda/discord_webhook/responses/` (NEW)
-4. Discord Developer Portal 설정
+1. `lambda/guardian/responders/telegram_bot.py` (ENHANCE)
+2. `lambda/guardian/analyzers/telegram_insights.py` (NEW)
+3. `lambda/guardian/reporters/telegram_exporter.py` (NEW)
 
 #### 🔄 구현 흐름
 ```
-Discord → Slash Command 실행
+Telegram → 명령어 메시지
   ↓
-Lambda (discord_webhook) 트리거
+telegram_bot.py 파싱
   ↓
-명령어 파싱
+명령어별 핸들러 실행
   ↓
-AWS API 호출
+AWS API 호출 또는 AI 분석
   ↓
-Discord Embed 응답 반환
+Telegram 메시지 응답 반환
 ```
 
 ---
@@ -1413,10 +1414,10 @@ Sprint 8: 대시보드 인증 (4-5일)
   ✓ RBAC 구현
   ✓ 감사로그
 
-Sprint 9: telegram 봇 명령어 (2-3일)
-  ✓ Slash Command 구현
-  ✓ 응답 포맷팅
-  ✓ 명령어별 권한 검사
+Sprint 9: Telegram 고급 기능 (2-3일)
+  ✓ 고급 명령어 확장 (/remediate, /insights, /export)
+  ✓ Gemini AI 통합
+  ✓ 보고서 생성
 ```
 
 ---
@@ -1514,3 +1515,4 @@ tail -f ~/.gemini/logs/claude-gemini.log
 
  # 다음 개발 시 이 명령어부터 다시 실행                                                                                                                                                                                           
   ./scripts/gemini-ask.sh --file docker-compose.yml "Review this Docker Compose..." architecture    
+

@@ -1,19 +1,16 @@
 """GuardDuty checker for threat detection."""
 
-from typing import Dict, Any, List, Optional
-from datetime import datetime, timezone
 import logging
+from datetime import datetime, timedelta, timezone
+from typing import Dict, Any, List, Optional
 
-from base import BaseChecker, CheckResult
+from guardian.checkers.base import BaseChecker, CheckResult
 
 logger = logging.getLogger(__name__)
 
 
 class GuardDutyChecker(BaseChecker):
-    """Detect security threats using GuardDuty findings."""
 
-    # Map GuardDuty severity (0.1-10.0) to Guardian severity
-    # Low: 0.1-3.9, Medium: 4.0-6.9, High: 7.0-10.0
     SEVERITY_MAP = {
         'CRITICAL': 7.0,
         'HIGH': 4.0,
@@ -25,6 +22,7 @@ class GuardDutyChecker(BaseChecker):
         super().__init__(clients, config)
         self.guardduty = clients.get('guardduty')
         self.ec2 = clients.get('ec2')
+        self.lookback_hours = config.get('guardduty_lookback_hours', 24)
 
     def check(self) -> CheckResult:
         """Check for GuardDuty threats."""
@@ -42,8 +40,8 @@ class GuardDutyChecker(BaseChecker):
                 )
 
             # Analyze findings by severity
-            high_severity = [f for f in findings if f['Severity'] >= 7.0]
-            med_severity = [f for f in findings if 4.0 <= f['Severity'] < 7.0]
+            high_severity = [f for f in findings if f['severity'] >= 7.0]
+            med_severity = [f for f in findings if 4.0 <= f['severity'] < 7.0]
 
             overall_severity = self._determine_severity(findings)
             self._log_check_end('GuardDuty', overall_severity)
@@ -88,8 +86,7 @@ class GuardDutyChecker(BaseChecker):
                 FindingCriteria={
                     'Criterion': {
                         'updatedAt': {
-                            'Gte': int((datetime.now(timezone.utc) - \
-                                        __import__('datetime').timedelta(hours=24)).timestamp() * 1000)
+                            'Gte': int((datetime.now(timezone.utc) - timedelta(hours=self.lookback_hours)).timestamp() * 1000)
                         },
                         'severity': {
                             'Gte': 4  # Medium and above
@@ -142,7 +139,13 @@ class GuardDutyChecker(BaseChecker):
         for finding in findings:
             threat_type = finding.get('type', '')
             if threat_type:
-                threat_types.add(threat_type.split('.')[-1])
+                # Extract both category (before :) and detail (after /)
+                category = threat_type.split(':')[0] if ':' in threat_type else ''
+                detail = threat_type.split('/')[-1] if '/' in threat_type else threat_type
+                if category:
+                    threat_types.add(category)
+                if detail:
+                    threat_types.add(detail)
 
         suggestions = []
 

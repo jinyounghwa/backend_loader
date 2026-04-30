@@ -1,8 +1,12 @@
 """Discord notification responder for AWS Guardian"""
+import logging
 import requests
 import json
 import os
 from typing import Dict, Any
+
+logger = logging.getLogger(__name__)
+
 
 class DiscordResponder:
     def __init__(self, webhook_url: str = None):
@@ -24,7 +28,7 @@ class DiscordResponder:
             )
             return response.status_code in [200, 204]
         except Exception as e:
-            print(f"Error sending Discord embed: {e}")
+            logger.error("Error sending Discord embed: %s", e)
             return False
 
     def send_cost_alert(self, cost_data: Dict[str, Any]) -> bool:
