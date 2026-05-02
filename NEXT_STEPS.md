@@ -4,15 +4,23 @@
 
 ## ⚡ 빠른 참고 (현재 상태)
 
-**현재**: Sprint 7 Phase 1-5 완료 (2026-05-02) ✅
+**현재**: Sprint 8 계획 완료 (2026-05-02), 다음 세션 구현 준비 ✅
 
 **완료된 것 (Sprint 7)**:
-- ✅ Phase 1-3: CloudTrail, IAM, GuardDuty 체커 + Telegram 통합 (~1,160줄)
-- ✅ Phase 4: IAM 권한 추가 + LocalStack 배포 스크립트 + 실제 배포 검증
-- ✅ Phase 5 Part 1: 56개 테스트 케이스 작성
-- ✅ Phase 5 Part 2: test_orchestrator.py 18개 테스트 추가 + 모두 통과
-- ✅ Phase 5 Part 3: test_cloudtrail.py (16/16), test_iam.py (17/17) 모두 통과
-- ✅ 전체 테스트: 102/116 통과 (88%) → 추가 테스트 수정 필요 (GuardDuty, Auto Remediation, S3)
+- ✅ Phase 1-5 전체 완료 (2026-05-02)
+- ✅ Organizations API + STS AssumeRole + 교차 계정 자격증명 + DynamoDB account_id + Telegram 계정 알림
+- ✅ 전체 테스트: 116/116 통과 (100%)
+- ✅ git commit: "Sprint 7 Phase 1-5 complete: Organizations API + cross-account credentials + DynamoDB + Telegram"
+
+**Sprint 8 계획 완료 (2026-05-02)**:
+- ✅ 아키텍처 설계 완료 (NextAuth v5 + Next.js 16.2.4 + GitHub OAuth)
+- ✅ Gemini 아키텍처 검증 완료
+- ✅ 구현 계획 문서화: `/Users/younghwa.jin/.claude/plans/golden-percolating-pixel.md`
+- 📋 Gemini 검증 주요 사항:
+  - ✅ NextAuth v5는 Next.js 16.2.4과 호환
+  - ✅ JWT 기반 role injection (admin/viewer) 방식 승인
+  - ⚠️ 필수: TypeScript 타입 확장 파일 (`src/types/next-auth.d.ts`) 필요
+  - ⚠️ 필수: `AUTH_SECRET` 생성 필요 (`npx auth secret`)
 
 **완료된 것 (Sprint 7)**:
 - ✅ Phase 1-2: Organizations API + STS AssumeRole 구현 (2026-04-30)
@@ -38,9 +46,38 @@
   - ✅ 모든 alert 메서드: 알림 메시지에 계정 정보 헤더 추가 (🏢)
   - ✅ 단일 계정과 다중 계정 모드 모두 지원
 
+**다음 세션 시작 가이드 (Sprint 8 구현)**:
+
+```bash
+# 1. 계획 파일 검토
+cat /Users/younghwa.jin/.claude/plans/golden-percolating-pixel.md
+
+# 2. 구현 순서 (3단계, 약 3시간)
+# Phase 1: NextAuth v5 설치 + OAuth 설정 (1.5h)
+#   - npm install next-auth@beta
+#   - apps/web/auth.ts 생성
+#   - apps/web/src/app/api/auth/[...nextauth]/route.ts 생성
+#   - apps/web/src/app/login/page.tsx 생성
+#   - apps/web/src/types/next-auth.d.ts 생성 (타입 확장)
+#   - .env.local 설정 (AUTH_SECRET, GITHUB_ID/SECRET, ADMIN_EMAILS)
+
+# Phase 2: Middleware + RBAC (45min)
+#   - apps/web/src/middleware.ts 생성
+#   - apps/web/src/lib/auth-utils.ts 생성
+#   - API 라우트에 auth() 가드 추가
+
+# Phase 3: UI 업데이트 + 감사 로깅 (30min)
+#   - Header.tsx 실시간 유저 정보 표시
+#   - layout.tsx에 SessionProvider 추가
+#   - lambda/guardian/storage/audit_logs.py 생성
+
+# 3. Gemini 아키텍처 리뷰 이미 완료 ✅
+./scripts/gemini-ask.sh "..." architecture  # 이미 실행됨
+```
+
 **다음 세션에서 구현**:
-- 📋 Sprint 8: 웹 대시보드 인증 시스템 (NextAuth 도입)
-- 📋 Sprint 9: Telegram 고급 기능 (/remediate, /insights, /export)
+- 🔄 Sprint 8: 웹 대시보드 인증 시스템 (NextAuth 도입) - 2026-05-05 시작
+- 📋 Sprint 9: Telegram 고급 기능 (/remediate, /insights, /export) - 2026-05-08 시작
 
 **핵심 파일**:
 ```
@@ -1435,44 +1472,73 @@ Telegram 알림 (계정명 명시)
 
 ---
 
-### ✅ Sprint 8: 웹 대시보드 인증 시스템
-**상태**: 📋 계획 준비 중
-**예상 소요시간**: 2-3일 (NextAuth v5 + DynamoDB)
+### 🔄 Sprint 8: 웹 대시보드 인증 시스템
+**상태**: ✅ 계획 완료 (2026-05-02), 구현 준비 완료
+**예상 소요시간**: 2-3시간 (NextAuth v5 + JWT RBAC)
 **우선순위**: 중간
-**시작 예정**: 2026-05-05
+**시작**: 2026-05-05 (다음 세션)
 
-**목표**: NextAuth 기반 OAuth 인증 + 역할 기반 접근 제어 (RBAC)
+**목표**: NextAuth v5 + GitHub OAuth + JWT 역할 기반 접근 제어 (RBAC)
 
-#### 🎯 Phase 1: NextAuth 설정 (1.5시간)
-- NextAuth v5 설정 (GitHub/Google OAuth)
-- DynamoDB 기반 세션 저장소
-- JWT 토큰 구성
+#### ✅ 완료된 계획 문서
+- **계획 파일**: `/Users/younghwa.jin/.claude/plans/golden-percolating-pixel.md`
+- **Gemini 아키텍처 검증**: ✅ 완료
+  - NextAuth v5는 Next.js 16.2.4와 호환 ✓
+  - JWT 기반 role injection 방식 승인 ✓
+  - TypeScript 타입 확장 필수 (next-auth.d.ts)
+  - AUTH_SECRET 생성 필수 (npx auth secret)
 
-#### 🎯 Phase 2: RBAC 구현 (1시간)
-- Role enum (Admin, Viewer, Editor)
-- middleware.ts로 라우트 보호
-- 권한 검사 유틸리티 함수
+#### 🎯 Phase 1: NextAuth v5 + GitHub OAuth 설정 (1.5시간)
+**구현 파일**:
+- `apps/web/auth.ts` - NextAuth 설정 (GitHub provider, JWT role callback)
+- `apps/web/src/app/api/auth/[...nextauth]/route.ts` - OAuth 핸들러
+- `apps/web/src/app/login/page.tsx` - 로그인 페이지
+- `apps/web/src/types/next-auth.d.ts` - TypeScript 타입 확장 (User + Session + JWT role field)
 
-#### 🎯 Phase 3: 감사 로그 (1시간)
-- DynamoDB audit_logs 테이블
-- 모든 쓰기 작업 기록 (who, what, when)
-- 감사 로그 조회 API
+**수정 파일**:
+- `apps/web/package.json` - next-auth@beta 추가
+- `apps/web/.env.local` - AUTH_SECRET, GITHUB_ID/SECRET, ADMIN_EMAILS 추가
 
-#### 📁 필요한 파일
-1. `apps/web/auth.config.ts` - NextAuth 설정
-2. `apps/web/src/app/api/auth/[...nextauth]/route.ts` - OAuth 엔드포인트
-3. `apps/web/src/middleware.ts` - 라우트 보호
-4. `apps/web/src/lib/auth.ts` - 인증 유틸리티
-5. `lambda/guardian/storage/audit_logs.py` - 감사 로그 저장소
+#### 🎯 Phase 2: Middleware + RBAC (45분)
+**구현 파일**:
+- `apps/web/src/middleware.ts` - Route protection (auth re-export)
+- `apps/web/src/lib/auth-utils.ts` - requireAdmin(), isAdmin() 헬퍼
 
-#### ⚙️ 환경변수
+**수정 파일**:
+- `apps/web/src/app/api/events/route.ts` - auth() 가드 추가
+- `apps/web/src/app/api/status/route.ts` - auth() 가드 추가
+
+#### 🎯 Phase 3: Header UI + 감사 로깅 (30분)
+**구현 파일**:
+- `lambda/guardian/storage/audit_logs.py` - DynamoDB 감사 로그 저장
+
+**수정 파일**:
+- `apps/web/src/app/layout.tsx` - SessionProvider 래핑
+- `apps/web/src/components/layout/Header.tsx` - useSession() 후크로 실시간 유저 정보
+- `apps/web/src/app/api/auth/[...nextauth]/route.ts` - 타입 명시
+
+#### ⚙️ 환경변수 설정
+```bash
+# .env.local에 추가
+AUTH_SECRET=<npx auth secret으로 생성>
+AUTH_GITHUB_ID=<GitHub OAuth App ID>
+AUTH_GITHUB_SECRET=<GitHub OAuth App Secret>
+ADMIN_EMAILS=timotolkie@gmail.com
 ```
-NEXTAUTH_SECRET=<random-secret>
-GITHUB_ID=<github-oauth-id>
-GITHUB_SECRET=<github-oauth-secret>
-GOOGLE_ID=<google-oauth-id>
-GOOGLE_SECRET=<google-oauth-secret>
-```
+
+#### 📋 구현 체크리스트
+- [ ] next-auth@beta 설치
+- [ ] auth.ts 작성 (GitHub provider + JWT role callback)
+- [ ] [...nextauth]/route.ts 작성
+- [ ] next-auth.d.ts 타입 확장
+- [ ] login/page.tsx 작성
+- [ ] middleware.ts 작성
+- [ ] auth-utils.ts 작성
+- [ ] Header.tsx 수정 (useSession)
+- [ ] layout.tsx 수정 (SessionProvider)
+- [ ] API 라우트 auth() 가드 추가
+- [ ] npm run dev로 로그인 플로우 테스트
+- [ ] 모든 Python 테스트 여전히 통과 확인 (pytest)
 
 ---
 
