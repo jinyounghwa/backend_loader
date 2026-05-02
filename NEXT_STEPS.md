@@ -4,9 +4,9 @@
 
 ## ⚡ 빠른 참고 (현재 상태)
 
-**현재**: Sprint 7 Phase 1-2 진행 중 (2026-04-30) 🚀
+**현재**: Sprint 7 Phase 1-5 완료 (2026-05-02) ✅
 
-**완료된 것 (Sprint 6)**:
+**완료된 것 (Sprint 7)**:
 - ✅ Phase 1-3: CloudTrail, IAM, GuardDuty 체커 + Telegram 통합 (~1,160줄)
 - ✅ Phase 4: IAM 권한 추가 + LocalStack 배포 스크립트 + 실제 배포 검증
 - ✅ Phase 5 Part 1: 56개 테스트 케이스 작성
@@ -14,17 +14,33 @@
 - ✅ Phase 5 Part 3: test_cloudtrail.py (16/16), test_iam.py (17/17) 모두 통과
 - ✅ 전체 테스트: 102/116 통과 (88%) → 추가 테스트 수정 필요 (GuardDuty, Auto Remediation, S3)
 
-**현재 작업 (Sprint 7)**:
-- ✅ Phase 1-2: Organizations API + STS AssumeRole 구현 완료
-  - ✅ config.py: organizations_enabled, organization_arn, cross_account_role_name 설정 추가
-  - ✅ orchestrator.py: _get_accounts(), _assume_role_for_account() 메서드 추가
-  - ✅ run_all_checks(): 단일/다중 계정 모드 지원 + account_id 기반 결과 저장
-  - ✅ _save_check_results(): account_id 필드 추가
+**완료된 것 (Sprint 7)**:
+- ✅ Phase 1-2: Organizations API + STS AssumeRole 구현 (2026-04-30)
+  - ✅ config.py: organizations_enabled, organization_arn, cross_account_role_name 설정
+  - ✅ orchestrator.py: _get_accounts(), _assume_role_for_account() 메서드
+  - ✅ run_all_checks(): 단일/다중 계정 루프, account_id 기반 결과 저장
+
+- ✅ Phase 3: 교차 계정 자격증명 주입 (2026-05-02)
+  - ✅ AWSClientProvider: get_client_for_account() - 임시 자격증명으로 클라이언트 생성
+  - ✅ BaseChecker: account_id/credentials 파라미터 추가
+  - ✅ orchestrator: _create_account_checkers() - 계정별 체커 인스턴스 생성
+  - ✅ CloudTrail, IAM, GuardDuty 체커: 교차 계정 지원 (SpringFramework 6 체커)
+  - ⏳ EC2, S3, Cost 체커: 향후 Phase 6에서 개선 예정
+
+- ✅ Phase 4: DynamoDB 스키마 account_id 추가 (2026-05-02)
+  - ✅ save_event(): account_id 파라미터 추가 (기본값: 'current')
+  - ✅ get_events_by_account(): 계정별 이벤트 조회 메서드
+  - ✅ get_event_summary(): account_id 필터 지원
+  - ✅ orchestrator: 모든 이벤트 저장 시 account_id 함께 저장
+
+- ✅ Phase 5: Telegram 계정 알림 (2026-05-02)
+  - ✅ send_alert(): account_id/account_name 파라미터 지원
+  - ✅ 모든 alert 메서드: 알림 메시지에 계정 정보 헤더 추가 (🏢)
+  - ✅ 단일 계정과 다중 계정 모드 모두 지원
 
 **다음 세션에서 구현**:
-- 📋 Phase 3: 임시 자격증명을 체커에 주입
-- 📋 Phase 4: DynamoDB 스키마 account_id 추가
-- 📋 Phase 5: Telegram 계정 알림 포맷팅
+- 📋 Sprint 8: 웹 대시보드 인증 시스템 (NextAuth 도입)
+- 📋 Sprint 9: Telegram 고급 기능 (/remediate, /insights, /export)
 
 **핵심 파일**:
 ```
@@ -1419,107 +1435,161 @@ Telegram 알림 (계정명 명시)
 
 ---
 
-### Sprint 8: 웹 대시보드 인증 시스템
-**상태**: 📋 계획 단계
-**예상 소요시간**: 4-5일
-**우선순위**: 낮음
+### ✅ Sprint 8: 웹 대시보드 인증 시스템
+**상태**: 📋 계획 준비 중
+**예상 소요시간**: 2-3일 (NextAuth v5 + DynamoDB)
+**우선순위**: 중간
+**시작 예정**: 2026-05-05
 
-**목표**: NextAuth 기반 인증 + RBAC
+**목표**: NextAuth 기반 OAuth 인증 + 역할 기반 접근 제어 (RBAC)
 
-#### 🎯 기능 요구사항
-- GitHub/Google OAuth 로그인
-- 역할 기반 접근 제어 (Admin/Viewer)
-- 설정 변경 시 인증 강화
-- 감사 로그
+#### 🎯 Phase 1: NextAuth 설정 (1.5시간)
+- NextAuth v5 설정 (GitHub/Google OAuth)
+- DynamoDB 기반 세션 저장소
+- JWT 토큰 구성
+
+#### 🎯 Phase 2: RBAC 구현 (1시간)
+- Role enum (Admin, Viewer, Editor)
+- middleware.ts로 라우트 보호
+- 권한 검사 유틸리티 함수
+
+#### 🎯 Phase 3: 감사 로그 (1시간)
+- DynamoDB audit_logs 테이블
+- 모든 쓰기 작업 기록 (who, what, when)
+- 감사 로그 조회 API
 
 #### 📁 필요한 파일
-1. `apps/web/auth.config.ts` (NextAuth 설정)
-2. `apps/web/src/app/api/auth/[...nextauth]/route.ts`
-3. `apps/web/src/middleware.ts` (보호된 라우트)
-4. `apps/web/src/lib/rbac.ts` (권한 검사)
-5. 데이터베이스 스키마 (사용자, 역할, 감사로그)
+1. `apps/web/auth.config.ts` - NextAuth 설정
+2. `apps/web/src/app/api/auth/[...nextauth]/route.ts` - OAuth 엔드포인트
+3. `apps/web/src/middleware.ts` - 라우트 보호
+4. `apps/web/src/lib/auth.ts` - 인증 유틸리티
+5. `lambda/guardian/storage/audit_logs.py` - 감사 로그 저장소
 
-#### 🔄 구현 흐름
+#### ⚙️ 환경변수
 ```
-로그인 → OAuth
-  ↓
-JWT 토큰 발급
-  ↓
-권한 확인 (RBAC)
-  ↓
-대시보드 접근
-  ↓
-변경사항 감사로그 기록
+NEXTAUTH_SECRET=<random-secret>
+GITHUB_ID=<github-oauth-id>
+GITHUB_SECRET=<github-oauth-secret>
+GOOGLE_ID=<google-oauth-id>
+GOOGLE_SECRET=<google-oauth-secret>
 ```
 
 ---
 
-### Sprint 9: Telegram 명령어 고급 기능 추가
-**상태**: 📋 계획 단계
+### ✅ Sprint 9: Telegram 고급 명령어 + Gemini AI 통합
+**상태**: 📋 계획 준비 중
 **예상 소요시간**: 2-3일
 **우선순위**: 중간
+**시작 예정**: 2026-05-08
 
-**목표**: Telegram 봇 명령어 고급 기능 완전 구현
+**목표**: Telegram 명령어 완전 구현 + Gemini 위협 분석 통합
 
-#### 🎯 구현할 명령어
-- `/status` - 현재 EC2, S3, 비용 상태 (✅ 기존)
-- `/stop <instance-id>` - 인스턴스 중지 (✅ 기존)
-- `/instances` - 실행 중인 인스턴스 목록 (✅ 기존)
-- `/remediate <finding-id>` - 자동 대응 실행 (NEW)
-- `/threshold <amount>` - 비용 임계값 변경 (✅ 기존)
-- `/history [hours]` - 최근 이벤트 로그 (✅ 기존)
-- `/insights` - Gemini AI 위협 분석 (NEW)
-- `/export [format]` - 보고서 생성 (CSV/PDF) (NEW)
+#### 🎯 Phase 1: 고급 명령어 (1.5시간)
+- `/remediate <finding-id>` - GuardDuty 발견사항 자동 대응
+- `/export [csv|pdf]` - 이벤트 및 비용 보고서 생성
+- `/insights` - 최근 위협 패턴 분석
+
+#### 🎯 Phase 2: Gemini AI 통합 (1시간)
+- Gemini API 호출 (위협 분석, 대응 제안)
+- 자연스러운 한글 설명 생성
+- 컨텍스트 기반 추천사항
+
+#### 🎯 Phase 3: 보고서 생성 (1시간)
+- DynamoDB 데이터 쿼리
+- CSV/PDF 형식으로 변환
+- 이메일 전송 옵션
 
 #### 📁 필요한 파일
 1. `lambda/guardian/responders/telegram_bot.py` (ENHANCE)
-2. `lambda/guardian/analyzers/telegram_insights.py` (NEW)
-3. `lambda/guardian/reporters/telegram_exporter.py` (NEW)
+   - 명령어 핸들러 8개 통합
+   - 사용자 상태 관리 (StateMachine)
 
-#### 🔄 구현 흐름
-```
-Telegram → 명령어 메시지
-  ↓
-telegram_bot.py 파싱
-  ↓
-명령어별 핸들러 실행
-  ↓
-AWS API 호출 또는 AI 분석
-  ↓
-Telegram 메시지 응답 반환
-```
+2. `lambda/guardian/analyzers/gemini_threat_analyzer.py` (NEW)
+   - Gemini API 호출
+   - 위협 컨텍스트 구성
+   - 권장사항 생성
+
+3. `lambda/guardian/reporters/event_exporter.py` (NEW)
+   - DynamoDB 쿼리
+   - CSV/PDF 변환
+   - 메일 전송
+
+#### 🎯 구현할 명령어
+| 명령어 | 상태 | 설명 |
+|--------|------|------|
+| /status | ✅ | EC2, S3, 비용 상태 조회 |
+| /instances | ✅ | 인스턴스 목록 |
+| /stop {id} | ✅ | 인스턴스 중지 |
+| /threshold {amount} | ✅ | 비용 임계값 변경 |
+| /history [hours] | ✅ | 이벤트 로그 |
+| /remediate {id} | NEW | 자동 대응 실행 |
+| /insights | NEW | AI 위협 분석 |
+| /export {format} | NEW | 보고서 생성 |
+| /help | ✅ | 명령어 도움말 |
 
 ---
 
-## 📊 스프린트 로드맵
+### ✅ Sprint 10: 성능 최적화 + 모니터링 강화
+**상태**: 📋 계획 중
+**예상 소요시간**: 2-3일
+**우선순위**: 중간
+**시작 예정**: 2026-05-12
 
-```
-Sprint 5: 프로덕션 배포 실행 (2-3시간)
-  ✓ Terraform 백엔드 설정
-  ✓ GitHub Secret 설정
-  ✓ PR → 배포 승인
-  ✓ 24시간 검증
+**목표**: Lambda 성능 최적화 + CloudWatch 대시보드 확장
 
-Sprint 6: AWS 서비스 감시 확장 (3-4일)
-  ✓ CloudTrail 감시
-  ✓ IAM 권한 감시
-  ✓ GuardDuty 위협 통합
+#### 🎯 Phase 1: Lambda 최적화 (1.5시간)
+- 콜드 스타트 시간 단축 (<500ms 목표)
+- 메모리 설정 최적화 (512MB → 1GB)
+- boto3 세션 캐싱 확장 (리전별)
 
-Sprint 7: 다중 계정 지원 (3-4일)
-  ✓ Organizations 통합
-  ✓ Cross-account IAM
-  ✓ 계정별 설정
+#### 🎯 Phase 2: 모니터링 강화 (1시간)
+- Lambda 실행 메트릭 수집
+- DynamoDB 용량 모니터링
+- 비용 추이 분석 대시보드
 
-Sprint 8: 대시보드 인증 (4-5일)
-  ✓ NextAuth 통합
-  ✓ RBAC 구현
-  ✓ 감사로그
+#### 🎯 Phase 3: 로그 분석 (1시간)
+- CloudWatch Insights 쿼리
+- 성능 병목 지점 식별
+- 개선 방안 제시
 
-Sprint 9: Telegram 고급 기능 (2-3일)
-  ✓ 고급 명령어 확장 (/remediate, /insights, /export)
-  ✓ Gemini AI 통합
-  ✓ 보고서 생성
-```
+---
+
+### ✅ Sprint 11: 웹 프론트엔드 개선
+**상태**: 📋 계획 중
+**예상 소요시간**: 2-3일
+**우선순위**: 낮음
+**시작 예정**: 2026-05-15
+
+**목표**: 대시보드 UX/UI 개선 + 실시간 업데이트
+
+#### 🎯 Phase 1: 대시보드 리디자인 (1.5시간)
+- 다중 계정 뷰 추가 (계정 선택 탭)
+- 실시간 이벤트 피드 (WebSocket 기반)
+- 계정별 위협 지표 (Risk Score)
+
+#### 🎯 Phase 2: 대응 액션 UI (1시간)
+- 원클릭 인스턴스 중지
+- 자동 대응 히스토리 시각화
+- 롤백 옵션 제공
+
+---
+
+### 📊 전체 로드맵
+
+| Sprint | 상태 | 목표 | 기간 |
+|--------|------|------|------|
+| Sprint 5 | ✅ | 프로덕션 배포 | 2h |
+| Sprint 6 | ✅ | AWS 서비스 확장 (CloudTrail, IAM, GuardDuty) | 3d |
+| Sprint 7 | ✅ | 다중 계정 지원 (Organizations API) | 3d |
+| Sprint 8 | 📋 | 웹 인증 (NextAuth + RBAC) | 2d |
+| Sprint 9 | 📋 | Telegram AI 고급 기능 | 2d |
+| Sprint 10 | 📋 | 성능 최적화 + 모니터링 | 2d |
+| Sprint 11 | 📋 | 프론트엔드 개선 + 실시간 | 2d |
+
+**누적 목표**:
+- ✅ 완료: 7 sprints (Lambda, AWS 감시, 다중 계정)
+- 📋 예정: 4 sprints (인증, AI, 최적화, UX)
+- 🚀 예상 완료: 2026-05-25
 
 ---
 
