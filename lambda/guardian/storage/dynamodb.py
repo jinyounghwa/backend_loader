@@ -22,7 +22,8 @@ class DynamoDBStorage:
             logger.warning("Could not access table %s: %s", self.table_name, e)
             self.table = None
 
-    def save_event(self, event_type: str, severity: str, details: Dict[str, Any]) -> bool:
+    def save_event(self, event_type: str, severity: str, details: Dict[str, Any],
+                   account_id: str = 'current') -> bool:
         try:
             if not self.table:
                 logger.warning("DynamoDB table not available")
@@ -33,6 +34,7 @@ class DynamoDBStorage:
                 'timestamp': datetime.now(timezone.utc).isoformat(),
                 'event_type': event_type,
                 'severity': severity,
+                'account_id': account_id,
                 'gsi_pk': 'EVENT',
                 'details': json.dumps(details) if isinstance(details, dict) else details
             }
@@ -106,9 +108,30 @@ class DynamoDBStorage:
             logger.error("Error getting events by severity: %s", e)
             return []
 
-    def get_event_summary(self, hours: int = 24) -> Dict[str, Any]:
+    def get_events_by_account(self, account_id: str, hours: int = 24) -> List[Dict]:
+        """Query events for a specific account (Phase 4: Multi-account support)."""
         try:
-            events = self.get_recent_events(hours)
+            from boto3.dynamodb.conditions import Key, Attr
+
+            cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
+
+            response = self.table.scan(
+                FilterExpression=Attr('account_id').eq(account_id) &
+                                Attr('timestamp').gt(cutoff_time.isoformat()),
+                Limit=100
+            )
+
+            return response.get('Items', [])
+        except Exception as e:
+            logger.error("Error getting events by account %s: %s", account_id, e)
+            return []
+
+    def get_event_summary(self, hours: int = 24, account_id: str = None) -> Dict[str, Any]:
+        try:
+            if account_id:
+                events = self.get_events_by_account(account_id, hours)
+            else:
+                events = self.get_recent_events(hours)
 
             summary: Dict[str, Any] = {
                 'total_events': len(events),
@@ -116,6 +139,9 @@ class DynamoDBStorage:
                 'by_severity': {},
                 'timestamp': datetime.now(timezone.utc).isoformat()
             }
+
+            if account_id:
+                summary['account_id'] = account_id
 
             for event in events:
                 event_type = event.get('event_type', 'unknown')

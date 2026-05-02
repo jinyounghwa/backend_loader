@@ -1,7 +1,7 @@
 """Singleton AWS Client Provider for managing boto3 clients"""
 import boto3
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 from guardian.config import Config
 
@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 class AWSClientProvider:
     _clients: Dict[str, object] = {}
     _session: Optional[boto3.Session] = None
+    _account_sessions: Dict[str, boto3.Session] = {}
 
     @classmethod
     def get_session(cls) -> boto3.Session:
@@ -20,6 +21,39 @@ class AWSClientProvider:
             cls._session = boto3.Session(**session_kwargs)
             logger.debug("Created new boto3 session")
         return cls._session
+
+    @classmethod
+    def create_session_from_credentials(cls, credentials: Dict[str, str]) -> boto3.Session:
+        """Create a boto3 session from temporary credentials (for cross-account access)."""
+        session = boto3.Session(
+            aws_access_key_id=credentials['aws_access_key_id'],
+            aws_secret_access_key=credentials['aws_secret_access_key'],
+            aws_session_token=credentials['aws_session_token']
+        )
+        logger.debug("Created boto3 session from temporary credentials")
+        return session
+
+    @classmethod
+    def get_client_for_account(cls, service_name: str, account_id: str,
+                               credentials: Dict[str, str], region: Optional[str] = None) -> object:
+        """Get a client using cross-account temporary credentials."""
+        cache_key = f"{service_name}-account-{account_id}-{region or 'default'}"
+
+        if cache_key not in cls._clients:
+            session = cls.create_session_from_credentials(credentials)
+            client_kwargs = {}
+            if region:
+                client_kwargs['region_name'] = region
+
+            boto3_kwargs = Config.get_boto3_kwargs()
+            if 'endpoint_url' in boto3_kwargs:
+                client_kwargs['endpoint_url'] = boto3_kwargs['endpoint_url']
+
+            cls._clients[cache_key] = session.client(service_name, **client_kwargs)
+            logger.debug("Created cross-account boto3 client for %s (account=%s, region=%s)",
+                        service_name, account_id, region or 'default')
+
+        return cls._clients[cache_key]
 
     @classmethod
     def get_client(cls, service_name: str, region: Optional[str] = None) -> object:
@@ -63,3 +97,4 @@ class AWSClientProvider:
     def clear_cache(cls):
         cls._clients = {}
         cls._session = None
+        cls._account_sessions = {}

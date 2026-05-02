@@ -37,10 +37,15 @@ class TelegramResponder:
             logger.error("Error sending Telegram message: %s", e)
             return False
 
-    def send_cost_alert(self, cost_data: Dict[str, Any]) -> bool:
+    def send_cost_alert(self, cost_data: Dict[str, Any], account_id: str = 'current',
+                       account_name: str = None) -> bool:
         today_cost = cost_data.get('today_cost', 0)
         threshold = cost_data.get('threshold', 0)
         increase_percent = cost_data.get('increase_percent', 0)
+
+        account_info = f"{account_name or account_id}"
+        if account_id != 'current':
+            account_info = f"Account: {account_info} ({account_id})"
 
         message = f"""
 🚨 <b>AWS Cost Alert</b>
@@ -49,6 +54,7 @@ class TelegramResponder:
 ⚠️ Threshold: ${threshold:.2f}
 📈 Increase: {increase_percent}%
 📅 Date: {cost_data.get('date', 'N/A')}
+🏢 {account_info}
 ━━━━━━━━━━━━━━━━━━━━
 <i>비용 임계값 초과!</i>
 
@@ -57,9 +63,14 @@ class TelegramResponder:
 """
         return self.send_message(message)
 
-    def send_ec2_alert(self, ec2_data: Dict[str, Any]) -> bool:
-        """Send EC2 security alert"""
-        message = "<b>⚠️ EC2 Security Alert</b>\n━━━━━━━━━━━━━━━━━━━"
+    def send_ec2_alert(self, ec2_data: Dict[str, Any], account_id: str = 'current',
+                      account_name: str = None) -> bool:
+        """Send EC2 security alert with multi-account support"""
+        account_info = f"{account_name or account_id}"
+        if account_id != 'current':
+            account_info = f"{account_info} ({account_id})"
+
+        message = f"<b>⚠️ EC2 Security Alert</b> 🏢 {account_info}\n━━━━━━━━━━━━━━━━━━━"
 
         # Unauthorized regions
         unauthorized = ec2_data.get('unauthorized_region_instances', {})
@@ -94,9 +105,14 @@ class TelegramResponder:
 
         return self.send_message(message)
 
-    def send_s3_alert(self, s3_data: Dict[str, Any]) -> bool:
-        """Send S3 security alert"""
-        message = "<b>🔐 S3 Security Alert</b>\n━━━━━━━━━━━━━━━━━━━"
+    def send_s3_alert(self, s3_data: Dict[str, Any], account_id: str = 'current',
+                     account_name: str = None) -> bool:
+        """Send S3 security alert with multi-account support"""
+        account_info = f"{account_name or account_id}"
+        if account_id != 'current':
+            account_info = f"{account_info} ({account_id})"
+
+        message = f"<b>🔐 S3 Security Alert</b> 🏢 {account_info}\n━━━━━━━━━━━━━━━━━━━"
 
         # Public buckets
         public = s3_data.get('public_buckets', [])
@@ -140,12 +156,17 @@ class TelegramResponder:
 """
         return self.send_message(message)
 
-    def send_cloudtrail_alert(self, cloudtrail_data: Dict[str, Any]) -> bool:
-        """Send CloudTrail suspicious API alert (Sprint 6)"""
+    def send_cloudtrail_alert(self, cloudtrail_data: Dict[str, Any], account_id: str = 'current',
+                             account_name: str = None) -> bool:
+        """Send CloudTrail suspicious API alert (Sprint 6) with multi-account support"""
         severity = cloudtrail_data.get('severity', 'MEDIUM')
         severity_icon = '🔴' if severity == 'CRITICAL' else '🟠' if severity == 'HIGH' else '🟡'
 
-        message = f"""{severity_icon} <b>CloudTrail: Suspicious API Calls</b>
+        account_info = f"{account_name or account_id}"
+        if account_id != 'current':
+            account_info = f"{account_info} ({account_id})"
+
+        message = f"""{severity_icon} <b>CloudTrail: Suspicious API Calls</b> 🏢 {account_info}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 📍 Severity: <b>{severity}</b>
 """
@@ -166,12 +187,17 @@ class TelegramResponder:
 
         return self.send_message(message)
 
-    def send_iam_alert(self, iam_data: Dict[str, Any]) -> bool:
-        """Send IAM permission changes alert (Sprint 6)"""
+    def send_iam_alert(self, iam_data: Dict[str, Any], account_id: str = 'current',
+                      account_name: str = None) -> bool:
+        """Send IAM permission changes alert (Sprint 6) with multi-account support"""
         severity = iam_data.get('severity', 'MEDIUM')
         severity_icon = '🔴' if severity == 'CRITICAL' else '🟠' if severity == 'HIGH' else '🟡'
 
-        message = f"""{severity_icon} <b>IAM: Permission Changes Detected</b>
+        account_info = f"{account_name or account_id}"
+        if account_id != 'current':
+            account_info = f"{account_info} ({account_id})"
+
+        message = f"""{severity_icon} <b>IAM: Permission Changes Detected</b> 🏢 {account_info}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 📍 Severity: <b>{severity}</b>
 """
@@ -197,12 +223,17 @@ class TelegramResponder:
 
         return self.send_message(message)
 
-    def send_guardduty_alert(self, guardduty_data: Dict[str, Any]) -> bool:
-        """Send GuardDuty threat detection alert (Sprint 6)"""
+    def send_guardduty_alert(self, guardduty_data: Dict[str, Any], account_id: str = 'current',
+                            account_name: str = None) -> bool:
+        """Send GuardDuty threat detection alert (Sprint 6) with multi-account support"""
         severity = guardduty_data.get('severity', 'MEDIUM')
         severity_icon = '🔴' if severity == 'CRITICAL' else '🟠' if severity == 'HIGH' else '🟡'
 
-        message = f"""{severity_icon} <b>GuardDuty: Threat Detected</b>
+        account_info = f"{account_name or account_id}"
+        if account_id != 'current':
+            account_info = f"{account_info} ({account_id})"
+
+        message = f"""{severity_icon} <b>GuardDuty: Threat Detected</b> 🏢 {account_info}
 ━━━━━━━━━━━━━━━━━━━━━━━━━
 🛡️  Severity: <b>{severity}</b>
 """
@@ -231,10 +262,17 @@ class TelegramResponder:
 
         return self.send_message(message)
 
-    def send_alert(self, check_name: str, alert_data: Dict[str, Any]) -> bool:
+    def send_alert(self, check_name: str, alert_data: Dict[str, Any],
+                   account_id: str = 'current', account_name: str = None) -> bool:
         """
-        Generic alert handler for all check types.
+        Generic alert handler for all check types with multi-account support.
         Dispatches to specific alert method based on check_name.
+
+        Args:
+            check_name: Type of check (cloudtrail, iam, guardduty, etc.)
+            alert_data: Alert details dictionary
+            account_id: AWS account ID (default: 'current' for single account)
+            account_name: Human-readable account name (optional)
         """
         alert_methods = {
             'cloudtrail': self.send_cloudtrail_alert,
@@ -247,18 +285,24 @@ class TelegramResponder:
 
         handler = alert_methods.get(check_name)
         if handler:
-            return handler(alert_data)
+            return handler(alert_data, account_id=account_id, account_name=account_name)
         else:
             # Fallback generic alert
-            return self._send_generic_alert(check_name, alert_data)
+            return self._send_generic_alert(check_name, alert_data, account_id=account_id, account_name=account_name)
 
-    def _send_generic_alert(self, check_name: str, alert_data: Dict[str, Any]) -> bool:
-        """Fallback generic alert for unknown check types"""
+    def _send_generic_alert(self, check_name: str, alert_data: Dict[str, Any],
+                           account_id: str = 'current', account_name: str = None) -> bool:
+        """Fallback generic alert for unknown check types with multi-account support"""
         severity = alert_data.get('severity', 'INFO')
         severity_icon = '🔴' if severity == 'CRITICAL' else '🟠' if severity == 'HIGH' else '🟡' if severity == 'MEDIUM' else 'ℹ️'
 
+        account_info = f"{account_name or account_id}"
+        if account_id != 'current':
+            account_info = f"{account_info} ({account_id})"
+
         message = f"""{severity_icon} <b>{check_name.upper()} Alert</b>
 ━━━━━━━━━━━━━━━━━━━
+🏢 Account: {account_info}
 📍 Severity: {severity}
 📝 Message: {alert_data.get('message', 'No details')}
 """

@@ -52,16 +52,21 @@ class CheckResult:
 class BaseChecker(ABC):
     """Abstract base class for all checkers."""
 
-    def __init__(self, clients: Dict[str, Any], config: Dict[str, Any]):
+    def __init__(self, clients: Dict[str, Any], config: Dict[str, Any],
+                 account_id: Optional[str] = None, credentials: Optional[Dict[str, str]] = None):
         """
         Initialize checker with AWS clients and configuration.
 
         Args:
             clients: Dict of boto3 clients (ec2, s3, cloudtrail, etc.)
             config: Configuration dict with settings like regions, thresholds
+            account_id: Optional account ID for cross-account checks
+            credentials: Optional temporary credentials for cross-account access
         """
         self.clients = clients
         self.config = config
+        self.account_id = account_id
+        self.credentials = credentials
 
     @abstractmethod
     def check(self) -> CheckResult:

@@ -116,22 +116,26 @@ class GuardianOrchestrator:
             self.logger.info("Running checks for account: %s (%s)", account_name, account_id)
 
             # For cross-account monitoring, assume role in target account
+            account_credentials = None
+            account_checkers = self.checkers
             if Config.is_organizations_enabled() and account_id != 'current':
                 assumed_role = self._assume_role_for_account(account_id)
                 if not assumed_role:
                     self.logger.warning("Skipping account %s - role assumption failed", account_id)
                     continue
-                # TODO: Use assumed role credentials for checks (Phase 3)
+                # Phase 3: Create account-specific checkers with cross-account credentials
+                account_credentials = assumed_role.get('credentials')
+                account_checkers = self._create_account_checkers(account_id, account_credentials)
 
             # Execute all relevant checks for this account
             account_check_data = {}
             for check_name in checks_to_run:
-                if check_name in self.checkers and self.checkers[check_name]:
+                if check_name in account_checkers and account_checkers[check_name]:
                     try:
                         if check_name in ('cost', 'ec2', 's3'):
-                            check_data = self._run_legacy_check(check_name, results)
+                            check_data = self._run_legacy_check(check_name, results, account_checkers, account_id)
                         else:
-                            check_data = self._run_new_check(check_name, results)
+                            check_data = self._run_new_check(check_name, results, account_checkers, account_id, account_name)
                         account_check_data[check_name] = check_data
                     except Exception as e:
                         self.logger.error("Error running %s check for account %s: %s",
@@ -172,6 +176,55 @@ class GuardianOrchestrator:
             'body': json.dumps(results)
         }
 
+    def _create_account_checkers(self, account_id: str, credentials: Dict[str, str]) -> Dict[str, Any]:
+        """
+        Create new checker instances for cross-account monitoring with temporary credentials.
+        Currently supports new checkers (CloudTrail, IAM, GuardDuty) that inherit from BaseChecker.
+
+        Args:
+            account_id: Target account ID
+            credentials: Temporary credentials from STS AssumeRole
+
+        Returns:
+            Dict of checker instances configured for the target account
+        """
+        try:
+            account_checkers = dict(self.checkers)  # Copy default checkers
+
+            # Phase 3: Create account-specific instances for Sprint 6 checkers (BaseChecker subclasses)
+            if self.checkers.get('cloudtrail'):
+                ct_clients = {
+                    'cloudtrail': AWSClientProvider.get_client_for_account('cloudtrail', account_id, credentials),
+                    'sts': AWSClientProvider.get_client_for_account('sts', account_id, credentials)
+                }
+                account_checkers['cloudtrail'] = CloudTrailChecker(
+                    ct_clients, {}, account_id=account_id, credentials=credentials
+                )
+
+            if self.checkers.get('iam'):
+                iam_clients = {
+                    'iam': AWSClientProvider.get_client_for_account('iam', account_id, credentials),
+                    'dynamodb': AWSClientProvider.get_resource('dynamodb', region='us-east-1')
+                }
+                account_checkers['iam'] = IAMChecker(
+                    iam_clients, {}, account_id=account_id, credentials=credentials
+                )
+
+            if self.checkers.get('guardduty'):
+                gd_clients = {
+                    'guardduty': AWSClientProvider.get_client_for_account('guardduty', account_id, credentials)
+                }
+                account_checkers['guardduty'] = GuardDutyChecker(
+                    gd_clients, {}, account_id=account_id, credentials=credentials
+                )
+
+            self.logger.info("Created account-specific checkers for %s with cross-account credentials", account_id)
+            return account_checkers
+
+        except Exception as e:
+            self.logger.error("Failed to create account-specific checkers for %s: %s", account_id, e)
+            return self.checkers
+
     def _get_checks_for_type(self, check_type: str) -> List[str]:
         """Determine which checks to run based on check_type."""
         if check_type == 'cost':
@@ -181,20 +234,29 @@ class GuardianOrchestrator:
         else:  # 'all'
             return ['cost', 'ec2', 's3', 'cloudtrail', 'iam', 'guardduty']
 
-    def _run_legacy_check(self, check_name: str, results: Dict[str, Any]) -> Dict[str, Any]:
+    def _run_legacy_check(self, check_name: str, results: Dict[str, Any],
+                         checkers: Dict[str, Any] = None, account_id: str = 'current') -> Dict[str, Any]:
         """Run legacy checkers (cost, ec2, s3) that return (anomaly, data) tuple."""
+        if checkers is None:
+            checkers = self.checkers
+
         if check_name == 'cost':
-            return self._run_cost_check(results)
+            return self._run_cost_check(results, checkers.get('cost'), account_id)
         elif check_name == 'ec2':
-            return self._run_ec2_check(results)
+            return self._run_ec2_check(results, checkers.get('ec2'), account_id)
         elif check_name == 's3':
-            return self._run_s3_check(results)
+            return self._run_s3_check(results, checkers.get('s3'), account_id)
         return {}
 
-    def _run_new_check(self, check_name: str, results: Dict[str, Any]) -> Dict[str, Any]:
-        """Run new checkers (Sprint 6) that return CheckResult object."""
+    def _run_new_check(self, check_name: str, results: Dict[str, Any],
+                       checkers: Dict[str, Any] = None, account_id: str = 'current',
+                       account_name: str = None) -> Dict[str, Any]:
+        """Run new checkers (Sprint 6) that return CheckResult object with multi-account support."""
+        if checkers is None:
+            checkers = self.checkers
+
         self.logger.info(f"Checking {check_name.upper()}...")
-        checker = self.checkers.get(check_name)
+        checker = checkers.get(check_name)
         if not checker:
             return {}
 
@@ -206,8 +268,8 @@ class GuardianOrchestrator:
             # Log and notify if not INFO
             if check_result.severity != 'INFO':
                 log_check_result(self.logger, check_name, check_result.severity, check_result.message)
-                self.storage.save_event(check_name, check_result.severity, result_dict)
-                self._notify_new_alert(check_name, result_dict)
+                self.storage.save_event(check_name, check_result.severity, result_dict, account_id=account_id)
+                self._notify_new_alert(check_name, result_dict, account_id=account_id, account_name=account_name)
 
             return result_dict
 
@@ -216,22 +278,26 @@ class GuardianOrchestrator:
             results['checks'][check_name] = {'error': f'{check_name}_check_failed'}
             return {}
 
-    def _notify_new_alert(self, check_name: str, alert_data: Dict[str, Any]):
-        """Send notifications for Sprint 6 checkers."""
+    def _notify_new_alert(self, check_name: str, alert_data: Dict[str, Any],
+                         account_id: str = 'current', account_name: str = None):
+        """Send notifications for Sprint 6 checkers with multi-account support."""
         if self.telegram:
-            # New method in TelegramResponder to handle all check types
-            self.telegram.send_alert(check_name, alert_data)
+            self.telegram.send_alert(check_name, alert_data, account_id=account_id, account_name=account_name)
 
-    def _run_cost_check(self, results: Dict[str, Any]) -> Dict[str, Any]:
+    def _run_cost_check(self, results: Dict[str, Any], cost_checker: Optional[Any] = None,
+                       account_id: str = 'current') -> Dict[str, Any]:
         """Execute cost anomaly check."""
+        if cost_checker is None:
+            cost_checker = self.cost_checker
+
         self.logger.info("Checking AWS costs...")
         try:
-            cost_anomaly, cost_data = self.cost_checker.check_cost_anomaly()
+            cost_anomaly, cost_data = cost_checker.check_cost_anomaly()
             results['checks']['cost'] = cost_data
 
             if cost_anomaly:
                 log_check_result(self.logger, 'cost', 'warning', f"Anomaly: ${cost_data['today_cost']:.2f}")
-                self.storage.save_event('cost', 'warning', cost_data)
+                self.storage.save_event('cost', 'warning', cost_data, account_id=account_id)
                 self._notify_cost_alert(cost_data)
             else:
                 log_check_result(self.logger, 'cost', 'ok', f"Cost: ${cost_data['today_cost']:.2f}")
@@ -243,16 +309,20 @@ class GuardianOrchestrator:
             results['checks']['cost'] = {'error': 'cost_check_failed'}
             return {}
 
-    def _run_ec2_check(self, results: Dict[str, Any]) -> Dict[str, Any]:
+    def _run_ec2_check(self, results: Dict[str, Any], ec2_checker: Optional[Any] = None,
+                      account_id: str = 'current') -> Dict[str, Any]:
         """Execute EC2 security check."""
+        if ec2_checker is None:
+            ec2_checker = self.ec2_checker
+
         self.logger.info("Checking EC2 instances...")
         try:
-            ec2_anomaly, ec2_data = self.ec2_checker.check_ec2_anomalies()
+            ec2_anomaly, ec2_data = ec2_checker.check_ec2_anomalies()
             results['checks']['ec2'] = ec2_data
 
             if ec2_anomaly:
                 log_check_result(self.logger, 'ec2', 'warning', f"Issues: {len(ec2_data.get('anomalies', []))}")
-                self.storage.save_event('ec2', 'critical', ec2_data)
+                self.storage.save_event('ec2', 'critical', ec2_data, account_id=account_id)
                 self._notify_ec2_alert(ec2_data)
 
                 # Auto-remediate exposed instances
@@ -268,16 +338,20 @@ class GuardianOrchestrator:
             results['checks']['ec2'] = {'error': 'ec2_check_failed'}
             return {}
 
-    def _run_s3_check(self, results: Dict[str, Any]) -> Dict[str, Any]:
+    def _run_s3_check(self, results: Dict[str, Any], s3_checker: Optional[Any] = None,
+                     account_id: str = 'current') -> Dict[str, Any]:
         """Execute S3 security check."""
+        if s3_checker is None:
+            s3_checker = self.s3_checker
+
         self.logger.info("Checking S3 buckets...")
         try:
-            s3_anomaly, s3_data = self.s3_checker.check_s3_anomalies()
+            s3_anomaly, s3_data = s3_checker.check_s3_anomalies()
             results['checks']['s3'] = s3_data
 
             if s3_anomaly:
                 log_check_result(self.logger, 's3', 'warning', f"Issues: {len(s3_data.get('anomalies', []))}")
-                self.storage.save_event('s3', 'critical', s3_data)
+                self.storage.save_event('s3', 'critical', s3_data, account_id=account_id)
                 self._notify_s3_alert(s3_data)
 
                 # Auto-remediate public buckets
@@ -396,7 +470,7 @@ class GuardianOrchestrator:
                     'last_check': datetime.now(timezone.utc).isoformat(),
                     'system_health': system_health,
                 }
-                self.storage.save_event('check_result', 'info', check_details)
+                self.storage.save_event('check_result', 'info', check_details, account_id='current')
             else:
                 # For multi-account, save each account's results with account_id
                 for account_id, account_data in all_check_data.items():
@@ -407,7 +481,7 @@ class GuardianOrchestrator:
                         'last_check': datetime.now(timezone.utc).isoformat(),
                         'system_health': system_health,
                     }
-                    self.storage.save_event('check_result', 'info', check_details)
+                    self.storage.save_event('check_result', 'info', check_details, account_id=account_id)
 
             self.logger.info("Check results saved. Health: %s", system_health)
         except Exception as e:
