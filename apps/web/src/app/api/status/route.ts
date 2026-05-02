@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { auth } from '@auth';
 import { getLatestCheckResult, getRecentEvents } from '@/lib/dynamodb';
 import { mockCostData, mockEC2Data, mockS3Data, mockEvents } from '@/lib/mock-data';
 import type { CheckResultDetails, DashboardSummary, DynamoEventItem, GuardianEvent } from '@/types/guardian';
@@ -36,6 +37,11 @@ function ddbItemToGuardianEvent(item: DynamoEventItem, index: number): GuardianE
 }
 
 export async function GET() {
+  const session = await auth();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const [checkResult, rawEvents] = await Promise.all([
       getLatestCheckResult(),

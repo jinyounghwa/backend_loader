@@ -1,16 +1,28 @@
 'use client';
 
-import { Bell, Search, Clock } from 'lucide-react';
+import { Bell, Search, Clock, LogOut } from 'lucide-react';
+import { useSession, signOut } from 'next-auth/react';
 import { mockDashboardSummary } from '@/lib/mock-data';
 
 export function Header() {
+  const { data: session } = useSession();
   const { last_check, next_check, system_health } = mockDashboardSummary;
-  
+
   const formatTime = (isoString: string) => {
     const date = new Date(isoString);
     const h = date.getHours().toString().padStart(2, '0');
     const m = date.getMinutes().toString().padStart(2, '0');
     return `${h}:${m}`;
+  };
+
+  const getInitials = (name: string | null | undefined) => {
+    if (!name) return "?";
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
   };
 
   return (
@@ -38,9 +50,29 @@ export function Header() {
             <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[#1a1d27]" />
           )}
         </div>
-        
-        <div className="w-8 h-8 rounded bg-slate-800 border border-slate-700 flex items-center justify-center text-sm font-bold text-slate-300">
-          AD
+
+        <div className="flex items-center space-x-3 border-l border-slate-700 pl-4">
+          {session?.user?.image ? (
+            <img
+              src={session.user.image}
+              alt={session.user.name || "User"}
+              className="w-8 h-8 rounded-full"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-300">
+              {getInitials(session?.user?.name)}
+            </div>
+          )}
+          <div className="text-xs font-mono text-slate-400 hidden sm:block">
+            {session?.user?.name}
+          </div>
+          <button
+            onClick={() => signOut()}
+            className="p-1.5 hover:bg-slate-700/50 rounded transition-colors"
+            title="Sign out"
+          >
+            <LogOut className="w-4 h-4 text-slate-400 hover:text-slate-200" />
+          </button>
         </div>
       </div>
     </header>

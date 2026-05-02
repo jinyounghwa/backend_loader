@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { auth } from '@auth';
 import {
   getRecentEvents,
   getEventsByGSI,
@@ -32,6 +33,11 @@ function transformEvents(rawEvents: any[]): GuardianEvent[] {
 }
 
 export async function GET(request: Request) {
+  const session = await auth();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const hours = parseInt(searchParams.get('hours') || '24', 10);

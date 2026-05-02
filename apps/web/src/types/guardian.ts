@@ -99,6 +99,7 @@ export interface CheckResultDetails {
 
 /** Raw DynamoDB event item */
 export interface DynamoEventItem {
+  event_id?: string;
   timestamp: string;
   event_type: string;
   severity: string;
