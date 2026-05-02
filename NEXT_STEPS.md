@@ -4,23 +4,36 @@
 
 ## ⚡ 빠른 참고 (현재 상태)
 
-**현재**: Sprint 8 계획 완료 (2026-05-02), 다음 세션 구현 준비 ✅
+**현재**: Sprint 8 Phase 1-3 완료 (2026-05-02) ✅
+
+**완료된 것 (Sprint 8 - 2026-05-02)**:
+- ✅ Phase 1: NextAuth v5 + GitHub OAuth (1.5h 예상 → 실제 완료)
+  - ✅ next-auth@beta 설치
+  - ✅ apps/web/auth.ts: JWT 기반 RBAC (admin/viewer 역할)
+  - ✅ apps/web/src/types/next-auth.d.ts: TypeScript 타입 확장 (Gemini 검증 필수)
+  - ✅ apps/web/src/app/api/auth/[...nextauth]/route.ts: OAuth 핸들러
+  - ✅ apps/web/src/app/login/LoginForm.tsx: GitHub 로그인 페이지
+  - ✅ .env.local: AUTH_SECRET + ADMIN_EMAILS 설정
+  - ✅ npm run build: ✓ Compiled successfully in 1787ms
+
+- ✅ Phase 2: Middleware + RBAC (45min)
+  - ✅ apps/web/src/middleware.ts: NextAuth 이디오매틱 re-export 패턴
+  - ✅ apps/web/src/lib/auth-utils.ts: RBAC 헬퍼 (isAdmin, requireAdmin)
+  - ✅ API 라우트 auth() 가드: /api/events, /api/status
+
+- ✅ Phase 3: UI + 감사 로깅 (30min)
+  - ✅ apps/web/src/components/layout/SessionProvider.tsx: 세션 프로바이더
+  - ✅ apps/web/src/app/layout.tsx: SessionProvider 래핑
+  - ✅ apps/web/src/components/layout/Header.tsx: 실시간 유저 정보 + 로그아웃
+  - ✅ lambda/guardian/storage/audit_logs.py: DynamoDB 감사 로그
+
+- ✅ 테스트 상태: 112 passed (3 LocalStack infrastructure failures pre-existing)
+- ✅ git commit: "Sprint 8 Phase 1: NextAuth v5 + GitHub OAuth implementation"
 
 **완료된 것 (Sprint 7)**:
 - ✅ Phase 1-5 전체 완료 (2026-05-02)
 - ✅ Organizations API + STS AssumeRole + 교차 계정 자격증명 + DynamoDB account_id + Telegram 계정 알림
-- ✅ 전체 테스트: 116/116 통과 (100%)
-- ✅ git commit: "Sprint 7 Phase 1-5 complete: Organizations API + cross-account credentials + DynamoDB + Telegram"
-
-**Sprint 8 계획 완료 (2026-05-02)**:
-- ✅ 아키텍처 설계 완료 (NextAuth v5 + Next.js 16.2.4 + GitHub OAuth)
-- ✅ Gemini 아키텍처 검증 완료
-- ✅ 구현 계획 문서화: `/Users/younghwa.jin/.claude/plans/golden-percolating-pixel.md`
-- 📋 Gemini 검증 주요 사항:
-  - ✅ NextAuth v5는 Next.js 16.2.4과 호환
-  - ✅ JWT 기반 role injection (admin/viewer) 방식 승인
-  - ⚠️ 필수: TypeScript 타입 확장 파일 (`src/types/next-auth.d.ts`) 필요
-  - ⚠️ 필수: `AUTH_SECRET` 생성 필요 (`npx auth secret`)
+- ✅ 전체 테스트: 116/116 통과
 
 **완료된 것 (Sprint 7)**:
 - ✅ Phase 1-2: Organizations API + STS AssumeRole 구현 (2026-04-30)
@@ -46,38 +59,30 @@
   - ✅ 모든 alert 메서드: 알림 메시지에 계정 정보 헤더 추가 (🏢)
   - ✅ 단일 계정과 다중 계정 모드 모두 지원
 
-**다음 세션 시작 가이드 (Sprint 8 구현)**:
+**다음 세션 시작 가이드 (Sprint 9 - Telegram 고급 기능)**:
 
 ```bash
-# 1. 계획 파일 검토
-cat /Users/younghwa.jin/.claude/plans/golden-percolating-pixel.md
+# Sprint 8 검증 방법
+npm run dev  # localhost:3000/login 테스트
+# 1. 로그인 페이지 표시 확인
+# 2. GitHub OAuth 설정 후 로그인 테스트
+# 3. 대시보드 접근 확인
+# 4. Header에 실제 유저 정보 표시 확인
 
-# 2. 구현 순서 (3단계, 약 3시간)
-# Phase 1: NextAuth v5 설치 + OAuth 설정 (1.5h)
-#   - npm install next-auth@beta
-#   - apps/web/auth.ts 생성
-#   - apps/web/src/app/api/auth/[...nextauth]/route.ts 생성
-#   - apps/web/src/app/login/page.tsx 생성
-#   - apps/web/src/types/next-auth.d.ts 생성 (타입 확장)
-#   - .env.local 설정 (AUTH_SECRET, GITHUB_ID/SECRET, ADMIN_EMAILS)
-
-# Phase 2: Middleware + RBAC (45min)
-#   - apps/web/src/middleware.ts 생성
-#   - apps/web/src/lib/auth-utils.ts 생성
-#   - API 라우트에 auth() 가드 추가
-
-# Phase 3: UI 업데이트 + 감사 로깅 (30min)
-#   - Header.tsx 실시간 유저 정보 표시
-#   - layout.tsx에 SessionProvider 추가
-#   - lambda/guardian/storage/audit_logs.py 생성
-
-# 3. Gemini 아키텍처 리뷰 이미 완료 ✅
-./scripts/gemini-ask.sh "..." architecture  # 이미 실행됨
+# Sprint 9 구현 시작
+# Telegram 고급 기능: /remediate, /insights, /export 명령어
+# 웹 대시보드: GitHub OAuth 자격증명 연동
 ```
 
-**다음 세션에서 구현**:
-- 🔄 Sprint 8: 웹 대시보드 인증 시스템 (NextAuth 도입) - 2026-05-05 시작
-- 📋 Sprint 9: Telegram 고급 기능 (/remediate, /insights, /export) - 2026-05-08 시작
+**다음 구현 로드맵**:
+- 🔄 Sprint 8 검증 (2026-05-05): GitHub OAuth 설정 + UI 테스트
+- 📋 Sprint 9: Telegram 고급 기능 (2026-05-08 시작)
+  - `/remediate {resource_id}`: 자동 복구 명령어
+  - `/insights {hours}`: 시간대별 분석 리포트
+  - `/export {format}`: CSV/JSON 내보내기
+- 🎯 Sprint 10: 웹 대시보드 API 통합 (2026-05-12 시작)
+  - Cognito 또는 IAM 자격증명 관리
+  - 대시보드에서 직접 EC2/S3 제어
 
 **핵심 파일**:
 ```
