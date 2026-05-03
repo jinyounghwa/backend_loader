@@ -1890,3 +1890,4 @@ tail -f ~/.gemini/logs/claude-gemini.log
  # 다음 개발 시 이 명령어부터 다시 실행                                                                                                                                                                                           
   ./scripts/gemini-ask.sh --file docker-compose.yml "Review this Docker Compose..." architecture    
 
+claude --resume "web-dashboard-auth"
