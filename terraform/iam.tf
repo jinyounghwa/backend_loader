@@ -128,6 +128,16 @@ resource "aws_iam_role_policy" "lambda_policy" {
         ]
       },
       {
+        Sid    = "DynamoDBIndexes"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:Query"
+        ]
+        Resource = [
+          "${aws_dynamodb_table.events.arn}/index/*"
+        ]
+      },
+      {
         Sid    = "SSMParameter"
         Effect = "Allow"
         Action = [
@@ -142,9 +152,10 @@ resource "aws_iam_role_policy" "lambda_policy" {
         Action = [
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
-          "logs:PutLogEvents"
+          "logs:PutLogEvents",
+          "cloudwatch:PutMetricData"
         ]
-        Resource = "arn:aws:logs:*:*:log-group:/aws/lambda/aws-guardian-*"
+        Resource = "*"
       }
     ]
   })

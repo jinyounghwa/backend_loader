@@ -1,5 +1,6 @@
 """Guardian Orchestrator - Coordinates check execution and remediation flow"""
 import json
+import time
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from logging import Logger
@@ -17,6 +18,7 @@ from guardian.responders.remediation_service import AutoRemediationResponder
 from guardian.storage.dynamodb import DynamoDBStorage
 from guardian.config import Config
 from guardian.logging_config import log_check_result, log_remediation
+from guardian.handlers.metrics import CloudWatchMetrics
 
 
 class GuardianOrchestrator:
@@ -89,6 +91,7 @@ class GuardianOrchestrator:
         Returns:
             Aggregated results dictionary
         """
+        start_time = time.time()
         check_type = event.get('check_type', 'all').lower()
         self.logger.info("AWS Guardian orchestration started (check_type=%s)", check_type)
 
@@ -168,6 +171,23 @@ class GuardianOrchestrator:
 
         # Send summary
         self._send_summary()
+
+        # Emit metrics
+        elapsed_ms = (time.time() - start_time) * 1000
+        event_count = len([
+            account for account in results.get('accounts', [])
+            for check_data in account.get('checks', {}).values()
+            if isinstance(check_data, dict) and check_data.get('severity') in ('CRITICAL', 'HIGH', 'MEDIUM')
+        ])
+
+        CloudWatchMetrics.emit_batch({
+            'Duration': elapsed_ms,
+            'EventsProcessed': len(results.get('accounts', [])),
+            'ErrorCount': len([
+                check for check in results.get('checks', {}).values()
+                if isinstance(check, dict) and 'error' in check
+            ])
+        })
 
         self.logger.info("AWS Guardian orchestration completed. Health: %s. Accounts: %d",
                         system_health, len(all_check_data))

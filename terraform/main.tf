@@ -87,6 +87,12 @@ variable "discord_public_key" {
   sensitive   = true
 }
 
+variable "alarm_sns_topic_arn" {
+  description = "SNS Topic ARN for CloudWatch alarms"
+  type        = string
+  default     = ""
+}
+
 # Store configuration in Parameter Store
 resource "aws_ssm_parameter" "cost_threshold" {
   name        = "/aws-guardian/cost-threshold"
