@@ -11,13 +11,33 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { account_id, finding_id, resource_id } = await request.json();
+    const { account_id, action: actionType, resource_id, finding_id } = await request.json();
 
-    if (!account_id || !finding_id) {
+    if (!account_id) {
       return NextResponse.json(
-        { error: 'Missing required fields: account_id, finding_id' },
+        { error: 'Missing required field: account_id' },
         { status: 400 }
       );
+    }
+
+    const finalResourceId = resource_id || finding_id;
+    if (!finalResourceId) {
+      return NextResponse.json(
+        { error: 'Missing required field: resource_id or finding_id' },
+        { status: 400 }
+      );
+    }
+
+    let actionTypeStr = actionType || 'remediate';
+    let message = '';
+
+    if (actionTypeStr === 'stop_instance') {
+      message = `Stopped EC2 instance ${finalResourceId}`;
+    } else if (actionTypeStr === 'block_bucket') {
+      message = `Blocked public access to S3 bucket ${finalResourceId}`;
+    } else {
+      actionTypeStr = 'remediate';
+      message = `Remediated finding ${finalResourceId}`;
     }
 
     const action = {
@@ -25,15 +45,15 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
       account_id,
       user: session.user?.email || 'system',
-      action_type: 'remediate',
-      resource_id: resource_id || finding_id,
+      action_type: actionTypeStr as 'stop_instance' | 'block_bucket' | 'remediate' | 'rollback',
+      resource_id: finalResourceId,
       status: 'success' as const,
-      message: `Auto-remediated finding ${finding_id}`,
+      message,
     };
 
-    return NextResponse.json({ action, message: 'Remediation initiated' });
+    return NextResponse.json({ action, message: 'Action executed successfully' });
   } catch (error) {
-    console.error('Remediation failed:', error);
-    return NextResponse.json({ error: 'Remediation failed' }, { status: 500 });
+    console.error('Action execution failed:', error);
+    return NextResponse.json({ error: 'Action execution failed' }, { status: 500 });
   }
 }

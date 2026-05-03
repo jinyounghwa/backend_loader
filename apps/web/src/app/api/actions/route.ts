@@ -23,6 +23,16 @@ export async function GET(request: NextRequest) {
   try {
     const actions: Action[] = [
       {
+        action_id: 'act-pending-001',
+        timestamp: new Date(Date.now() - 300000).toISOString(),
+        account_id: accountId,
+        user: session.user?.email || 'system',
+        action_type: 'stop_instance' as const,
+        resource_id: 'i-9876543210fedcba0',
+        status: 'pending' as const,
+        message: 'Suspicious EC2 instance detected - pending manual approval',
+      },
+      {
         action_id: 'act-001',
         timestamp: new Date(Date.now() - 3600000).toISOString(),
         account_id: accountId,
