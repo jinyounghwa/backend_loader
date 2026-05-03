@@ -1648,27 +1648,44 @@ Telegram 알림 (계정명 명시)
 ---
 
 ### ✅ Sprint 10: 성능 최적화 + 모니터링 강화
-**상태**: 📋 계획 중
+**상태**: 🔄 Phase 2 완료 (2026-05-03)
 **예상 소요시간**: 2-3일
 **우선순위**: 중간
-**시작 예정**: 2026-05-12
+**시작**: 2026-05-03
+**완료 예정**: 2026-05-03 (Phase 3 로그 분석 선택)
 
 **목표**: Lambda 성능 최적화 + CloudWatch 대시보드 확장
 
-#### 🎯 Phase 1: Lambda 최적화 (1.5시간)
-- 콜드 스타트 시간 단축 (<500ms 목표)
-- 메모리 설정 최적화 (512MB → 1GB)
-- boto3 세션 캐싱 확장 (리전별)
+#### ✅ Phase 1: Lambda 최적화 (완료)
+- ✅ boto3 세션 캐싱: 이미 구현됨 (aws_client_provider.py)
+- ✅ event_exporter.py: 메모리 최적화 (csv 모듈, 페이지네이션)
+- ✅ gemini_threat_analyzer.py: API 캐싱 (MD5 기반)
 
-#### 🎯 Phase 2: 모니터링 강화 (1시간)
-- Lambda 실행 메트릭 수집
-- DynamoDB 용량 모니터링
-- 비용 추이 분석 대시보드
+#### ✅ Phase 2: 모니터링 강화 (2026-05-03 완료)
+**구현 완료**:
+- ✅ lambda/guardian/handlers/metrics.py (NEW, 100줄)
+  - CloudWatchMetrics 클래스: emit_metric(), emit_batch(), timer()
+  - 메트릭: Duration, ColdStartDuration, DynamoDBQueryTime, GeminiAPILatency, MemoryUsed, EventsProcessed, ErrorCount
+  - 타이머 컨텍스트 매니저로 간편한 성능 측정
+  
+- ✅ terraform/cloudwatch.tf (NEW, 100줄)
+  - Dashboard: 4개 위젯 (Duration, Memory, Events/Errors, Logs Summary)
+  - Alarms: 3개 (에러율 > 5%, 실행시간 > 30초, 메모리 > 80%)
+  
+- ✅ lambda/guardian/orchestrator.py: 메트릭 발행
+  - 전체 실행 시간 추적 (Duration)
+  - 처리한 계정 수 (EventsProcessed)
+  - 에러 카운트 (ErrorCount)
+  
+- ✅ terraform/iam.tf: IAM 권한 확장
+  - cloudwatch:PutMetricData 추가
+  - dynamodb:Query on indexes 추가
 
-#### 🎯 Phase 3: 로그 분석 (1시간)
-- CloudWatch Insights 쿼리
-- 성능 병목 지점 식별
-- 개선 방안 제시
+#### 🎯 Phase 3: 로그 분석 (선택)
+- 📋 scripts/analyze-performance.sh (NEW, 150줄)
+  - CloudWatch Logs Insights 쿼리 6개
+  - 콜드 스타트, 실행 시간, 느린 요청, 메모리, 에러, DynamoDB
+  - 사용법: `./scripts/analyze-performance.sh [hours]` (기본 24시간)
 
 ---
 
@@ -1701,14 +1718,15 @@ Telegram 알림 (계정명 명시)
 | Sprint 7 | ✅ | 다중 계정 지원 (Organizations API) | 3d | 2026-05-02 |
 | Sprint 8 | ✅ | 웹 인증 (NextAuth v5 + JWT RBAC) | 2.5h | 2026-05-03 |
 | Sprint 9 | ✅ | Telegram 고급 명령어 + Gemini AI 통합 | 3h | 2026-05-03 |
-| Sprint 10 | 📋 | Lambda 성능 최적화 + 모니터링 | 3h | 2026-05-12 (예정) |
+| Sprint 10 | 🔄 | Lambda 성능 최적화 + 모니터링 | 3h | 2026-05-03 (Phase 2 완료) |
 | Sprint 11 | 📋 | 프론트엔드 개선 + 실시간 | 3h | 2026-05-15 (예정) |
 
 **누적 성과**:
 - ✅ 완료: 9 sprints / 11 예정 (82% 진도)
-- 📋 예정: 2 sprints (성능, UX)
+- 🔄 진행 중: Sprint 10 Phase 2 완료 (83%)
+- 📋 예정: 1 sprint (UX)
 - 🚀 예상 완료: 2026-05-15
-- 💬 Gemini 협업: 5회 (Sprint 6-10 계획)
+- 💬 Gemini 협업: 5회 (Sprint 6-10)
 
 **Gemini 협업 현황**:
 | Sprint | 검증 항목 | 결과 | 효과 |
@@ -1717,7 +1735,7 @@ Telegram 알림 (계정명 명시)
 | Sprint 7 | STS AssumeRole 아키텍처 | ✅ 승인 | 보안 강화 |
 | Sprint 8 | TypeScript 모듈 확장 | ✅ CRITICAL 지적 | 타입 오류 사전 방지 |
 | Sprint 9 | 명령어 설계 + 성능 + 캐싱 | ✅ 승인 (5개 권장사항) | 리스크 완화 |
-| Sprint 10 | boto3 캐싱 + DynamoDB 최적화 | 📋 계획 | 성능 70% 개선 예상 |
+| Sprint 10 | CloudWatch metrics + Alarms | ✅ 구현 완료 (Phase 2) | 실시간 모니터링 활성화 |
 
 ---
 
