@@ -4,6 +4,10 @@ import { useDashboard } from '@/hooks/useGuardianData';
 import { mockDashboardSummary } from '@/lib/mock-data';
 import { DollarSign, Server, Database, AlertTriangle, ArrowUpRight, ArrowDownRight, Activity, RefreshCw } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import AccountSelector from '@/components/Dashboard/AccountSelector';
+import RiskScore from '@/components/Dashboard/RiskScore';
+import EventFeed from '@/components/Dashboard/EventFeed';
+import ActionHistory from '@/components/Dashboard/ActionHistory';
 
 export default function DashboardPage() {
   const { summary, isLoading, isError, refresh } = useDashboard();
@@ -29,8 +33,13 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-100 tracking-tight">System Overview</h1>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100 tracking-tight">System Overview</h1>
+          <div className="mt-2">
+            <AccountSelector />
+          </div>
+        </div>
         <div className="flex items-center space-x-3 text-sm">
           <span className="text-slate-400">Status:</span>
           <span className={`px-2 py-1 rounded border font-mono font-medium ${healthClass}`}>
@@ -188,11 +197,27 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div>
+          <RiskScore
+            criticalCount={ec2.anomalies.length}
+            highCount={s3.anomalies.length}
+            mediumCount={ec2.anomalies.length > 0 ? Math.ceil(ec2.anomalies.length / 2) : 0}
+            totalIssues={ec2.anomalies.length + s3.anomalies.length + (ec2.anomalies.length > 0 ? Math.ceil(ec2.anomalies.length / 2) : 0)}
+          />
+        </div>
+        <div className="lg:col-span-2">
+          <EventFeed />
+        </div>
+      </div>
+
+      <ActionHistory />
+
       <div className="bg-[#1a1d27] border border-slate-800 rounded-lg overflow-hidden">
         <div className="p-5 border-b border-slate-800 flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-200 flex items-center">
             <Activity className="w-5 h-5 mr-2 text-slate-400" />
-            Recent Events
+            Event Log
           </h2>
           {isError && <span className="text-xs text-red-400">API unavailable — showing fallback data</span>}
         </div>
