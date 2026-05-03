@@ -36,20 +36,27 @@ Telegram 봇에 3개 고급 명령어 추가 + Gemini AI 위협 분석 통합
 
 **목적**: GuardDuty 발견사항에 대한 자동 대응 실행
 
-**플로우**:
+**플로우** (Idempotent State Machine 패턴):
 ```
 사용자: /remediate finding-123
   ↓
-telegram_bot.py: finding-id 파싱 + DynamoDB 조회
+telegram_bot.py: finding-id 파싱 (정규식: finding-[a-f0-9-]+)
+  ↓
+DynamoDB 확인: 기존 remediation 상태 조회
+  ├─ "InProgress" → "이미 진행 중, 대기하세요" 응답
+  ├─ "Completed" → "이미 완료됨, 상태: [결과]" 응답
+  └─ 없음 → 다음 단계
+  ↓
+DynamoDB 기록: 상태 = "InProgress" (TransactWriteItems)
   ↓
 remediation_service.py: 발견사항에 맞는 대응 실행
-  ├─ EC2 관련 → EC2 중지
-  ├─ S3 관련 → 퍼블릭 액세스 차단
-  └─ IAM 관련 → 액세스 키 비활성화
+  ├─ EC2 관련 → stop_instances (idempotent)
+  ├─ S3 관련 → put_bucket_acl (idempotent)
+  └─ IAM 관련 → update_access_key_status (idempotent)
   ↓
-DynamoDB: remediation 히스토리 저장
+DynamoDB 업데이트: 상태 = "Completed" or "Failed" (TransactWriteItems)
   ↓
-Telegram: 결과 리포트 (성공/실패)
+Telegram: 결과 리포트 (성공/실패 + 상태 설명)
 ```
 
 **구현 세부사항**:
@@ -77,11 +84,21 @@ Telegram: 결과 리포트 (성공/실패)
   Timestamp: 2026-05-08 14:30:45 UTC
   ```
 
-**Gemini 검증 항목**:
-- ⚠️ 명령어 파싱: 정규표현식 보안 (injection 방지)
-- ⚠️ 트랜잭션: 부분 실패 시 롤백 전략 (원자성)
-- ⚠️ Idempotency: 동일 명령어 재실행 시 안전성
-- ⚠️ 권한: admin만 remediation 실행 가능?
+**✅ Gemini 검증 완료 (2026-05-03)**:
+1. ✅ **트랜잭션 안전성**: Idempotent State Machine 패턴 권장
+   - DynamoDB TransactWriteItems 사용
+   - 상태 확인 (InProgress/Completed) 후 실행
+   - AWS API는 대부분 idempotent (stop_instances 등)
+2. ✅ **정규표현식 보안**: 엄격한 패턴 필수
+   - `finding_id`: `finding-[a-f0-9-]+` (GuardDuty UUID 형식)
+   - `format`: `(csv|pdf|json)` (정확한 값 매칭)
+   - ReDoS 취약성 검사 완료
+3. ⚠️ **Lambda 메모리 부족**: 256MB → 512-1024MB 증설 필요
+   - pandas + fpdf2 + google-generativeai 의존성 무거움
+   - 1000+ 이벤트 처리 시 메모리 부족
+4. ⚠️ **DynamoDB 페이지네이션**: 1MB 제한 처리 필수
+   - SeverityTimestampIndex 사용 확인 ✓
+   - LastEvaluatedKey로 반복 쿼리
 
 ---
 
@@ -111,25 +128,40 @@ Telegram: 파일 업로드 (최대 50MB)
 ```
 
 **구현 세부사항**:
-- **옵션 파싱**:
+- **옵션 파싱** (Gemini 권장 엄격한 패턴):
   ```
   /export csv --days 7 --severity high --limit 100
   → format="csv", days=7, severity="high", limit=100
   ```
-  - 정규표현식: `--(\w+) (\w+)` 매칭
+  - 정규표현식: `format=(csv|pdf|json)` / `--days (\d+)` / `--severity (low|medium|high|critical)`
+  - **보안**: 화이트리스트 값만 허용 (ReDoS 방지)
   - 기본값: format="csv", days=7, severity=None, limit=500
-- **DynamoDB 쿼리**:
-  - GSI: `SeverityTimestampIndex` (Sprint 3에서 생성)
+- **DynamoDB 쿼리** (Gemini 검증 완료):
+  - GSI: `SeverityTimestampIndex` (Sprint 3에서 생성) ✓
   - 쿼리: `severity >= :sev AND timestamp > :time`
-  - 페이지네이션: 1000개 제한 + 반복 쿼리
+  - **페이지네이션**: DynamoDB 1MB 한도 처리 필수
+    ```python
+    # LastEvaluatedKey 처리
+    response = table.query(KeyConditionExpression=...)
+    while 'LastEvaluatedKey' in response:
+        response = table.query(
+            ExclusiveStartKey=response['LastEvaluatedKey'],
+            ...
+        )
+    ```
   - RCU 최적화: Query 사용 (Scan 대비 99% 절감)
-- **변환**:
-  - **CSV**: 열 = `timestamp, severity, event_type, resource_id, message, status`
-  - **PDF**: 
+- **변환** (메모리 최적화):
+  - **CSV**: `csv` 모듈 사용 (pandas 대신)
+    - 열 = `timestamp, severity, event_type, resource_id, message, status`
+    - 메모리 효율: pandas 대비 80% 절감
+  - **PDF**: `fpdf2` (이미 설치된 경우) 또는 경량 대안
     - 헤더: 생성 시간, 필터 조건, 이벤트 수
     - 본문: 이벤트 테이블 (10줄/페이지)
-    - 요약: 심각도별 분포 (차트)
-  - **JSON**: 배열 형식 (자동화 도구 연동용)
+    - 요약: 심각도별 분포
+  - **JSON**: `json.dumps()` 스트리밍
+    - 배열 형식 (자동화 도구 연동용)
+  
+  ⚠️ **Lambda 메모리 설정**: terraform/lambda.tf에서 256MB → **512MB 이상**으로 증설 필수 (Gemini 권장)
 - **파일 저장**:
   - 경로: `/tmp/report_{timestamp}_{format}.{ext}`
   - 크기 제한: 50MB (Telegram 제한)
@@ -197,25 +229,55 @@ Telegram: 분석 결과 포맷팅 + 전송
   }
   ```
 
-- **Gemini 프롬프트**:
+- **Gemini 프롬프트** (Gemini 권장 구조):
   ```
-  다음은 지난 24시간 AWS 환경에서 탐지된 위협 데이터입니다.
+  [System Prompt]
+  당신은 AWS 환경의 Senior Cloud Security Architect입니다.
+  주어진 위협 데이터를 분석하고 실행 가능한 권장사항을 제시합니다.
+  응답은 Markdown 형식으로 명확하게 구조화합니다.
   
-  [JSON 형식 데이터]
+  [User Prompt]
+  다음은 지난 24시간 AWS 환경에서 탐지된 위협 데이터입니다:
   
-  다음을 한글로 분석해주세요:
-  1. 주요 위협 패턴 (3-5가지)
-  2. 우선순위별 대응 조치
-  3. 추가 모니터링 영역
+  {
+    "total_events": 37,
+    "by_severity": {"CRITICAL": 5, "HIGH": 12, "MEDIUM": 20},
+    "by_type": {"guardduty": 15, "cloudtrail": 10, "ec2": 12},
+    "affected_resources": [...]
+  }
   
-  간결하고 실행 가능한 형식으로 작성해주세요.
+  [요청 항목]
+  # 분석 결과
+  
+  ## 주요 위협 패턴 (상위 3-5가지)
+  - [패턴 1]: [설명]
+  
+  ## 우선순위별 대응 조치
+  1. [긴급 조치]: [작업 명령어]
+  2. [권장 조치]: [작업 명령어]
+  
+  ## 추가 모니터링 영역
+  - [항목 1]: [모니터링 방법]
   ```
+  
+  ✅ **Gemini 검증**: 프롬프트 구조 + Persona + Output Schema 권장
 
-- **API 통합**:
+- **API 통합** (Gemini 검증 완료):
   - SDK: `google.generativeai` (Python)
-  - 모델: `gemini-1.5-flash` (빠른 응답)
-  - 비용: 약 $0.001/호출 (전체 요청량 기준)
-  - 에러 처리: API 실패 시 → 기본 통계만 제공 (fallback)
+  - 모델: `gemini-1.5-flash` (빠른 응답, 비용 효율)
+  - **비용**: ~$0.002/분석 (1000 이벤트 기준)
+    - 월간 예상 비용: /insights 50회/월 → ~$0.10 (매우 저렴) ✅
+  - **캐싱 전략** (Gemini 권장):
+    ```python
+    # 중복 요청 방지
+    cache_key = hashlib.md5(json.dumps(events_summary)).hexdigest()
+    if cache_key in gemini_cache:
+        return cached_result
+    # 실제 API 호출
+    result = gemini_model.generate_content(prompt)
+    gemini_cache[cache_key] = result
+    ```
+  - **에러 처리**: API 실패 시 → 기본 통계만 제공 (fallback)
 
 - **응답 예시**:
   ```
@@ -371,23 +433,42 @@ class EventExporter:
 
 ## Gemini 협업 체크리스트
 
-### Phase 1: 아키텍처 검증 (Gemini 리뷰 필수)
-- [ ] `/remediate` 설계: 트랜잭션 안전성, 권한 검증
-- [ ] `/export` 설계: 쿼리 최적화, 메모리 효율성
-- [ ] `/insights` 설계: 프롬프트 품질, API 비용
-- [ ] 정규표현식: 보안 (injection 방지)
-- [ ] Idempotency: 재시도 안전성
+### ✅ Phase 1: 아키텍처 검증 완료 (2026-05-03)
+**Gemini 검증 결과**: 주요 권장사항 5개 통합
 
-### Phase 2: 구현 (Claude Code)
-- [ ] telegram_bot.py 확장
-- [ ] gemini_threat_analyzer.py 구현
-- [ ] event_exporter.py 구현
-- [ ] 의존성 설치 (pandas, fpdf2, google-generativeai)
+- [x] `/remediate` 설계: **Idempotent State Machine** 패턴 권장 ✅
+  - 상태 확인 → InProgress 기록 → 실행 → 결과 저장
+  - TransactWriteItems로 원자성 보장
+  - AWS API idempotency 활용
+- [x] `/export` 설계: **메모리 최적화** 필수 ✅
+  - Lambda 메모리: 256MB → 512MB 이상 증설
+  - csv 모듈 사용 (pandas 대신, 메모리 80% 절감)
+  - DynamoDB 페이지네이션 (1MB 한도 처리)
+- [x] `/insights` 설계: **Persona + Output Schema** 권장 ✅
+  - Gemini 프롬프트: System Role + Markdown 구조화
+  - 캐싱 전략 (동일 요청 중복 방지)
+  - 비용: ~$0.002/분석 (매우 저렴)
+- [x] 정규표현식: **화이트리스트 패턴** 필수 ✅
+  - `finding-[a-f0-9-]+` (GuardDuty UUID)
+  - `(csv|pdf|json)` (정확한 값 매칭)
+  - ReDoS 취약성 검사 완료
+- [x] Idempotency: **부분 실패 처리** 전략 ✅
+  - DynamoDB 상태 확인으로 중복 실행 방지
+  - AWS API는 대부분 idempotent
 
-### Phase 3: 검증 (선택적 코드 리뷰)
-- [ ] 명령어 보안 테스트
-- [ ] 대용량 쿼리 성능 테스트
-- [ ] Gemini 프롬프트 품질 평가
+### 🔄 Phase 2: 구현 (Claude Code, 예정 2-3시간)
+- [ ] **terraform/lambda.tf**: 메모리 256MB → 512MB 증설
+- [ ] **telegram_bot.py**: /remediate, /export, /insights 핸들러 추가
+- [ ] **gemini_threat_analyzer.py**: Gemini 클라이언트 + 캐싱 + fallback
+- [ ] **event_exporter.py**: csv/pdf/json 변환 + 페이지네이션
+- [ ] **의존성 설치**: google-generativeai, fpdf2 (pandas 불필요)
+- [ ] **정규표현식 검증**: 화이트리스트 패턴 적용
+- [ ] **에러 처리**: API 실패 시 fallback 통계
+
+### 📋 Phase 3: 코드 리뷰 (선택적, Gemini)
+- [ ] 명령어 파싱 보안 검증
+- [ ] DynamoDB 페이지네이션 구현 확인
+- [ ] Gemini 캐싱 전략 효율성
 
 ---
 
