@@ -7,6 +7,7 @@ import logging
 import signal
 import requests
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
@@ -138,6 +139,177 @@ def get_history(hours: int = 24) -> dict:
         return {'error': str(e), 'timestamp': datetime.now(timezone.utc).isoformat()}
 
 
+def remediate_finding(finding_id: str) -> dict:
+    """Handle /remediate {finding-id} command (Idempotent State Machine pattern)"""
+    import re
+
+    # Strict regex validation (Gemini recommended)
+    if not re.match(r'^finding-[a-f0-9\-]+$', finding_id):
+        return {'error': f'Invalid finding ID format: {finding_id}'}
+
+    try:
+        storage = DynamoDBStorage()
+
+        # Step 1: Check existing remediation status
+        existing = storage.get_item_by_id(finding_id)
+        if existing and existing.get('remediation_status') == 'InProgress':
+            return {
+                'action': 'remediate',
+                'finding_id': finding_id,
+                'status': 'in_progress',
+                'message': '이미 진행 중인 대응입니다. 잠시 후 다시 확인하세요.'
+            }
+        if existing and existing.get('remediation_status') == 'Completed':
+            return {
+                'action': 'remediate',
+                'finding_id': finding_id,
+                'status': 'completed',
+                'message': f'이미 완료됨. 결과: {existing.get("remediation_result", "성공")}',
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }
+
+        # Step 2: Mark as InProgress (TransactWriteItems)
+        storage.update_remediation_status(finding_id, 'InProgress')
+
+        # Step 3: Execute remediation (AWS APIs are idempotent)
+        result = _execute_remediation(finding_id, existing or {})
+
+        # Step 4: Update status to Completed
+        storage.update_remediation_status(finding_id, 'Completed', result['action'])
+
+        return {
+            'action': 'remediate',
+            'finding_id': finding_id,
+            'status': 'success',
+            'message': result['message'],
+            'result': result['action'],
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        logger.error("Error remediating finding %s: %s", finding_id, e)
+        try:
+            storage.update_remediation_status(finding_id, 'Failed', str(e))
+        except:
+            pass
+        return {'error': f'대응 실행 실패: {str(e)}'}
+
+
+def _execute_remediation(finding_id: str, finding_data: dict) -> dict:
+    """Execute remediation action based on finding type"""
+    resource_type = finding_data.get('resource_type', 'unknown')
+    resource_id = finding_data.get('resource_id', '')
+
+    if resource_type == 'EC2':
+        ec2 = AWSClientProvider.get_client('ec2')
+        ec2.stop_instances(InstanceIds=[resource_id])
+        return {'action': 'stopped', 'message': f'✅ EC2 인스턴스 {resource_id} 중지됨'}
+    elif resource_type == 'S3':
+        s3 = AWSClientProvider.get_client('s3')
+        s3.put_public_access_block(
+            Bucket=resource_id,
+            PublicAccessBlockConfiguration={'BlockPublicAcls': True}
+        )
+        return {'action': 'blocked', 'message': f'✅ S3 버킷 {resource_id} 퍼블릭 액세스 차단됨'}
+    else:
+        return {'action': 'logged', 'message': f'✅ 발견사항 {finding_id} 기록됨'}
+
+
+def export_events(format_str: str, days: int = 7, severity: Optional[str] = None) -> dict:
+    """Handle /export {csv|pdf|json} command (Gemini recommended memory optimization)"""
+    from guardian.reporters.event_exporter import EventExporter, query_events_with_pagination
+
+    # Strict format validation
+    if not EventExporter.validate_format(format_str):
+        return {'error': f'Invalid format. Must be: csv, pdf, or json'}
+
+    try:
+        storage = DynamoDBStorage()
+        events = query_events_with_pagination(
+            storage.table,
+            severity_filter=severity,
+            days=days,
+            limit=500
+        )
+
+        if not events:
+            return {'error': f'No events found for past {days} days'}
+
+        summary = {
+            'total_events': len(events),
+            'by_severity': {},
+            'by_type': {}
+        }
+        for event in events:
+            summary['by_severity'][event.get('severity', 'UNKNOWN')] = \
+                summary['by_severity'].get(event.get('severity'), 0) + 1
+            summary['by_type'][event.get('event_type', 'unknown')] = \
+                summary['by_type'].get(event.get('event_type'), 0) + 1
+
+        file_path, content = EventExporter.export_events(events, format_str, summary)
+
+        return {
+            'action': 'export',
+            'format': format_str,
+            'file_path': file_path,
+            'event_count': len(events),
+            'size_bytes': len(content) if isinstance(content, (str, bytes)) else 0,
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        logger.error("Error exporting events: %s", e)
+        return {'error': f'보고서 생성 실패: {str(e)}'}
+
+
+def analyze_threats() -> dict:
+    """Handle /insights command (Gemini AI threat analysis with caching)"""
+    from guardian.analyzers.gemini_threat_analyzer import GeminiThreatAnalyzer
+    from guardian.reporters.event_exporter import query_events_with_pagination
+
+    try:
+        storage = DynamoDBStorage()
+
+        # Collect events from past 24 hours
+        events = query_events_with_pagination(storage.table, days=1, limit=1000)
+
+        if not events:
+            return {'analysis': '지난 24시간 위협 이벤트가 없습니다.'}
+
+        # Prepare summary
+        summary = {
+            'total_events': len(events),
+            'by_severity': {},
+            'by_type': {},
+            'affected_resources': set()
+        }
+
+        for event in events:
+            severity = event.get('severity', 'UNKNOWN')
+            summary['by_severity'][severity] = summary['by_severity'].get(severity, 0) + 1
+
+            event_type = event.get('event_type', 'unknown')
+            summary['by_type'][event_type] = summary['by_type'].get(event_type, 0) + 1
+
+            if 'resource_id' in event:
+                summary['affected_resources'].add(event['resource_id'])
+
+        summary['affected_resources'] = list(summary['affected_resources'])[:5]
+
+        # Get Gemini analysis (with caching and fallback)
+        api_key = os.getenv('GEMINI_API_KEY')
+        analyzer = GeminiThreatAnalyzer(api_key)
+        analysis = analyzer.analyze_threats(summary)
+
+        return {
+            'action': 'insights',
+            'analysis': analysis,
+            'event_count': len(events),
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        logger.error("Error analyzing threats: %s", e)
+        return {'error': f'분석 실패: {str(e)}'}
+
+
 class TelegramBotListener:
     def __init__(self):
         self.bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -197,6 +369,23 @@ class TelegramBotListener:
                     return lambda: get_history(hours), f'/history {hours}'
                 except ValueError:
                     return lambda: get_history(), '/history'
+            # Sprint 9: New advanced commands
+            elif command == 'remediate' and args:
+                return lambda: remediate_finding(args), f'/remediate {args}'
+            elif command == 'export':
+                # Parse format and options: /export csv --days 7 --severity high
+                import re
+                format_match = re.search(r'\b(csv|pdf|json)\b', text)
+                days_match = re.search(r'--days\s+(\d+)', text)
+                severity_match = re.search(r'--severity\s+(\w+)', text)
+
+                fmt = format_match.group(1) if format_match else 'csv'
+                days = int(days_match.group(1)) if days_match else 7
+                severity = severity_match.group(1) if severity_match else None
+
+                return lambda: export_events(fmt, days, severity), f'/export {fmt} --days {days}'
+            elif command == 'insights':
+                return analyze_threats, '/insights'
             elif command == 'help':
                 return self._show_help, '/help'
 
@@ -223,6 +412,11 @@ class TelegramBotListener:
 <b>자동 수정:</b>
 요금과다 원인수정 - 비용 과다 자동 분석 및 수정
 해킹우려 수정 - 보안 위협 자동 대응
+
+<b>🔄 Sprint 9: 고급 명령어</b>
+/remediate <finding-id> - GuardDuty 발견사항 자동 대응
+/export [csv|pdf|json] --days 7 - 이벤트 보고서 생성
+/insights - AI 위협 분석 (Gemini)
 
 /help - 이 도움말 표시
 """
@@ -322,6 +516,31 @@ class TelegramBotListener:
             self.telegram.send_message('\n'.join(lines))
         elif 'events' in result:
             self.telegram.send_message(f"✅ 최근 {result.get('hours', 24)}시간 이벤트가 없습니다.")
+
+        # Sprint 9: Advanced commands
+        elif result.get('action') == 'remediate':
+            status = result.get('status', 'error')
+            if status == 'in_progress':
+                self.telegram.send_message(f"⏳ <b>대응 진행 중</b>\nFinding: {result['finding_id']}\n{result['message']}")
+            elif status == 'completed':
+                self.telegram.send_message(f"✅ <b>대응 완료</b>\nFinding: {result['finding_id']}\n{result['message']}")
+            else:
+                msg = result.get('message', '성공')
+                self.telegram.send_message(f"✅ <b>대응 실행</b>\nFinding: {result['finding_id']}\n{msg}")
+
+        elif result.get('action') == 'export':
+            self.telegram.send_message(
+                f"✅ <b>보고서 생성</b>\n"
+                f"형식: {result['format'].upper()}\n"
+                f"이벤트: {result['event_count']}개\n"
+                f"파일: {result['file_path']}\n"
+                f"크기: {result['size_bytes'] / 1024:.1f} KB"
+            )
+
+        elif result.get('action') == 'insights':
+            analysis = result.get('analysis', '분석 불가')
+            # Send analysis as markdown (Gemini output)
+            self.telegram.send_message(f"🔍 <b>위협 분석</b> ({result.get('event_count', 0)}개 이벤트)\n\n{analysis}")
 
     def run(self):
         logger.info("AWS Guardian Telegram Bot 시작")

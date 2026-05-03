@@ -5,7 +5,7 @@ resource "aws_lambda_function" "guardian" {
   handler       = "lambda.guardian.handler.lambda_handler"
   runtime       = "python3.12"
   timeout       = 300
-  memory_size   = 256
+  memory_size   = 512  # Increased from 256MB for /export (csv/pdf) + /insights (Gemini) heavy operations
 
   environment {
     variables = {
