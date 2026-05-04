@@ -116,9 +116,12 @@ class S3Checker(BaseChecker):
                 and config.get('IgnorePublicAcls', False)
                 and config.get('RestrictPublicBuckets', False)
             )
-        except self.s3_client.exceptions.NoSuchPublicAccessBlockConfiguration:
-            return True
         except Exception as e:
+            error_code = getattr(e, 'response', {}).get('Error', {}).get('Code', '')
+            if 'NoSuchPublicAccessBlockConfiguration' in str(error_code) or \
+               'NoSuchPublicAccessBlockConfiguration' in str(e) or \
+               'AccessDenied' in str(error_code):
+                return True
             logger.error("Error checking public access block for %s: %s", bucket_name, e)
             return False
 

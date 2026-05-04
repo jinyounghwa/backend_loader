@@ -34,14 +34,14 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex items-center justify-between flex-wrap gap-3 md:gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100 tracking-tight">System Overview</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-slate-100 tracking-tight">System Overview</h1>
           <div className="mt-2">
             <AccountSelector />
           </div>
         </div>
-        <div className="flex items-center space-x-3 text-sm">
+        <div className="flex items-center space-x-2 md:space-x-3 text-xs md:text-sm">
           <span className="text-slate-400">Status:</span>
           <span className={`px-2 py-1 rounded border font-mono font-medium ${healthClass}`}>
             {healthLabel}
@@ -56,72 +56,72 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-[#1a1d27] border border-slate-800 rounded-lg p-5 relative overflow-hidden group">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+        <div className="bg-[#1a1d27] border border-slate-800 rounded-lg p-3 md:p-5 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-16 h-16 bg-amber-500/5 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-2 bg-slate-800/50 rounded-md border border-slate-700/50">
-              <DollarSign className="w-5 h-5 text-slate-300" />
+          <div className="flex justify-between items-start mb-3 md:mb-4">
+            <div className="p-1.5 md:p-2 bg-slate-800/50 rounded-md border border-slate-700/50">
+              <DollarSign className="w-4 md:w-5 h-4 md:h-5 text-slate-300" />
             </div>
-            <div className={`flex items-center text-sm font-mono ${costTrendColor}`}>
-              {costTrend === 'up' ? <ArrowUpRight className="w-4 h-4 mr-1" /> : <ArrowDownRight className="w-4 h-4 mr-1" />}
+            <div className={`flex items-center text-xs md:text-sm font-mono ${costTrendColor}`}>
+              {costTrend === 'up' ? <ArrowUpRight className="w-3 md:w-4 h-3 md:h-4 mr-1" /> : <ArrowDownRight className="w-3 md:w-4 h-3 md:h-4 mr-1" />}
               {Math.abs(cost.increase_percent)}%
             </div>
           </div>
-          <div className="text-slate-400 text-sm font-medium mb-1">Today&apos;s Cost</div>
-          <div className="text-3xl font-bold text-slate-100 font-mono">${cost.today_cost.toFixed(2)}</div>
+          <div className="text-slate-400 text-xs md:text-sm font-medium mb-1">Today&apos;s Cost</div>
+          <div className="text-2xl md:text-3xl font-bold text-slate-100 font-mono">${cost.today_cost.toFixed(2)}</div>
         </div>
 
-        <div className="bg-[#1a1d27] border border-slate-800 rounded-lg p-5 relative overflow-hidden group">
+        <div className="bg-[#1a1d27] border border-slate-800 rounded-lg p-3 md:p-5 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-16 h-16 bg-green-500/5 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-2 bg-slate-800/50 rounded-md border border-slate-700/50">
-              <Server className="w-5 h-5 text-slate-300" />
+          <div className="flex justify-between items-start mb-3 md:mb-4">
+            <div className="p-1.5 md:p-2 bg-slate-800/50 rounded-md border border-slate-700/50">
+              <Server className="w-4 md:w-5 h-4 md:h-5 text-slate-300" />
             </div>
-            <div className="flex items-center text-sm font-mono text-slate-400">
+            <div className="flex items-center text-xs md:text-sm font-mono text-slate-400">
               {ec2.total_instances} Total
             </div>
           </div>
-          <div className="text-slate-400 text-sm font-medium mb-1">Running EC2</div>
-          <div className="text-3xl font-bold text-slate-100 font-mono">{ec2.running_instances}</div>
+          <div className="text-slate-400 text-xs md:text-sm font-medium mb-1">Running EC2</div>
+          <div className="text-2xl md:text-3xl font-bold text-slate-100 font-mono">{ec2.running_instances}</div>
         </div>
 
-        <div className="bg-[#1a1d27] border border-slate-800 rounded-lg p-5 relative overflow-hidden group">
+        <div className="bg-[#1a1d27] border border-slate-800 rounded-lg p-3 md:p-5 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-16 h-16 bg-blue-500/5 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-2 bg-slate-800/50 rounded-md border border-slate-700/50">
-              <Database className="w-5 h-5 text-slate-300" />
+          <div className="flex justify-between items-start mb-3 md:mb-4">
+            <div className="p-1.5 md:p-2 bg-slate-800/50 rounded-md border border-slate-700/50">
+              <Database className="w-4 md:w-5 h-4 md:h-5 text-slate-300" />
             </div>
-            <div className="flex items-center text-sm font-mono text-amber-500">
+            <div className="flex items-center text-xs md:text-sm font-mono text-amber-500">
               {s3.new_buckets.length} New
             </div>
           </div>
-          <div className="text-slate-400 text-sm font-medium mb-1">Total S3 Buckets</div>
-          <div className="text-3xl font-bold text-slate-100 font-mono">{s3.total_buckets}</div>
+          <div className="text-slate-400 text-xs md:text-sm font-medium mb-1">Total S3 Buckets</div>
+          <div className="text-2xl md:text-3xl font-bold text-slate-100 font-mono">{s3.total_buckets}</div>
         </div>
 
-        <div className="bg-[#1a1d27] border border-red-900/30 rounded-lg p-5 relative overflow-hidden group">
+        <div className="bg-[#1a1d27] border border-red-900/30 rounded-lg p-3 md:p-5 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-16 h-16 bg-red-500/5 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-2 bg-red-500/10 rounded-md border border-red-500/20">
-              <AlertTriangle className="w-5 h-5 text-red-500" />
+          <div className="flex justify-between items-start mb-3 md:mb-4">
+            <div className="p-1.5 md:p-2 bg-red-500/10 rounded-md border border-red-500/20">
+              <AlertTriangle className="w-4 md:w-5 h-4 md:h-5 text-red-500" />
             </div>
-            <div className="flex items-center text-sm font-mono text-red-500 animate-pulse">
+            <div className="flex items-center text-xs md:text-sm font-mono text-red-500 animate-pulse">
               Action Req.
             </div>
           </div>
-          <div className="text-slate-400 text-sm font-medium mb-1">Active Alerts</div>
-          <div className="text-3xl font-bold text-red-500 font-mono">{ec2.anomalies.length + s3.anomalies.length}</div>
+          <div className="text-slate-400 text-xs md:text-sm font-medium mb-1">Active Alerts</div>
+          <div className="text-2xl md:text-3xl font-bold text-red-500 font-mono">{ec2.anomalies.length + s3.anomalies.length}</div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-[#1a1d27] border border-slate-800 rounded-lg p-5">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-bold text-slate-200">Cost Trend (30 Days)</h2>
-            <div className="text-sm text-slate-400 font-mono">Threshold: ${cost.threshold}/day</div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+        <div className="lg:col-span-2 bg-[#1a1d27] border border-slate-800 rounded-lg p-3 md:p-5">
+          <div className="flex items-center justify-between mb-4 md:mb-6 flex-col md:flex-row gap-2">
+            <h2 className="text-base md:text-lg font-bold text-slate-200">Cost Trend (30 Days)</h2>
+            <div className="text-xs md:text-sm text-slate-400 font-mono">Threshold: ${cost.threshold}/day</div>
           </div>
-          <div className="h-72 w-full">
+          <div className="h-48 md:h-64 lg:h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={cost.daily_costs} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
@@ -157,9 +157,9 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="bg-[#1a1d27] border border-slate-800 rounded-lg p-5">
-          <h2 className="text-lg font-bold text-slate-200 mb-6">Resource Distribution</h2>
-          <div className="h-64 w-full relative">
+        <div className="bg-[#1a1d27] border border-slate-800 rounded-lg p-3 md:p-5">
+          <h2 className="text-base md:text-lg font-bold text-slate-200 mb-4 md:mb-6">Resource Distribution</h2>
+          <div className="h-48 md:h-56 lg:h-64 w-full relative">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -183,22 +183,22 @@ export default function DashboardPage() {
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
-              <span className="text-2xl font-bold text-slate-200 font-mono">{ec2.total_instances + s3.total_buckets}</span>
+              <span className="text-xl md:text-2xl font-bold text-slate-200 font-mono">{ec2.total_instances + s3.total_buckets}</span>
               <span className="text-xs text-slate-500 uppercase tracking-wider">Total</span>
             </div>
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-2">
+          <div className="mt-3 md:mt-4 grid grid-cols-2 gap-2">
             {resourceData.map((item) => (
               <div key={item.name} className="flex items-center text-xs">
-                <div className="w-3 h-3 rounded-sm mr-2" style={{ backgroundColor: item.color }} />
-                <span className="text-slate-400 truncate">{item.name}</span>
+                <div className="w-2 h-2 md:w-3 md:h-3 rounded-sm mr-2" style={{ backgroundColor: item.color }} />
+                <span className="text-slate-400 truncate text-xs md:text-sm">{item.name}</span>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
         <div>
           <RiskScore
             criticalCount={ec2.anomalies.length}
@@ -217,28 +217,28 @@ export default function DashboardPage() {
       <AuditLogViewer limit={50} />
 
       <div className="bg-[#1a1d27] border border-slate-800 rounded-lg overflow-hidden">
-        <div className="p-5 border-b border-slate-800 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-slate-200 flex items-center">
-            <Activity className="w-5 h-5 mr-2 text-slate-400" />
+        <div className="p-3 md:p-5 border-b border-slate-800 flex items-center justify-between flex-col md:flex-row gap-2">
+          <h2 className="text-base md:text-lg font-bold text-slate-200 flex items-center">
+            <Activity className="w-4 md:w-5 h-4 md:h-5 mr-2 text-slate-400" />
             Event Log
           </h2>
           {isError && <span className="text-xs text-red-400">API unavailable — showing fallback data</span>}
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
+          <table className="w-full text-xs md:text-sm text-left">
             <thead className="text-xs text-slate-400 uppercase bg-slate-800/50 border-b border-slate-800">
               <tr>
-                <th className="px-6 py-3 font-medium">Time</th>
-                <th className="px-6 py-3 font-medium">Type</th>
-                <th className="px-6 py-3 font-medium">Severity</th>
-                <th className="px-6 py-3 font-medium">Message</th>
-                <th className="px-6 py-3 font-medium">Status</th>
+                <th className="px-2 md:px-6 py-2 md:py-3 font-medium">Time</th>
+                <th className="px-2 md:px-6 py-2 md:py-3 font-medium hidden sm:table-cell">Type</th>
+                <th className="px-2 md:px-6 py-2 md:py-3 font-medium hidden md:table-cell">Severity</th>
+                <th className="px-2 md:px-6 py-2 md:py-3 font-medium hidden lg:table-cell">Message</th>
+                <th className="px-2 md:px-6 py-2 md:py-3 font-medium">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/50">
               {recent_events.map((event, idx) => {
                 const date = new Date(event.timestamp);
-                const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
                 let severityClass = 'bg-blue-500/10 text-blue-400 border-blue-500/20';
                 if (event.severity === 'critical') severityClass = 'bg-red-500/10 text-red-400 border-red-500/20';
@@ -246,19 +246,19 @@ export default function DashboardPage() {
 
                 return (
                   <tr key={event.event_id ?? idx} className="hover:bg-slate-800/30 transition-colors">
-                    <td className="px-6 py-4 font-mono text-slate-400 whitespace-nowrap">{timeStr}</td>
-                    <td className="px-6 py-4">
+                    <td className="px-2 md:px-6 py-2 md:py-4 font-mono text-slate-400 whitespace-nowrap text-xs md:text-sm">{timeStr}</td>
+                    <td className="px-2 md:px-6 py-2 md:py-4 hidden sm:table-cell">
                       <span className="uppercase tracking-wider text-xs font-bold text-slate-300">
-                        {event.event_type.replace('_', ' ')}
+                        {event.event_type.replace('_', ' ').substring(0, 10)}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2.5 py-1 rounded text-xs font-medium border ${severityClass}`}>
-                        {event.severity.toUpperCase()}
+                    <td className="px-2 md:px-6 py-2 md:py-4 hidden md:table-cell">
+                      <span className={`px-2 py-1 rounded text-xs font-medium border ${severityClass}`}>
+                        {event.severity.substring(0, 3).toUpperCase()}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-slate-300">{event.details?.message ?? '-'}</td>
-                    <td className="px-6 py-4">
+                    <td className="px-2 md:px-6 py-2 md:py-4 text-slate-300 hidden lg:table-cell">{(event.details?.message ?? '-').substring(0, 30)}</td>
+                    <td className="px-2 md:px-6 py-2 md:py-4">
                       {event.auto_response ? (
                         <span className={`flex items-center text-xs font-medium ${
                           event.auto_response.status === 'success' ? 'text-green-400' : 'text-red-400'

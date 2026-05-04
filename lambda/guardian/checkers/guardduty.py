@@ -115,7 +115,7 @@ class GuardDutyChecker(BaseChecker):
                     })
 
         except Exception as e:
-            logger.warning(f"Error fetching GuardDuty findings: {str(e)}")
+            logger.warning("Error fetching GuardDuty findings: %s", str(e))
 
         return findings
 

@@ -1,5 +1,6 @@
 """Telegram bot listener - polls for user commands and executes auto-remediation"""
 import os
+import re
 import sys
 import json
 import time
@@ -23,6 +24,8 @@ COMMANDS = {
     '요금과다 원인수정': remediate_cost_overrun,
     '해킹우려 수정': remediate_hacking_suspicion,
 }
+
+INSTANCE_ID_RE = re.compile(r'^i-[0-9a-f]{8,17}$')
 
 
 def get_status() -> dict:
@@ -81,6 +84,8 @@ def get_instances() -> dict:
 
 
 def stop_instance(instance_id: str) -> dict:
+    if not INSTANCE_ID_RE.match(instance_id):
+        return {'error': f'Invalid instance ID format: {instance_id}', 'timestamp': datetime.now(timezone.utc).isoformat()}
     try:
         ec2 = AWSClientProvider.get_client('ec2')
         ec2.stop_instances(InstanceIds=[instance_id])
@@ -99,6 +104,8 @@ def stop_instance(instance_id: str) -> dict:
 def set_threshold(amount: str) -> dict:
     try:
         threshold = float(amount)
+        if threshold <= 0 or threshold > 1000000:
+            return {'error': 'Amount must be between $0.01 and $1,000,000', 'timestamp': datetime.now(timezone.utc).isoformat()}
         ssm = AWSClientProvider.get_client('ssm')
 
         ssm.put_parameter(
@@ -140,10 +147,6 @@ def get_history(hours: int = 24) -> dict:
 
 
 def remediate_finding(finding_id: str) -> dict:
-    """Handle /remediate {finding-id} command (Idempotent State Machine pattern)"""
-    import re
-
-    # Strict regex validation (Gemini recommended)
     if not re.match(r'^finding-[a-f0-9\-]+$', finding_id):
         return {'error': f'Invalid finding ID format: {finding_id}'}
 
@@ -189,8 +192,8 @@ def remediate_finding(finding_id: str) -> dict:
         logger.error("Error remediating finding %s: %s", finding_id, e)
         try:
             storage.update_remediation_status(finding_id, 'Failed', str(e))
-        except:
-            pass
+        except Exception as update_err:
+            logger.warning("Failed to update remediation status for %s: %s", finding_id, update_err)
         return {'error': f'대응 실행 실패: {str(e)}'}
 
 
@@ -373,8 +376,6 @@ class TelegramBotListener:
             elif command == 'remediate' and args:
                 return lambda: remediate_finding(args), f'/remediate {args}'
             elif command == 'export':
-                # Parse format and options: /export csv --days 7 --severity high
-                import re
                 format_match = re.search(r'\b(csv|pdf|json)\b', text)
                 days_match = re.search(r'--days\s+(\d+)', text)
                 severity_match = re.search(r'--severity\s+(\w+)', text)

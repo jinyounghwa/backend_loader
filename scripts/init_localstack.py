@@ -14,7 +14,6 @@ os.environ['AWS_SECRET_ACCESS_KEY'] = 'test'
 os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
 
 def init_dynamodb():
-    """Create DynamoDB table"""
     print("📊 Creating DynamoDB table...")
     try:
         dynamodb = boto3.client(
@@ -23,15 +22,59 @@ def init_dynamodb():
             region_name='us-east-1'
         )
 
+        # Drop old table if it has the wrong schema (timestamp HASH)
+        try:
+            old_desc = dynamodb.describe_table(TableName='aws-guardian-events')
+            key_schema = old_desc['Table']['KeySchema']
+            hash_key = next((k for k in key_schema if k['KeyType'] == 'HASH'), None)
+            if hash_key and hash_key['AttributeName'] == 'timestamp':
+                print("  Dropping old table with outdated schema...")
+                dynamodb.delete_table(TableName='aws-guardian-events')
+                waiter = dynamodb.get_waiter('table_not_exists')
+                waiter.wait(TableName='aws-guardian-events')
+        except dynamodb.exceptions.ResourceNotFoundException:
+            pass
+        except Exception:
+            pass
+
         dynamodb.create_table(
             TableName='aws-guardian-events',
             KeySchema=[
-                {'AttributeName': 'timestamp', 'KeyType': 'HASH'},
-                {'AttributeName': 'event_type', 'KeyType': 'RANGE'}
+                {'AttributeName': 'event_id', 'KeyType': 'HASH'},
+                {'AttributeName': 'timestamp', 'KeyType': 'RANGE'}
             ],
             AttributeDefinitions=[
+                {'AttributeName': 'event_id', 'AttributeType': 'S'},
                 {'AttributeName': 'timestamp', 'AttributeType': 'S'},
-                {'AttributeName': 'event_type', 'AttributeType': 'S'}
+                {'AttributeName': 'event_type', 'AttributeType': 'S'},
+                {'AttributeName': 'severity', 'AttributeType': 'S'},
+                {'AttributeName': 'gsi_pk', 'AttributeType': 'S'},
+            ],
+            GlobalSecondaryIndexes=[
+                {
+                    'IndexName': 'AllEventsIndex',
+                    'KeySchema': [
+                        {'AttributeName': 'gsi_pk', 'KeyType': 'HASH'},
+                        {'AttributeName': 'timestamp', 'KeyType': 'RANGE'},
+                    ],
+                    'Projection': {'ProjectionType': 'ALL'},
+                },
+                {
+                    'IndexName': 'TypeTimestampIndex',
+                    'KeySchema': [
+                        {'AttributeName': 'event_type', 'KeyType': 'HASH'},
+                        {'AttributeName': 'timestamp', 'KeyType': 'RANGE'},
+                    ],
+                    'Projection': {'ProjectionType': 'ALL'},
+                },
+                {
+                    'IndexName': 'SeverityTimestampIndex',
+                    'KeySchema': [
+                        {'AttributeName': 'severity', 'KeyType': 'HASH'},
+                        {'AttributeName': 'timestamp', 'KeyType': 'RANGE'},
+                    ],
+                    'Projection': {'ProjectionType': 'ALL'},
+                },
             ],
             BillingMode='PAY_PER_REQUEST'
         )

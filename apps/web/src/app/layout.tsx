@@ -4,6 +4,7 @@ import "./globals.css";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { Providers } from "@/components/Providers";
+import { LayoutClient } from "@/components/LayoutClient";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,6 +21,7 @@ export const metadata: Metadata = {
   description: "Serverless AWS Account Monitoring System",
 };
 
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -32,6 +34,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex bg-[#0f1117] text-slate-200 selection:bg-amber-500/30">
         <Providers>
+          <LayoutClient />
           <Sidebar />
           <div className="flex-1 flex flex-col min-w-0">
             <Header />

@@ -63,9 +63,10 @@ def setup_logger(name: str, log_file: str = None, level: int = logging.INFO) -> 
 
 
 def log_check_result(logger: logging.Logger, check_type: str, status: str, detail: str = None):
-    """Log a check result with structured data"""
     logger.info(
-        f"{check_type}: {status}",
+        "%s: %s",
+        check_type,
+        status,
         extra={
             'action': 'check_result',
             'resource': check_type,
@@ -76,9 +77,11 @@ def log_check_result(logger: logging.Logger, check_type: str, status: str, detai
 
 
 def log_remediation(logger: logging.Logger, action: str, resource: str, status: str, detail: str = None):
-    """Log a remediation action with structured data"""
     logger.info(
-        f"{action}: {resource} - {status}",
+        "%s: %s - %s",
+        action,
+        resource,
+        status,
         extra={
             'action': 'remediation',
             'resource': resource,

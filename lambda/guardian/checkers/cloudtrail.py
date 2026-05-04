@@ -112,7 +112,7 @@ class CloudTrailChecker(BaseChecker):
                     })
 
         except Exception as e:
-            logger.warning(f"Error fetching CloudTrail events: {str(e)}")
+            logger.warning("Error fetching CloudTrail events: %s", str(e))
 
         return all_events
 

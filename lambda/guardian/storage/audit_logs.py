@@ -3,13 +3,24 @@ Audit log storage for guardian admin actions
 """
 
 import json
-from datetime import datetime
-from typing import Optional
+import logging
+from datetime import datetime, timezone
+from typing import Optional, List, Dict, Any
 
-import boto3
+from guardian.aws_client_provider import AWSClientProvider
 
-dynamodb = boto3.resource("dynamodb")
-table = dynamodb.Table("guardian-audit-logs")
+logger = logging.getLogger(__name__)
+
+TABLE_NAME = "guardian-audit-logs"
+
+
+def _get_table():
+    """Lazy-load DynamoDB table via AWSClientProvider (respects LocalStack config)."""
+    try:
+        return AWSClientProvider.get_resource("dynamodb").Table(TABLE_NAME)
+    except Exception as e:
+        logger.error("Could not access audit log table: %s", e)
+        return None
 
 
 def save_audit_log(
@@ -20,7 +31,7 @@ def save_audit_log(
     details: Optional[dict] = None,
 ) -> dict:
     """Save audit log entry for admin actions"""
-    timestamp = datetime.utcnow().isoformat()
+    timestamp = datetime.now(timezone.utc).isoformat()
 
     item = {
         "user": user,
@@ -32,32 +43,41 @@ def save_audit_log(
     }
 
     try:
+        table = _get_table()
+        if table is None:
+            return {"success": False, "error": "DynamoDB table unavailable"}
         table.put_item(Item=item)
         return {"success": True, "timestamp": timestamp}
     except Exception as e:
-        print(f"Error saving audit log: {e}")
+        logger.error("Error saving audit log: %s", e)
         return {"success": False, "error": str(e)}
 
 
-def get_audit_logs(limit: int = 100) -> list:
+def get_audit_logs(limit: int = 100) -> List[Dict[str, Any]]:
     """Get recent audit logs"""
     try:
+        table = _get_table()
+        if table is None:
+            return []
         response = table.scan(Limit=limit)
         return response.get("Items", [])
     except Exception as e:
-        print(f"Error retrieving audit logs: {e}")
+        logger.error("Error retrieving audit logs: %s", e)
         return []
 
 
-def get_audit_logs_by_user(user: str, limit: int = 50) -> list:
+def get_audit_logs_by_user(user: str, limit: int = 50) -> List[Dict[str, Any]]:
     """Get audit logs for specific user"""
     try:
+        table = _get_table()
+        if table is None:
+            return []
         response = table.query(
-            KeyConditionExpression="usr = :user",
+            KeyConditionExpression="user = :user",
             ExpressionAttributeValues={":user": user},
             Limit=limit,
         )
         return response.get("Items", [])
     except Exception as e:
-        print(f"Error querying audit logs for user {user}: {e}")
+        logger.error("Error querying audit logs for user %s: %s", user, e)
         return []

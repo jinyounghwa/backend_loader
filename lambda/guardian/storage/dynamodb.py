@@ -48,11 +48,16 @@ class DynamoDBStorage:
     def save_auto_response(self, action_type: str, resource_id: str, status: str, details: Dict[str, Any]) -> bool:
         try:
             item = {
+                'event_id': str(uuid.uuid4()),
                 'timestamp': datetime.now(timezone.utc).isoformat(),
+                'event_type': 'auto_response',
+                'severity': 'info',
+                'account_id': 'current',
+                'gsi_pk': 'EVENT',
                 'action_type': action_type,
                 'resource_id': resource_id,
                 'status': status,
-                'details': details
+                'details': json.dumps(details) if isinstance(details, dict) else details
             }
 
             self.table.put_item(Item=item)
@@ -183,12 +188,44 @@ class DynamoDBStorage:
             dynamodb.create_table(
                 TableName=self.table_name,
                 KeySchema=[
-                    {'AttributeName': 'timestamp', 'KeyType': 'HASH'},
-                    {'AttributeName': 'event_type', 'KeyType': 'RANGE'}
+                    {'AttributeName': 'event_id', 'KeyType': 'HASH'},
+                    {'AttributeName': 'timestamp', 'KeyType': 'RANGE'}
                 ],
                 AttributeDefinitions=[
+                    {'AttributeName': 'event_id', 'AttributeType': 'S'},
                     {'AttributeName': 'timestamp', 'AttributeType': 'S'},
-                    {'AttributeName': 'event_type', 'AttributeType': 'S'}
+                    {'AttributeName': 'event_type', 'AttributeType': 'S'},
+                    {'AttributeName': 'severity', 'AttributeType': 'S'},
+                    {'AttributeName': 'gsi_pk', 'AttributeType': 'S'},
+                ],
+                GlobalSecondaryIndexes=[
+                    {
+                        'IndexName': 'AllEventsIndex',
+                        'KeySchema': [
+                            {'AttributeName': 'gsi_pk', 'KeyType': 'HASH'},
+                            {'AttributeName': 'timestamp', 'KeyType': 'RANGE'},
+                        ],
+                        'Projection': {
+                            'ProjectionType': 'INCLUDE',
+                            'NonKeyAttributes': ['event_type', 'severity', 'details'],
+                        },
+                    },
+                    {
+                        'IndexName': 'TypeTimestampIndex',
+                        'KeySchema': [
+                            {'AttributeName': 'event_type', 'KeyType': 'HASH'},
+                            {'AttributeName': 'timestamp', 'KeyType': 'RANGE'},
+                        ],
+                        'Projection': {'ProjectionType': 'ALL'},
+                    },
+                    {
+                        'IndexName': 'SeverityTimestampIndex',
+                        'KeySchema': [
+                            {'AttributeName': 'severity', 'KeyType': 'HASH'},
+                            {'AttributeName': 'timestamp', 'KeyType': 'RANGE'},
+                        ],
+                        'Projection': {'ProjectionType': 'ALL'},
+                    },
                 ],
                 BillingMode='PAY_PER_REQUEST'
             )

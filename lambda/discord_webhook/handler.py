@@ -12,6 +12,7 @@ from guardian.checkers.cost import CostChecker
 from guardian.checkers.ec2 import EC2Checker
 from guardian.checkers.s3 import S3Checker
 from guardian.responders.discord import DiscordResponder
+from guardian.responders.aws_action_executor import AWSActionExecutor
 from guardian.storage.dynamodb import DynamoDBStorage
 from guardian.aws_client_provider import AWSClientProvider
 
@@ -27,6 +28,7 @@ ec2_checker = EC2Checker()
 s3_checker = S3Checker()
 discord = DiscordResponder()
 storage = DynamoDBStorage()
+action_executor = AWSActionExecutor()
 
 
 def verify_discord_request(request_body: str, signature: str, timestamp: str) -> bool:
@@ -106,23 +108,30 @@ def lambda_handler(event, context):
 
 def handle_status_command(interaction):
     try:
-        daily_cost = cost_checker.get_daily_cost()
-        monthly_cost = cost_checker.get_monthly_cost()
+        cost_result = cost_checker.check()
+        cost_details = cost_result.details
 
-        all_instances = ec2_checker.get_all_instances()
-        total_instances = sum(len(insts) for insts in all_instances.values())
+        ec2_result = ec2_checker.check()
+        ec2_details = ec2_result.details
 
-        public_buckets = s3_checker.get_public_buckets()
+        s3_result = s3_checker.check()
+        s3_details = s3_result.details
+
+        total_instances = sum(
+            len(insts) for insts in ec2_details.get('unauthorized_region_instances', {}).values()
+        ) + len(ec2_details.get('new_instances', []))
+
+        public_count = len(s3_details.get('public_buckets', []))
 
         embed = {
             'title': '📊 AWS Guardian Status',
             'color': 65280,
             'fields': [
-                {'name': '💰 Monthly Cost', 'value': f"${monthly_cost:.2f}", 'inline': True},
-                {'name': "📈 Today's Cost", 'value': f"${daily_cost:.2f}", 'inline': True},
-                {'name': '🏃 Running EC2', 'value': str(total_instances), 'inline': True},
-                {'name': '🪣 Total S3 Buckets', 'value': str(len(public_buckets)), 'inline': True},
-                {'name': '🌐 Public Buckets', 'value': str(len(public_buckets)), 'inline': True}
+                {'name': '💰 Monthly Cost', 'value': f"${cost_details.get('monthly_cost', 0):.2f}", 'inline': True},
+                {'name': "📈 Today's Cost", 'value': f"${cost_details.get('today_cost', 0):.2f}", 'inline': True},
+                {'name': '🏃 EC2 Issues', 'value': str(total_instances), 'inline': True},
+                {'name': '🪣 S3 Issues', 'value': str(public_count), 'inline': True},
+                {'name': '📍 System Health', 'value': cost_result.severity, 'inline': True}
             ],
             'footer': {'text': 'AWS Guardian'},
             'timestamp': datetime.now(timezone.utc).isoformat()
@@ -165,7 +174,7 @@ def handle_stop_command(interaction):
         if not REGION_PATTERN.match(region):
             return create_response("Invalid region format", ephemeral=True)
 
-        success = ec2_checker.stop_instance(instance_id, region)
+        success = action_executor.stop_ec2_instance(instance_id, region)
 
         if success:
             message = f"✅ Successfully stopped instance: `{instance_id}` in `{region}`"

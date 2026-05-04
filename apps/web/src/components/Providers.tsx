@@ -2,6 +2,7 @@
 
 import { AuthSessionProvider } from '@/components/layout/SessionProvider';
 import { ToastProvider } from '@/components/ToastProvider';
+import { NotificationProvider } from '@/components/NotificationProvider';
 import { ReactNode, createContext, useContext, useState, useCallback } from 'react';
 
 export interface Account {
@@ -69,9 +70,11 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <AuthSessionProvider>
       <ToastProvider>
-        <AccountProvider>
-          {children}
-        </AccountProvider>
+        <NotificationProvider>
+          <AccountProvider>
+            {children}
+          </AccountProvider>
+        </NotificationProvider>
       </ToastProvider>
     </AuthSessionProvider>
   );

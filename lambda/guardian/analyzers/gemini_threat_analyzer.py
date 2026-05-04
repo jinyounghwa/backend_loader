@@ -53,7 +53,7 @@ class GeminiThreatAnalyzer:
     def _generate_cache_key(self, events_summary: Dict[str, Any]) -> str:
         """Generate MD5 hash of events summary for caching"""
         summary_json = json.dumps(events_summary, sort_keys=True, default=str)
-        return hashlib.md5(summary_json.encode()).hexdigest()
+        return hashlib.sha256(summary_json.encode()).hexdigest()[:16]
 
     def _build_prompt(self, events_summary: Dict[str, Any]) -> str:
         """Build Gemini prompt with Persona + Output Schema (Gemini recommended)"""

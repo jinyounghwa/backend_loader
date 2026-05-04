@@ -1,11 +1,17 @@
 """Auto-remediation actions for AWS Guardian Telegram commands"""
 import logging
 from datetime import datetime, timezone as tz
+from typing import List, Dict, Any
 
 from guardian.config import Config
 from guardian.aws_client_provider import AWSClientProvider
 
 logger = logging.getLogger('auto_remediation')
+
+MAX_INSTANCES_STOP_LIMIT = 5
+PROTECTED_TAG_KEY = 'GuardianProtected'
+SKIP_TAG_KEY = 'AutoManaged'
+SKIP_TAG_VALUE = 'false'
 
 
 def remediate_cost_overrun() -> dict:
@@ -29,30 +35,23 @@ def remediate_cost_overrun() -> dict:
                 'status': 'identified'
             })
             results['steps'].append({
-                'name': '비용 임계값 상향 (10→20)',
-                'detail': 'SSM /guardian/cost-threshold 를 20.0으로 상향',
+                'name': '비용 임계값 유지 (수동 확인 필요)',
+                'detail': '자동 임계값 상향은 위험하므로 분석 결과만 제공',
                 'status': 'done'
             })
-
-            ssm = AWSClientProvider.get_client('ssm')
-            ssm.put_parameter(
-                Name='/guardian/cost-threshold',
-                Value='20.0',
-                Type='String',
-                Overwrite=True
-            )
 
             results['summary'] = (
                 '비용 원인 분석 완료.\n'
                 '- 주요 원인: EC2 인스턴스 다수 실행\n'
-                '- 임계값을 $10 → $20 상향\n'
-                '- 불필요한 인스턴스 중지 권장'
+                '- ⚠️ 임계값 자동 상향은 보안상 비활성화됨\n'
+                '- /threshold 명령으로 수동 조정 가능'
             )
         else:
             ce = AWSClientProvider.get_client('ce')
             today = datetime.now(tz.utc).strftime('%Y-%m-%d')
             yesterday = (datetime.now(tz.utc).replace(hour=0, minute=0, second=0)).strftime('%Y-%m-%d')
 
+            top_services: List[str] = []
             try:
                 response = ce.get_cost_and_usage(
                     TimePeriod={'Start': yesterday, 'End': today},
@@ -61,7 +60,6 @@ def remediate_cost_overrun() -> dict:
                     GroupBy=[{'Type': 'DIMENSION', 'Key': 'SERVICE'}]
                 )
 
-                top_services = []
                 if response.get('ResultsByTime'):
                     groups = response['ResultsByTime'][0].get('Groups', [])
                     for g in sorted(groups, key=lambda x: float(x['Metrics']['UnblendedCost']['Amount']), reverse=True)[:3]:
@@ -80,32 +78,18 @@ def remediate_cost_overrun() -> dict:
                     'status': 'failed'
                 })
 
-            try:
-                ssm = AWSClientProvider.get_client('ssm')
-                current = float(ssm.get_parameter(Name='/guardian/cost-threshold')['Parameter']['Value'])
-                new_threshold = current * 2
-                ssm.put_parameter(Name='/guardian/cost-threshold', Value=str(new_threshold), Type='String', Overwrite=True)
+            results['steps'].append({
+                'name': '임계값 자동 상향 안함 (보안)',
+                'detail': '비용 이상을 숨길 수 있으므로 수동 확인 필요: /threshold {amount}',
+                'status': 'done'
+            })
 
-                results['steps'].append({
-                    'name': f'임계값 상향 (${current} → ${new_threshold})',
-                    'detail': '반복 알림 방지를 위해 임계값 상향',
-                    'status': 'done'
-                })
-
-                results['summary'] = (
-                    f'비용 원인 분석 완료.\n'
-                    f'- 상위 서비스:\n' + '\n'.join(f'  {s}' for s in top_services if top_services) + '\n'
-                    f'- 임계값 ${current} → ${new_threshold} 상향\n'
-                    f'- 불필요한 리소스 정리 권장'
-                )
-            except Exception as ssm_error:
-                logger.error("SSM parameter update failed: %s", ssm_error)
-                results['steps'].append({
-                    'name': '임계값 상향',
-                    'detail': f'SSM 업데이트 실패: {str(ssm_error)}',
-                    'status': 'failed'
-                })
-                results['summary'] = '일부 단계가 실패했습니다. 콘솔에서 수동 확인 필요.'
+            results['summary'] = (
+                '비용 원인 분석 완료.\n'
+                + ('- 상위 서비스:\n' + '\n'.join(f'  {s}' for s in top_services) + '\n' if top_services else '')
+                + '- ⚠️ 임계값 자동 상향은 보안상 비활성화됨\n'
+                '- /threshold {금액} 으로 수동 조정'
+            )
 
     except Exception as e:
         logger.error("Cost remediation error: %s", e)
@@ -119,6 +103,16 @@ def remediate_cost_overrun() -> dict:
     return results
 
 
+def _is_protected_instance(instance: Dict[str, Any]) -> bool:
+    tags = instance.get('Tags', [])
+    for tag in tags:
+        if tag.get('Key') == PROTECTED_TAG_KEY:
+            return True
+        if tag.get('Key') == SKIP_TAG_KEY and tag.get('Value', '').lower() == SKIP_TAG_VALUE:
+            return True
+    return False
+
+
 def remediate_hacking_suspicion() -> dict:
     results = {
         'action': '해킹우려 수정',
@@ -128,8 +122,9 @@ def remediate_hacking_suspicion() -> dict:
     }
 
     try:
-        stopped_instances = []
-        blocked_buckets = []
+        stopped_instances: List[str] = []
+        skipped_instances: List[str] = []
+        blocked_buckets: List[str] = []
 
         regions = ['us-east-1'] if Config.is_localstack() else _get_all_regions()
 
@@ -141,14 +136,34 @@ def remediate_hacking_suspicion() -> dict:
                     Filters=[{'Name': 'instance-state-name', 'Values': ['running']}]
                 )
 
-                instance_ids = []
+                stoppable_ids: List[str] = []
                 for reservation in response.get('Reservations', []):
                     for instance in reservation.get('Instances', []):
-                        instance_ids.append(instance['InstanceId'])
+                        instance_id = instance['InstanceId']
+                        if _is_protected_instance(instance):
+                            skipped_instances.append(f"{instance_id} ({region})")
+                            logger.info("Skipping protected instance: %s in %s", instance_id, region)
+                            continue
+                        stoppable_ids.append(instance_id)
 
-                if instance_ids:
-                    ec2.stop_instances(InstanceIds=instance_ids)
-                    for iid in instance_ids:
+                if stoppable_ids:
+                    if len(stoppable_ids) > MAX_INSTANCES_STOP_LIMIT:
+                        results['steps'].append({
+                            'name': f'EC2 중지 ({region})',
+                            'detail': (
+                                f'⚠️ 중지 대상 {len(stoppable_ids)}개 > 안전 한계 {MAX_INSTANCES_STOP_LIMIT}개. '
+                                f'수동 확인 필요: /stop {{instance-id}}'
+                            ),
+                            'status': 'failed'
+                        })
+                        logger.warning(
+                            "Too many stoppable instances (%d) in %s, exceeding safety limit %d",
+                            len(stoppable_ids), region, MAX_INSTANCES_STOP_LIMIT
+                        )
+                        continue
+
+                    ec2.stop_instances(InstanceIds=stoppable_ids)
+                    for iid in stoppable_ids:
                         stopped_instances.append(f"{iid} ({region})")
                         logger.info("Stopped instance: %s in %s", iid, region)
             except Exception as e:
@@ -163,6 +178,13 @@ def remediate_hacking_suspicion() -> dict:
             results['steps'].append({
                 'name': 'EC2 인스턴스 중지',
                 'detail': f'{len(stopped_instances)}개 인스턴스 중지: ' + ', '.join(stopped_instances[:5]),
+                'status': 'done'
+            })
+
+        if skipped_instances:
+            results['steps'].append({
+                'name': '보호된 인스턴스 (스킵)',
+                'detail': f'{len(skipped_instances)}개 스킵: ' + ', '.join(skipped_instances[:5]),
                 'status': 'done'
             })
 
@@ -201,12 +223,15 @@ def remediate_hacking_suspicion() -> dict:
                 'status': 'failed'
             })
 
-        results['summary'] = (
-            f'보안 위협 자동 수정 완료.\n'
-            f'- EC2: {len(stopped_instances)}개 인스턴스 중지\n'
-            f'- S3: {len(blocked_buckets)}개 버킷 퍼블릭 차단\n'
-            f'- Security Group 0.0.0.0/0 규칙은 실 AWS에서 수동 확인 필요'
-        )
+        summary_parts = [
+            f'EC2: {len(stopped_instances)}개 중지',
+            f'S3: {len(blocked_buckets)}개 퍼블릭 차단',
+        ]
+        if skipped_instances:
+            summary_parts.append(f'⚠️ {len(skipped_instances)}개 보호됨 (스킵)')
+        summary_parts.append('Security Group 0.0.0.0/0 규칙은 실 AWS에서 수동 확인 필요')
+
+        results['summary'] = '보안 위협 자동 수정 완료.\n- ' + '\n- '.join(summary_parts)
 
     except Exception as e:
         logger.error("Hacking suspicion remediation error: %s", e)

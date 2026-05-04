@@ -81,13 +81,10 @@ class BaseChecker(ABC):
         pass
 
     def _log_check_start(self, check_name: str):
-        """Log check start."""
-        logger.info(f"Starting {check_name} check")
+        logger.info("Starting %s check", check_name)
 
     def _log_check_end(self, check_name: str, severity: str):
-        """Log check completion."""
-        logger.info(f"Completed {check_name} check: {severity}")
+        logger.info("Completed %s check: %s", check_name, severity)
 
     def _log_error(self, check_name: str, error: Exception):
-        """Log error."""
-        logger.error(f"Error in {check_name}: {str(error)}")
+        logger.error("Error in %s: %s", check_name, str(error))
