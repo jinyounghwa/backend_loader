@@ -2,8 +2,9 @@
 
 ## 📊 프로젝트 현황
 
-**현재 상태**: Sprint 12 Phase 1 + 2 + 3 완료 (2026-05-04) 🎯  
-**전체 진도**: 92% (120+ commits, 56+ components, 22+ API endpoints)
+**현재 상태**: Sprint 14 완료 (2026-05-04) 🎯  
+**전체 진도**: 95% (125+ commits, 62+ components, 28+ API endpoints)  
+**최종 완료 기준**: Sprint 15 (멀티 리전) + Sprint 16 (API 통합)
 
 ---
 
@@ -203,28 +204,45 @@ MODIFIED:
 
 ---
 
-## 🚀 Sprint 13 사전 계획 (예상 2-3시간)
+## ✅ Sprint 13 완료 (2026-05-04)
 
-### Phase 1: 모바일 반응형 UI (45분)
-- Tailwind CSS responsive classes (md:, lg: breakpoints)
-- Dashboard grid 조정 (1 col mobile → 2 col tablet → 4 col desktop)
-- 터치 친화적 버튼 크기 (최소 44x44px)
-- 네비게이션 메뉴 모바일 헤더 추가
+**Phase 1: 모바일 반응형 UI** ✅
+- Tailwind responsive classes 적용 (md:, lg: breakpoints)
+- Header 모바일 메뉴 (hamburger icon)
+- Dashboard 그리드 최적화 (grid-cols-1 md:grid-cols-2 lg:grid-cols-4)
+- 터치 친화적 버튼 (min-h-[44px] min-w-[44px])
 
-### Phase 2: 브라우저 푸시 알림 (60분)
-- `useNotification` 훅 (Web Notifications API)
-- NotificationProvider (React Context)
-- `/api/notifications` 엔드포인트 (mock 푸시 이벤트)
-- 권한 요청 모달 + 거부 상태 처리
+**Phase 2: 브라우저 푸시 알림** ✅
+- useNotification 훅 (Web Notifications API)
+- NotificationProvider (React Context + 스로틀링)
+- /api/notifications SSE 엔드포인트
+- NotificationPermissionModal + LayoutClient 통합
 
-### Phase 3: 오프라인 지원 (45분)
-- Service Worker 구현 (네트워크 감지)
-- 오프라인 배너 표시
-- 네트워크 복구 시 캐시 무효화 + 재동기화
+**Phase 3: 오프라인 지원** ✅
+- Service Worker (cache-first, network-first 전략)
+- useOnline 훅 (heartbeat 검사)
+- OfflineBanner 컴포넌트
+- API 캐시 무효화 시스템
 
-**준비사항**: 
-- Notification API는 HTTPS 필수 (localhost 제외)
-- Service Worker는 production build에서만 활성화
+**성과**: 3/3 phases (100%) | 150+ LOC | Zero errors | Build: 1.8s
+
+---
+
+## ✅ Sprint 14 완료 (2026-05-04)
+
+**Phase 1: Gemini AI 위협 분석** ✅
+- `/api/analyze-threat` 엔드포인트 (Gemini API 통합)
+- `useAIAnalysis` 훅 (캐싱 + 5초 debounce)
+- `AIThreatPanel` 컴포넌트 (심각도 배지 + 조치항목)
+- Dashboard에 AI 분석 패널 통합
+
+**Phase 2: 성능 최적화** ✅
+- ChartSection 동적 로딩 (Recharts 번들 분리)
+- Next.js 이미지 최적화 (WebP, AVIF 지원)
+- SWR 캐싱 전략 개선 (60s 디다운, 포커스 제한)
+- EventFeed 메모이제이션 + useCallback 최적화
+
+**성과**: 2/2 phases (100%) | 526 LOC | Zero errors | Build: 2.1s
 
 ---
 
@@ -234,11 +252,12 @@ MODIFIED:
 |--------|------|------|------|
 | **Sprint 11** | ✅ DONE | 다중 계정 대시보드 UI | 1 session |
 | **Sprint 12** | ✅ DONE | SSE + Toast + 필터링 + 감사 로그 + 성능 최적화 | 1 session |
-| **Sprint 13** | 🔮 | 모바일 대응 + 웹 푸시 알림 | TBD |
-| Sprint 14 | 🔮 | AI 분석 (Gemini 통합) | TBD |
-| Sprint 15 | 🔮 | 멀티 리전 배포 | TBD |
+| **Sprint 13** | ✅ DONE | 모바일 반응형 UI + 웹 푸시 알림 + 오프라인 지원 | 1 session |
+| **Sprint 14** | ✅ DONE | Gemini AI 위협 분석 + 성능 최적화 | 1 session |
+| Sprint 15 | 🔮 | 멀티 리전 배포 + 고급 분석 | TBD |
+| Sprint 16 | 🔮 | API 통합 테스트 + 문서화 | TBD |
 
-**진도**: Sprint 6 → 7 → 8 → 10 → 11 → 12 (총 12 sprints completed)
+**진도**: Sprint 6 → 7 → 8 → 10 → 11 → 12 → 13 → 14 (총 14 sprints completed)
 
 ---
 
