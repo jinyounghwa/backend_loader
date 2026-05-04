@@ -91,6 +91,20 @@ export default function ActionHistory() {
           title: 'Rollback Successful',
           message: 'The action has been rolled back.',
         });
+
+        // Log to audit log
+        await fetch('/api/audit-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user: 'admin',
+            action: 'rollback',
+            resource_id: actionId,
+            status: 'success',
+            details: { account_id: selectedAccountId },
+          }),
+        }).catch(err => console.error('Failed to log audit:', err));
+
         await loadActions();
       } else {
         addToast({
@@ -163,6 +177,20 @@ export default function ActionHistory() {
           title: 'Action Completed',
           message: 'The remediation action has been executed successfully.',
         });
+
+        // Log to audit log
+        await fetch('/api/audit-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user: 'admin',
+            action: dialog.actionType,
+            resource_id: dialog.resourceId,
+            status: 'success',
+            details: { account_id: selectedAccountId },
+          }),
+        }).catch(err => console.error('Failed to log audit:', err));
+
         await loadActions();
       } else {
         addToast({
@@ -170,6 +198,19 @@ export default function ActionHistory() {
           title: 'Action Failed',
           message: 'Failed to execute action. Please try again.',
         });
+
+        // Log failure
+        await fetch('/api/audit-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user: 'admin',
+            action: dialog.actionType,
+            resource_id: dialog.resourceId,
+            status: 'failed',
+            details: { account_id: selectedAccountId, error: 'Action execution failed' },
+          }),
+        }).catch(err => console.error('Failed to log audit:', err));
       }
     } catch (err) {
       addToast({

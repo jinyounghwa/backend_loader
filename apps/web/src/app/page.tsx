@@ -8,6 +8,7 @@ import AccountSelector from '@/components/Dashboard/AccountSelector';
 import RiskScore from '@/components/Dashboard/RiskScore';
 import EventFeed from '@/components/Dashboard/EventFeed';
 import ActionHistory from '@/components/Dashboard/ActionHistory';
+import AuditLogViewer from '@/components/Dashboard/AuditLogViewer';
 
 export default function DashboardPage() {
   const { summary, isLoading, isError, refresh } = useDashboard();
@@ -212,6 +213,8 @@ export default function DashboardPage() {
       </div>
 
       <ActionHistory />
+
+      <AuditLogViewer limit={50} />
 
       <div className="bg-[#1a1d27] border border-slate-800 rounded-lg overflow-hidden">
         <div className="p-5 border-b border-slate-800 flex items-center justify-between">
