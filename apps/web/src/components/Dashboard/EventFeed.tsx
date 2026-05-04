@@ -1,7 +1,7 @@
 'use client';
 
 import { useAccounts } from '@/components/Providers';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useMemo, memo } from 'react';
 import { AlertTriangle, AlertCircle, CheckCircle, Zap, Wifi, WifiOff } from 'lucide-react';
 import { useEventStream } from '@/lib/hooks/useEventStream';
 
@@ -14,7 +14,7 @@ interface GuardianEvent {
   auto_response?: { action: string; status: string };
 }
 
-export default function EventFeed() {
+function EventFeed() {
   const { selectedAccountId } = useAccounts();
   const [events, setEvents] = useState<GuardianEvent[]>([]);
 
@@ -27,33 +27,29 @@ export default function EventFeed() {
     onEvent: handleNewEvent,
   });
 
-  const getSeverityIcon = (severity: GuardianEvent['severity']) => {
-    switch (severity) {
-      case 'critical':
-        return <AlertTriangle className="w-4 h-4 text-red-400" />;
-      case 'high':
-      case 'warning':
-        return <AlertCircle className="w-4 h-4 text-amber-400" />;
-      case 'medium':
-        return <Zap className="w-4 h-4 text-blue-400" />;
-      default:
-        return <CheckCircle className="w-4 h-4 text-green-400" />;
-    }
-  };
+  const severityIconMap = useMemo(() => ({
+    critical: <AlertTriangle className="w-4 h-4 text-red-400" />,
+    high: <AlertCircle className="w-4 h-4 text-amber-400" />,
+    warning: <AlertCircle className="w-4 h-4 text-amber-400" />,
+    medium: <Zap className="w-4 h-4 text-blue-400" />,
+    low: <CheckCircle className="w-4 h-4 text-green-400" />,
+  }), []);
 
-  const getSeverityColor = (severity: GuardianEvent['severity']) => {
-    switch (severity) {
-      case 'critical':
-        return 'border-l-red-400 bg-red-500/5';
-      case 'high':
-      case 'warning':
-        return 'border-l-amber-400 bg-amber-500/5';
-      case 'medium':
-        return 'border-l-blue-400 bg-blue-500/5';
-      default:
-        return 'border-l-green-400 bg-green-500/5';
-    }
-  };
+  const severityColorMap = useMemo(() => ({
+    critical: 'border-l-red-400 bg-red-500/5',
+    high: 'border-l-amber-400 bg-amber-500/5',
+    warning: 'border-l-amber-400 bg-amber-500/5',
+    medium: 'border-l-blue-400 bg-blue-500/5',
+    low: 'border-l-green-400 bg-green-500/5',
+  }), []);
+
+  const getSeverityIcon = useCallback((severity: GuardianEvent['severity']) => {
+    return severityIconMap[severity] || severityIconMap.low;
+  }, [severityIconMap]);
+
+  const getSeverityColor = useCallback((severity: GuardianEvent['severity']) => {
+    return severityColorMap[severity] || severityColorMap.low;
+  }, [severityColorMap]);
 
   return (
     <div className="bg-[#1a1d27] border border-slate-800 rounded-lg p-5">
@@ -112,3 +108,5 @@ export default function EventFeed() {
     </div>
   );
 }
+
+export default memo(EventFeed);

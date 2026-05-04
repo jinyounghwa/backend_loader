@@ -5,11 +5,19 @@ import type { DashboardSummary, GuardianEvent } from '@/types/guardian';
 
 const fetcher = (url: string) => fetch(url).then(res => res.json());
 
+const defaultOptions = {
+  dedupingInterval: 60_000,
+  focusThrottleInterval: 300_000,
+  revalidateOnFocus: false,
+  revalidateOnReconnect: true,
+  shouldRetryOnError: true,
+};
+
 export function useDashboard() {
   const { data, error, isLoading, mutate } = useSWR<DashboardSummary>(
     '/api/status',
     fetcher,
-    { refreshInterval: 60_000, revalidateOnFocus: true }
+    { ...defaultOptions, refreshInterval: 60_000 }
   );
 
   return {
@@ -37,7 +45,7 @@ export function useEvents(
   const { data, error, isLoading, mutate } = useSWR<{ events: GuardianEvent[]; total: number }>(
     url,
     fetcher,
-    { refreshInterval: 60_000, revalidateOnFocus: true }
+    { ...defaultOptions, refreshInterval: 60_000 }
   );
 
   return {
