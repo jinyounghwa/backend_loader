@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { X } from 'lucide-react';
 
 type ActionType = 'stop_instance' | 'block_bucket' | 'remediate' | 'rollback';
@@ -18,7 +18,7 @@ export interface FilterState {
 const ACTION_TYPES: Array<ActionType | 'all'> = ['all', 'stop_instance', 'block_bucket', 'remediate', 'rollback'];
 const STATUSES: Array<ActionStatus | 'all'> = ['all', 'pending', 'success', 'failed'];
 
-export default function ActionHistoryFilter({ onFilterChange }: ActionHistoryFilterProps) {
+function ActionHistoryFilter({ onFilterChange }: ActionHistoryFilterProps) {
   const [filters, setFilters] = useState<FilterState>({ type: 'all', status: 'all' });
   const [isOpen, setIsOpen] = useState(false);
 
@@ -140,3 +140,5 @@ export default function ActionHistoryFilter({ onFilterChange }: ActionHistoryFil
     </div>
   );
 }
+
+export default memo(ActionHistoryFilter);

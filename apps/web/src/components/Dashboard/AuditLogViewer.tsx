@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { RefreshCw, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface AuditLog {
@@ -17,7 +17,7 @@ interface AuditLogViewerProps {
   limit?: number;
 }
 
-export default function AuditLogViewer({ limit = 50 }: AuditLogViewerProps) {
+function AuditLogViewer({ limit = 50 }: AuditLogViewerProps) {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -140,3 +140,5 @@ export default function AuditLogViewer({ limit = 50 }: AuditLogViewerProps) {
     </div>
   );
 }
+
+export default memo(AuditLogViewer);

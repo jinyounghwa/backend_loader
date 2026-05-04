@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Check, X, Clock, Undo2, RefreshCw, Play, Wifi } from 'lucide-react';
 import { useEventStream } from '@/lib/hooks/useEventStream';
 import { useToast } from '@/lib/hooks/useToast';
+import { useDebounce } from '@/lib/hooks/useDebounce';
 import ConfirmationDialog from './ConfirmationDialog';
 import ActionHistoryFilter, { FilterState } from './ActionHistoryFilter';
 
@@ -35,6 +36,7 @@ export default function ActionHistory() {
   const [executing, setExecuting] = useState<string | null>(null);
   const [dialog, setDialog] = useState<DialogState>({ isOpen: false, actionId: null, actionType: null, resourceId: null });
   const [filters, setFilters] = useState<FilterState>({ type: 'all', status: 'all' });
+  const debouncedFilters = useDebounce(filters, 300);
 
   const loadActions = useCallback(async () => {
     if (!selectedAccountId) return;
@@ -43,8 +45,8 @@ export default function ActionHistory() {
       const url = new URL('/api/actions', window.location.origin);
       url.searchParams.set('account_id', selectedAccountId);
       url.searchParams.set('limit', '10');
-      if (filters.type !== 'all') url.searchParams.set('type', filters.type);
-      if (filters.status !== 'all') url.searchParams.set('status', filters.status);
+      if (debouncedFilters.type !== 'all') url.searchParams.set('type', debouncedFilters.type);
+      if (debouncedFilters.status !== 'all') url.searchParams.set('status', debouncedFilters.status);
 
       const res = await fetch(url.toString());
       if (res.ok) {
@@ -56,7 +58,7 @@ export default function ActionHistory() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedAccountId, filters]);
+  }, [selectedAccountId, debouncedFilters]);
 
   const handleActionUpdate = useCallback((updatedAction: Action) => {
     setActions(prev => {
@@ -68,6 +70,10 @@ export default function ActionHistory() {
     });
   }, []);
 
+  const handleFilterChange = useCallback((newFilters: FilterState) => {
+    setFilters(newFilters);
+  }, []);
+
   const { isConnected } = useEventStream({
     accountId: selectedAccountId || 'default',
     onEvent: handleActionUpdate,
@@ -75,7 +81,7 @@ export default function ActionHistory() {
 
   useEffect(() => {
     loadActions();
-  }, [selectedAccountId, filters, loadActions]);
+  }, [selectedAccountId, debouncedFilters, loadActions]);
 
   const handleRollback = async (actionId: string) => {
     setRollingBack(actionId);
@@ -303,7 +309,7 @@ export default function ActionHistory() {
           </button>
         </div>
 
-        <ActionHistoryFilter onFilterChange={setFilters} />
+        <ActionHistoryFilter onFilterChange={handleFilterChange} />
 
         <div className="space-y-3">
           {actions.length === 0 ? (

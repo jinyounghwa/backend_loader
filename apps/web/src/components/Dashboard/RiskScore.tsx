@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import { AlertTriangle, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface RiskScoreProps {
@@ -9,7 +10,7 @@ interface RiskScoreProps {
   totalIssues: number;
 }
 
-export default function RiskScore({ criticalCount, highCount, mediumCount, totalIssues }: RiskScoreProps) {
+function RiskScore({ criticalCount, highCount, mediumCount, totalIssues }: RiskScoreProps) {
   const riskScore = totalIssues === 0 ? 0 : Math.round((criticalCount * 10 + highCount * 5 + mediumCount * 2) / Math.max(1, totalIssues));
 
   let riskLevel = 'Low';
@@ -57,3 +58,5 @@ export default function RiskScore({ criticalCount, highCount, mediumCount, total
     </div>
   );
 }
+
+export default memo(RiskScore);

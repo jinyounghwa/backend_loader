@@ -1,5 +1,7 @@
 'use client';
 
+import { memo } from 'react';
+
 interface ConfirmationDialogProps {
   isOpen: boolean;
   title: string;
@@ -12,7 +14,7 @@ interface ConfirmationDialogProps {
   onCancel: () => void;
 }
 
-export default function ConfirmationDialog({
+function ConfirmationDialog({
   isOpen,
   title,
   message,
@@ -54,3 +56,5 @@ export default function ConfirmationDialog({
     </div>
   );
 }
+
+export default memo(ConfirmationDialog);
