@@ -477,22 +477,32 @@ npm run dev
 
 ---
 
-## 📋 다음 세션 체크리스트 (Sprint 13 시작 전)
+## 📋 다음 세션 체크리스트 (Sprint 14 시작 전)
 
 ```
 Session Start Checklist:
 ---------------------
-[ ] 이 파일 읽음 (NEXT_STEPS.md - 현재 위치)
-[ ] Sprint 13 계획 이해 (모바일 + 푸시 + 오프라인)
+[ ] NEXT_STEPS.md 읽음 (현재 위치)
+[ ] docs/sprints/SPRINT_14_PLAN.md 읽음 (Phase 1 = 우선순위)
+[ ] Gemini API 키 준비 (.env.local)
+[ ] `npm install @google/generative-ai` 확인
 [ ] 개발 서버 실행: npm run dev (localhost:3000)
-[ ] 현재 상태 확인: npm run build (zero errors?)
-[ ] git log 확인: 마지막 2 commits (Phase 5 + doc update)
+[ ] 빌드 확인: npm run build (zero errors?)
+[ ] git log: 마지막 commit "Sprint 13 Complete"
+
+Environment Setup:
+-----------------
+[ ] Google Cloud Project 생성 (Gemini API 활성화)
+[ ] API 키 발급 (.env.local에 GOOGLE_API_KEY=...)
+[ ] 월 할당량 확인 (free tier: 60 요청/분)
+[ ] 토큰 캐싱 활성화 (비용 절감)
 
 Optional But Recommended:
 ------------------------
-[ ] docs/sprints/SPRINT_12_DETAILED_PLAN.md 스캔 (기술 결정사항)
-[ ] Gemini 협업 문서 읽음 (메모리에서: Agentic Workflow Framework)
-[ ] CLAUDE.md 리뷰 (프로젝트 범위)
+[ ] Gemini API 비용 계산기 확인
+[ ] CloudTrail 샘플 이벤트 준비
+[ ] Lighthouse baseline 측정 (Phase 2 기준)
+[ ] RiskScore 디자인 검토 (AI 결과 표시 위치)
 ```
 
 ## 📞 문의 & 피드백
@@ -598,14 +608,32 @@ MODIFIED:
 
 ---
 
-## 🚀 다음 스프린트 (Sprint 14)
+## 🚀 다음 스프린트: Sprint 14 (준비 완료)
 
-| 기능 | 우선순위 | 예상 시간 |
-|------|---------|---------|
-| Gemini AI 분석 (실시간 위협 감지) | 🔴 High | 3시간 |
-| 멀티 리전 배포 | 🟡 Medium | 2시간 |
-| PWA 완성 (install prompt) | 🟡 Medium | 1시간 |
-| Performance audit (Lighthouse) | 🟡 Medium | 1.5시간 |
+**상세 계획**: `docs/sprints/SPRINT_14_PLAN.md` 참고
+
+| Phase | 기능 | 우선순위 | 예상 시간 | 상태 |
+|-------|------|---------|---------|------|
+| Phase 1 | Gemini AI 실시간 위협 분석 | 🔴 필수 | 90분 | 📋 Ready |
+| Phase 2 | Performance audit (Lighthouse 80+) | 🟡 선택 | 60분 | 📋 Ready |
+
+### Sprint 14 Phase 1: Gemini AI 위협 분석
+- **핵심**: CloudTrail/GuardDuty → Gemini API → AI 위협 평가
+- **구현**:
+  - `/api/analyze-threat` 엔드포인트 (NextAuth 보안)
+  - `useAIAnalysis` 훅 (debounce + caching)
+  - `AIThreatPanel` 컴포넌트 (결과 표시)
+  - RiskScore 통합 (AI 심각도)
+- **환경 설정**:
+  ```bash
+  npm install @google/generative-ai
+  # .env.local에 GOOGLE_API_KEY 추가
+  ```
+
+### Sprint 14 Phase 2: 성능 최적화 (선택사항)
+- Lighthouse 80+ 달성
+- 번들 크기 1.8MB → 1.5MB
+- LCP/FID/CLS 개선
 
 ---
 
@@ -627,6 +655,25 @@ MODIFIED:
 
 ---
 
+## 📝 Session Notes (Sprint 13)
+
+**Duration**: ~3시간 (모바일 + 푸시 + 오프라인)  
+**Gemini Collaboration**: ✅ Plan → Review → Implement (Complete)  
+**Build Status**: ✅ Zero TypeScript errors, 1.9s build time  
+**Git Commits**:
+- `✨ Sprint 13 Complete: Mobile + Push Notifications + Offline`
+
+**Current Metrics**:
+- Components: 60+
+- API Routes: 26+
+- Mobile: ✅ Fully responsive
+- PWA: ✅ Service Worker ready
+- Offline: ✅ Cache + heartbeat
+- Performance: Ready for Lighthouse audit
+
+---
+
 **Session Duration**: ~3시간 (모바일 + 푸시 + 오프라인)  
 **Last Updated**: 2026-05-04 (Sprint 13 완료)  
-**Next Session**: Sprint 14 (Gemini AI 분석) - 예정
+**Next Session**: Sprint 14 (Gemini AI 분석) - ✅ 준비 완료  
+**Estimated Duration**: 2.5시간 (Phase 1 필수, Phase 2 선택)
