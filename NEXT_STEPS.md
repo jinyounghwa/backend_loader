@@ -2,8 +2,8 @@
 
 ## 📊 프로젝트 현황
 
-**현재 상태**: Sprint 11 Phase 1 + Phase 2 완료 (2026-05-03) ✅  
-**전체 진도**: 87% (115+ commits, 50+ components, 20+ API endpoints)
+**현재 상태**: Sprint 12 Phase 1 + Phase 2 진행 중 (2026-05-04) 🚀  
+**전체 진도**: 90% (117+ commits, 55+ components, 22+ API endpoints)
 
 ---
 
@@ -38,51 +38,65 @@
 
 ---
 
-## 📋 Sprint 12 상세 계획 (차기 스프린트)
+## 📋 Sprint 12 진행 상황 (IN PROGRESS)
 
-**상태**: PLANNED - 상세 계획 완료, 구현 준비 완료  
-**예상 기간**: 2-3 sessions (각 session = 1-2 phases)
+**상태**: Phase 1 + Phase 2 완료, Phase 3 준비 중  
+**총 진도**: 40% (5개 phase 중 2개 완료)
 
-### Phase 1: WebSocket 실시간 업데이트
-- Socket.IO 서버 설정 (apps/web/src/lib/socket.ts)
-- useSocket 클라이언트 훅
-- EventFeed WebSocket 구독 (30초 폴링 제거)
-- ActionHistory 실시간 완료 이벤트
-- 방 기반 계정 격리 (room-based isolation)
+### Phase 1: SSE 실시간 업데이트 ✅ (2026-05-04)
+- useEventStream hook (EventSource 관리)
+- /api/events/stream 엔드포인트 (mock 이벤트, 2초 간격)
+- /api/actions/stream 엔드포인트 (mock 액션, 5초 간격)
+- EventFeed 폴링 제거 → SSE 구독
+- ActionHistory SSE 통합
+- 연결 상태 표시 (WiFi 아이콘)
 
-**검증 체크리스트**: Socket.IO 연결, 방 구독, 즉시 업데이트 확인
+**검증**: 브라우저 로그인 후 실시간 이벤트 수신 확인
 
-### Phase 2: Toast 알림
-- Toast 컴포넌트 (success/error/info/warning)
-- useToast 훅
-- ActionHistory 작업 결과 알림
-- 자동 4초 dismiss + 수동 dismiss
+### Phase 2: Toast 알림 시스템 ✅ (2026-05-04)
+- ToastProvider (React Context + hook 패턴)
+- useToast hook (addToast, dismissToast)
+- Toast UI 컴포넌트 (4가지 타입)
+- 자동 4초 dismiss + 수동 dismiss 버튼
+- ActionHistory 에러 배너 → Toast 전환
+- 액션 완료 피드백 (success/error/info toasts)
 
-**검증 체크리스트**: 올바른 스타일, 자동 dismiss, 스택 레이아웃
+**검증**: ActionHistory에서 remediate/rollback 시 toast 표시 확인
 
-### Phase 3: 고급 필터링
+### Phase 3: 고급 필터링 (NEXT)
 - ActionHistoryFilter 컴포넌트
 - 액션 타입/상태/날짜 범위 필터
 - 강화된 /api/actions 쿼리 파라미터
-- 필터 상태 관리
+- 필터 상태 관리 (useState)
 
-**검증 체크리스트**: 필터 적용, 결과 업데이트, 조합 필터
+**예상**: 30분 (간단한 필터 UI)
 
-### Phase 4: DynamoDB 감사 로그 통합
+### Phase 4: DynamoDB 감사 로그 통합 (DEFERRED)
 - audit_logs.py 강화 (save_audit_log)
 - /api/audit-logs 엔드포인트
 - AuditLogViewer 컴포넌트
 - Lambda 감사 로그 작성
 
-**검증 체크리스트**: TTL 활성화, 로그 작성, 조회 기능
+**예상**: 1시간
 
-### Phase 5: 성능 최적화
+### Phase 5: 성능 최적화 (DEFERRED)
 - useDebounce 훅
 - 컴포넌트 메모이제이션
-- 이미지/자산 최적화
 - Bundle 크기 최적화
 
-**검증 체크리스트**: Lighthouse > 80, 콘솔 에러 없음, 번들 < 500KB
+**예상**: 45분
+
+---
+
+## 📊 Sprint 12 요약
+
+| Phase | 상태 | 컴포넌트 | API | 시간 |
+|-------|------|---------|-----|------|
+| Phase 1 (SSE) | ✅ Done | useEventStream | 2개 | 45min |
+| Phase 2 (Toast) | ✅ Done | ToastProvider, Toast UI | 0개 | 45min |
+| Phase 3 (Filter) | 🔜 Next | ActionHistoryFilter | 개선 | 30min |
+| Phase 4 (AuditLog) | ⏳ Later | AuditLogViewer | 2개 | 60min |
+| Phase 5 (Perf) | ⏳ Later | Debounce, Memo | 0개 | 45min |
 
 **상세 계획 참조**: `docs/sprints/SPRINT_12_DETAILED_PLAN.md`
 
@@ -129,33 +143,38 @@
 
 ---
 
-## 🚀 다음 세션 시작 가이드 (Sprint 12)
+## 🚀 Phase 3 시작 가이드
 
 ### 준비 사항
 ```bash
-# 1. Sprint 12 계획 읽기
-cat docs/sprints/SPRINT_12_DETAILED_PLAN.md
+# 1. 현재 상태 확인
+npm run build  # Zero errors 확인
+npm run dev    # http://localhost:3000 테스트
 
-# 2. 필요한 라이브러리 설치
-cd apps/web
-npm install socket.io socket.io-client react-datepicker
+# 2. 라이브러리 (이미 설치됨)
+# - react-datepicker (필요시)
 
-# 3. 개발 서버 시작
-npm run dev
-# http://localhost:3000에서 테스트
-
-# 4. 빌드 검증
-npm run build
+# 3. Phase 3 구현 시작
+# ActionHistoryFilter 컴포넌트 생성
 ```
 
-### Phase 1 (WebSocket) 구현 순서
-1. `apps/web/src/lib/socket.ts` 생성 - Socket.IO 서버
-2. `apps/web/src/app/api/socket/route.ts` 생성 - 초기화 핸들러
-3. `apps/web/src/lib/hooks/useSocket.ts` 생성 - 클라이언트 훅
-4. EventFeed.tsx 수정 - 폴링 제거, WebSocket 구독
-5. ActionHistory.tsx 수정 - 실시간 업데이트
+### Phase 3 (Advanced Filtering) 구현 순서
+1. ActionHistoryFilter 컴포넌트 생성
+   - 액션 타입 필터 (dropdown: all, stop_instance, block_bucket, remediate, rollback)
+   - 상태 필터 (dropdown: all, pending, success, failed)
+   - 날짜 범위 필터 (선택사항)
+   - 필터 적용 및 초기화 버튼
 
-**검증**: `subscribe-account` 이벤트 확인, 즉시 업데이트 테스트
+2. /api/actions 강화
+   - type, status 쿼리 파라미터 추가
+   - 필터링 로직 구현
+
+3. ActionHistory.tsx 수정
+   - ActionHistoryFilter 통합
+   - 필터 상태 관리
+   - 필터 변경 시 loadActions 자동 호출
+
+**검증**: 필터 적용 후 UI에 결과 반영 확인
 
 ---
 
@@ -374,6 +393,6 @@ npm run dev
 
 ---
 
-**Last Updated**: 2026-05-03  
-**Status**: Sprint 11 Complete, Ready for Sprint 12  
-**Next Session**: WebSocket Integration + Toast Notifications
+**Last Updated**: 2026-05-04  
+**Status**: Sprint 12 Phase 1+2 Complete, Phase 3 Ready  
+**Session Summary**: SSE + Toast (2 phases, 90min), Architecture reviewed with Gemini
