@@ -2,8 +2,9 @@
 
 import { useAccounts } from '@/components/Providers';
 import { useCallback, useEffect, useState } from 'react';
-import { Check, X, Clock, Undo2, RefreshCw, Play, AlertCircle, Wifi } from 'lucide-react';
+import { Check, X, Clock, Undo2, RefreshCw, Play, Wifi } from 'lucide-react';
 import { useEventStream } from '@/lib/hooks/useEventStream';
+import { useToast } from '@/lib/hooks/useToast';
 import ConfirmationDialog from './ConfirmationDialog';
 
 interface Action {
@@ -26,11 +27,11 @@ interface DialogState {
 
 export default function ActionHistory() {
   const { selectedAccountId } = useAccounts();
+  const { addToast } = useToast();
   const [actions, setActions] = useState<Action[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [rollingBack, setRollingBack] = useState<string | null>(null);
   const [executing, setExecuting] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<DialogState>({ isOpen: false, actionId: null, actionType: null, resourceId: null });
 
   const loadActions = async () => {
@@ -70,7 +71,6 @@ export default function ActionHistory() {
 
   const handleRollback = async (actionId: string) => {
     setRollingBack(actionId);
-    setError(null);
     try {
       const res = await fetch('/api/rollback', {
         method: 'POST',
@@ -78,12 +78,25 @@ export default function ActionHistory() {
         body: JSON.stringify({ action_id: actionId, account_id: selectedAccountId }),
       });
       if (res.ok) {
+        addToast({
+          type: 'success',
+          title: 'Rollback Successful',
+          message: 'The action has been rolled back.',
+        });
         await loadActions();
       } else {
-        setError('Failed to rollback action');
+        addToast({
+          type: 'error',
+          title: 'Rollback Failed',
+          message: 'Failed to rollback action. Please try again.',
+        });
       }
     } catch (err) {
-      setError('Error rolling back action');
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: 'Error rolling back action. Please try again.',
+      });
     } finally {
       setRollingBack(null);
     }
@@ -106,7 +119,6 @@ export default function ActionHistory() {
     if (!dialog.actionId || !dialog.actionType || !selectedAccountId) return;
 
     setExecuting(dialog.actionId);
-    setError(null);
     closeConfirmDialog();
 
     try {
@@ -125,6 +137,12 @@ export default function ActionHistory() {
 
       if (!endpoint) return;
 
+      addToast({
+        type: 'info',
+        title: 'Action Started',
+        message: `Executing ${dialog.actionType.replace('_', ' ')}...`,
+      });
+
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -132,12 +150,25 @@ export default function ActionHistory() {
       });
 
       if (res.ok) {
+        addToast({
+          type: 'success',
+          title: 'Action Completed',
+          message: 'The remediation action has been executed successfully.',
+        });
         await loadActions();
       } else {
-        setError('Failed to execute action');
+        addToast({
+          type: 'error',
+          title: 'Action Failed',
+          message: 'Failed to execute action. Please try again.',
+        });
       }
     } catch (err) {
-      setError('Error executing action');
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: 'Error executing action. Please try again.',
+      });
     } finally {
       setExecuting(null);
     }
@@ -222,21 +253,6 @@ export default function ActionHistory() {
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
         </div>
-
-        {error && (
-          <div className="mb-4 p-3 rounded border border-red-700/50 bg-red-500/10 flex items-start space-x-2">
-            <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-xs text-red-400">{error}</p>
-            </div>
-            <button
-              onClick={() => setError(null)}
-              className="text-red-400 hover:text-red-300 ml-2"
-            >
-              ✕
-            </button>
-          </div>
-        )}
 
         <div className="space-y-3">
           {actions.length === 0 ? (

@@ -1,6 +1,7 @@
 'use client';
 
 import { AuthSessionProvider } from '@/components/layout/SessionProvider';
+import { ToastProvider } from '@/components/ToastProvider';
 import { ReactNode, createContext, useContext, useState, useCallback } from 'react';
 
 export interface Account {
@@ -67,9 +68,11 @@ export function useAccounts() {
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <AuthSessionProvider>
-      <AccountProvider>
-        {children}
-      </AccountProvider>
+      <ToastProvider>
+        <AccountProvider>
+          {children}
+        </AccountProvider>
+      </ToastProvider>
     </AuthSessionProvider>
   );
 }
