@@ -2,8 +2,8 @@
 
 ## 📊 프로젝트 현황
 
-**현재 상태**: Sprint 12 Phase 1 + Phase 2 진행 중 (2026-05-04) 🚀  
-**전체 진도**: 90% (117+ commits, 55+ components, 22+ API endpoints)
+**현재 상태**: Sprint 12 Phase 1 + 2 + 3 완료 (2026-05-04) 🎯  
+**전체 진도**: 92% (120+ commits, 56+ components, 22+ API endpoints)
 
 ---
 
@@ -63,13 +63,15 @@
 
 **검증**: ActionHistory에서 remediate/rollback 시 toast 표시 확인
 
-### Phase 3: 고급 필터링 (NEXT)
-- ActionHistoryFilter 컴포넌트
-- 액션 타입/상태/날짜 범위 필터
-- 강화된 /api/actions 쿼리 파라미터
-- 필터 상태 관리 (useState)
+### Phase 3: 고급 필터링 ✅ (2026-05-04)
+- ActionHistoryFilter 컴포넌트 (토글형 필터 패널)
+- Type 필터 (all, stop_instance, block_bucket, remediate, rollback)
+- Status 필터 (all, pending, success, failed)
+- /api/actions 강화 (type, status 쿼리 파라미터)
+- 필터 상태 배지 (활성 필터 개수 표시)
+- Clear Filters 버튼
 
-**예상**: 30분 (간단한 필터 UI)
+**검증**: 필터 적용 시 UI 결과 반영 확인
 
 ### Phase 4: DynamoDB 감사 로그 통합 (DEFERRED)
 - audit_logs.py 강화 (save_audit_log)
@@ -90,13 +92,15 @@
 
 ## 📊 Sprint 12 요약
 
-| Phase | 상태 | 컴포넌트 | API | 시간 |
-|-------|------|---------|-----|------|
+| Phase | 상태 | 컴포넌트 | API | 실시간 |
+|-------|------|---------|-----|--------|
 | Phase 1 (SSE) | ✅ Done | useEventStream | 2개 | 45min |
-| Phase 2 (Toast) | ✅ Done | ToastProvider, Toast UI | 0개 | 45min |
-| Phase 3 (Filter) | 🔜 Next | ActionHistoryFilter | 개선 | 30min |
-| Phase 4 (AuditLog) | ⏳ Later | AuditLogViewer | 2개 | 60min |
+| Phase 2 (Toast) | ✅ Done | ToastProvider, Toast | 0개 | 45min |
+| Phase 3 (Filter) | ✅ Done | ActionHistoryFilter | 강화 | 30min |
+| Phase 4 (AuditLog) | 🔜 Next | AuditLogViewer | 2개 | 60min |
 | Phase 5 (Perf) | ⏳ Later | Debounce, Memo | 0개 | 45min |
+
+**Progress**: 3/5 phases (60%) ✨
 
 **상세 계획 참조**: `docs/sprints/SPRINT_12_DETAILED_PLAN.md`
 
@@ -394,5 +398,5 @@ npm run dev
 ---
 
 **Last Updated**: 2026-05-04  
-**Status**: Sprint 12 Phase 1+2 Complete, Phase 3 Ready  
-**Session Summary**: SSE + Toast (2 phases, 90min), Architecture reviewed with Gemini
+**Status**: Sprint 12 Phase 1+2+3 Complete (60%), Phase 4 Ready  
+**Session Summary**: SSE + Toast + Filtering (3 phases, 120min), Gemini architecture reviews
