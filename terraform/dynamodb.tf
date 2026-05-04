@@ -135,18 +135,3 @@ resource "aws_dynamodb_table" "iam_baseline" {
     Purpose     = "Baseline state for IAM permission change detection"
   }
 }
-
-output "events_table_name" {
-  value       = aws_dynamodb_table.events.name
-  description = "Name of the events DynamoDB table"
-}
-
-output "responses_table_name" {
-  value       = aws_dynamodb_table.responses.name
-  description = "Name of the responses DynamoDB table"
-}
-
-output "iam_baseline_table_name" {
-  value       = aws_dynamodb_table.iam_baseline.name
-  description = "Name of the IAM baseline tracking table"
-}

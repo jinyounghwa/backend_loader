@@ -2,338 +2,197 @@
 import logging
 import os
 import requests
-from typing import Dict, Any, List
+from typing import Dict, Any, Optional
+
+from guardian.responders.alert_formatter import (
+    AlertMessage, severity_icon, check_emoji, EMOJI,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class TelegramResponder:
-    def __init__(self, bot_token: str = None, chat_id: str = None):
-        """
-        Initialize Telegram responder
-
-        Args:
-            bot_token: Telegram Bot API token
-            chat_id: Target chat ID for notifications
-        """
-        self.bot_token = bot_token or os.getenv('TELEGRAM_BOT_TOKEN')
-        self.chat_id = chat_id or os.getenv('TELEGRAM_CHAT_ID')
+    def __init__(self, bot_token: Optional[str] = None, chat_id: Optional[str] = None):
+        self.bot_token = bot_token or os.getenv('TELEGRAM_BOT_TOKEN', '')
+        self.chat_id = chat_id or os.getenv('TELEGRAM_CHAT_ID', '')
         self.api_url = f"https://api.telegram.org/bot{self.bot_token}"
 
     def send_message(self, message: str, parse_mode: str = 'HTML') -> bool:
-        """Send a message to Telegram"""
         try:
             response = requests.post(
                 f"{self.api_url}/sendMessage",
-                json={
-                    'chat_id': self.chat_id,
-                    'text': message,
-                    'parse_mode': parse_mode
-                },
-                timeout=10
+                json={'chat_id': self.chat_id, 'text': message, 'parse_mode': parse_mode},
+                timeout=10,
             )
             return response.status_code == 200
         except Exception as e:
             logger.error("Error sending Telegram message: %s", e)
             return False
 
+    def _render_alert(self, alert: AlertMessage) -> str:
+        icon = check_emoji(alert.check_name)
+        sev_icon = severity_icon(alert.severity)
+        parts = [f"{sev_icon} <b>{icon} {alert.title}</b>"]
+        if alert.account_info:
+            parts.append(f"🏢 {alert.account_info}")
+        parts.append("━━━━━━━━━━━━━━━━━━━")
+
+        for item in alert.items:
+            if isinstance(item, dict) and 'label' in item:
+                parts.append(f"\n{item['label']}")
+                for d in item.get('details', [])[:3]:
+                    parts.append(f"  └ {d}")
+            elif isinstance(item, dict):
+                for k, v in item.items():
+                    parts.append(f"{k}: {v}")
+
+        if alert.summary_line:
+            parts.append(f"\n━━━━━━━━━━━━━━━━━━━\n⚡ {alert.summary_line}")
+
+        if alert.suggested_action:
+            parts.append(f"\n💡 {alert.suggested_action}")
+
+        parts.append("\n━━━━━━━━━━━━━━━━━━━")
+        return '\n'.join(parts)
+
     def send_cost_alert(self, cost_data: Dict[str, Any], account_id: str = 'current',
-                       account_name: str = None) -> bool:
-        today_cost = cost_data.get('today_cost', 0)
-        threshold = cost_data.get('threshold', 0)
-        increase_percent = cost_data.get('increase_percent', 0)
-
-        account_info = f"{account_name or account_id}"
-        if account_id != 'current':
-            account_info = f"Account: {account_info} ({account_id})"
-
-        message = f"""
-🚨 <b>AWS Cost Alert</b>
-━━━━━━━━━━━━━━━━━━━━
-💰 Today's Cost: ${today_cost:.2f}
-⚠️ Threshold: ${threshold:.2f}
-📈 Increase: {increase_percent}%
-📅 Date: {cost_data.get('date', 'N/A')}
-🏢 {account_info}
-━━━━━━━━━━━━━━━━━━━━
-<i>비용 임계값 초과!</i>
-
-💬 <b>답장으로 자동 수정:</b>
-👉 <code>요금과다 원인수정</code>
-"""
-        return self.send_message(message)
+                        account_name: Optional[str] = None) -> bool:
+        alert = AlertMessage.from_cost_data(cost_data, account_info=self._account_info(account_id, account_name))
+        return self.send_message(self._render_alert(alert))
 
     def send_ec2_alert(self, ec2_data: Dict[str, Any], account_id: str = 'current',
-                      account_name: str = None) -> bool:
-        """Send EC2 security alert with multi-account support"""
-        account_info = f"{account_name or account_id}"
-        if account_id != 'current':
-            account_info = f"{account_info} ({account_id})"
-
-        message = f"<b>⚠️ EC2 Security Alert</b> 🏢 {account_info}\n━━━━━━━━━━━━━━━━━━━"
-
-        # Unauthorized regions
-        unauthorized = ec2_data.get('unauthorized_region_instances', {})
-        if unauthorized:
-            message += f"\n\n🌍 <b>Unauthorized Region Instances:</b>"
-            for region, instances in unauthorized.items():
-                message += f"\n• Region: {region} ({len(instances)} instances)"
-                for inst in instances:
-                    message += f"\n  - ID: <code>{inst['InstanceId']}</code>"
-
-        # Exposed instances
-        exposed = ec2_data.get('exposed_instances', [])
-        if exposed:
-            message += f"\n\n🔓 <b>Exposed to 0.0.0.0/0:</b>"
-            for exp in exposed:
-                message += f"\n• Instance: <code>{exp['instance_id']}</code> ({exp['region']})"
-                for rule in exp['exposed_rules'][:2]:  # Show first 2 rules
-                    message += f"\n  - Port {rule['from_port']}/{rule['protocol']}"
-
-        # New instances
-        new = ec2_data.get('new_instances', [])
-        if new:
-            message += f"\n\n🆕 <b>New Instances ({len(new)}):</b>"
-            for inst in new[:3]:  # Show first 3
-                message += f"\n• {inst['instance_id']} ({inst['region']})"
-
-        message += "\n━━━━━━━━━━━━━━━━━━━\n⚡ Automated response: Stopping instances..."
-
-        if ec2_data.get('anomalies'):
-            message += "\n\n💬 <b>답장으로 자동 수정:</b>"
-            message += "\n👉 <code>해킹우려 수정</code>"
-
-        return self.send_message(message)
+                       account_name: Optional[str] = None) -> bool:
+        alert = AlertMessage.from_ec2_data(ec2_data, account_info=self._account_info(account_id, account_name))
+        return self.send_message(self._render_alert(alert))
 
     def send_s3_alert(self, s3_data: Dict[str, Any], account_id: str = 'current',
-                     account_name: str = None) -> bool:
-        """Send S3 security alert with multi-account support"""
-        account_info = f"{account_name or account_id}"
-        if account_id != 'current':
-            account_info = f"{account_info} ({account_id})"
+                      account_name: Optional[str] = None) -> bool:
+        alert = AlertMessage.from_s3_data(s3_data, account_info=self._account_info(account_id, account_name))
+        return self.send_message(self._render_alert(alert))
 
-        message = f"<b>🔐 S3 Security Alert</b> 🏢 {account_info}\n━━━━━━━━━━━━━━━━━━━"
+    def send_cloudtrail_alert(self, cloudtrail_data: Dict[str, Any], account_id: str = 'current',
+                              account_name: Optional[str] = None) -> bool:
+        sev = cloudtrail_data.get('severity', 'MEDIUM')
+        icon = severity_icon(sev)
+        acct = self._account_info(account_id, account_name)
+        anomalies = cloudtrail_data.get('details', {}).get('anomalies', [])
+        msg = f"{icon} <b>CloudTrail: Suspicious API Calls</b> 🏢 {acct}\n━━━━━━━━━━━━━━━━━━━━━━━━"
+        msg += f"\n📍 Severity: <b>{sev}</b>"
+        if anomalies:
+            msg += f"\n🔍 <b>Detected Events ({len(anomalies)}):</b>"
+            for a in anomalies[:5]:
+                msg += f"\n• <b>{a.get('event_name')}</b>"
+                msg += f"\n  👤 <code>{a.get('username')}</code> 🌐 <code>{a.get('source_ip')}</code>"
+        suggestion = cloudtrail_data.get('suggested_action')
+        if suggestion:
+            msg += f"\n\n💡 <b>Suggested Action:</b>\n{suggestion}"
+        msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━"
+        return self.send_message(msg)
 
-        # Public buckets
-        public = s3_data.get('public_buckets', [])
-        if public:
-            message += f"\n\n🌐 <b>Public Buckets Detected ({len(public)}):</b>"
-            for bucket in public[:3]:  # Show first 3
-                message += f"\n• <code>{bucket['bucket_name']}</code>"
-                for reason in bucket['public_reasons']:
-                    message += f"\n  └ {reason}"
+    def send_iam_alert(self, iam_data: Dict[str, Any], account_id: str = 'current',
+                       account_name: Optional[str] = None) -> bool:
+        sev = iam_data.get('severity', 'MEDIUM')
+        icon = severity_icon(sev)
+        acct = self._account_info(account_id, account_name)
+        changes = iam_data.get('details', {}).get('changes', [])
+        type_icons = {'NEW_USER': '👤', 'DELETED_USER': '🚫', 'NEW_ACCESS_KEY': '🔑'}
+        msg = f"{icon} <b>IAM: Permission Changes Detected</b> 🏢 {acct}\n━━━━━━━━━━━━━━━━━━━━━━━━"
+        msg += f"\n📍 Severity: <b>{sev}</b>"
+        if changes:
+            msg += f"\n🔐 <b>Changes ({len(changes)}):</b>"
+            for c in changes[:5]:
+                msg += f"\n{type_icons.get(c.get('type'), '⚙️')} <b>{c.get('type')}</b>"
+                msg += f"\n  📝 {c.get('detail')}"
+        suggestion = iam_data.get('suggested_action')
+        if suggestion:
+            msg += f"\n\n💡 <b>Suggested Action:</b>\n{suggestion}"
+        msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━"
+        return self.send_message(msg)
 
-        # New buckets
-        new = s3_data.get('new_buckets', [])
-        if new:
-            message += f"\n\n🆕 <b>New Buckets ({len(new)}):</b>"
-            for bucket in new[:3]:  # Show first 3
-                message += f"\n• <code>{bucket['bucket_name']}</code>"
+    def send_guardduty_alert(self, guardduty_data: Dict[str, Any], account_id: str = 'current',
+                            account_name: Optional[str] = None) -> bool:
+        sev = guardduty_data.get('severity', 'MEDIUM')
+        icon = severity_icon(sev)
+        acct = self._account_info(account_id, account_name)
+        details = guardduty_data.get('details', {})
+        high = details.get('high_severity', [])
+        med = details.get('medium_severity', [])
+        msg = f"{icon} <b>GuardDuty: Threat Detected</b> 🏢 {acct}\n━━━━━━━━━━━━━━━━━━━━━━━━"
+        msg += f"\n🛡️  Severity: <b>{sev}</b>"
+        if high:
+            msg += f"\n\n🔴 <b>High ({len(high)}):</b>"
+            for f in high[:3]:
+                msg += f"\n• <b>{f.get('type')}</b> → <code>{f.get('resource_id', '')}</code>"
+        if med:
+            msg += f"\n\n🟡 <b>Medium ({len(med)}):</b>"
+            for f in med[:2]:
+                msg += f"\n• <b>{f.get('type')}</b>"
+        suggestion = guardduty_data.get('suggested_action')
+        if suggestion:
+            msg += f"\n\n💡 <b>Remediation:</b>\n{suggestion}"
+        msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━"
+        return self.send_message(msg)
 
-        message += "\n━━━━━━━━━━━━━━━━━━━\n⚡ Automated response: Blocking public access..."
+    def send_alert(self, check_name: str, alert_data: Dict[str, Any],
+                   account_id: str = 'current', account_name: Optional[str] = None) -> bool:
+        dispatch = {
+            'cost': self.send_cost_alert,
+            'ec2': self.send_ec2_alert,
+            's3': self.send_s3_alert,
+            'cloudtrail': self.send_cloudtrail_alert,
+            'iam': self.send_iam_alert,
+            'guardduty': self.send_guardduty_alert,
+        }
+        handler = dispatch.get(check_name)
+        if handler:
+            return handler(alert_data, account_id=account_id, account_name=account_name)
+        return self._send_generic_alert(check_name, alert_data, account_id=account_id, account_name=account_name)
 
-        if s3_data.get('anomalies'):
-            message += "\n\n💬 <b>답장으로 자동 수정:</b>"
-            message += "\n👉 <code>해킹우려 수정</code>"
-
-        return self.send_message(message)
+    def _send_generic_alert(self, check_name: str, alert_data: Dict[str, Any],
+                           account_id: str = 'current', account_name: Optional[str] = None) -> bool:
+        sev = alert_data.get('severity', 'INFO')
+        icon = severity_icon(sev)
+        acct = self._account_info(account_id, account_name)
+        msg = f"{icon} <b>{check_name.upper()} Alert</b>\n━━━━━━━━━━━━━━━━━━━"
+        msg += f"\n🏢 {acct}\n📍 Severity: {sev}\n📝 {alert_data.get('message', '')}"
+        if alert_data.get('suggested_action'):
+            msg += f"\n💡 {alert_data['suggested_action']}"
+        msg += "\n━━━━━━━━━━━━━━━━━━━"
+        return self.send_message(msg)
 
     def send_auto_response_notification(self, action_type: str, resource_id: str, status: str) -> bool:
-        """Send auto-response action notification"""
-        status_emoji = "✅" if status == "success" else "❌"
+        status_icon = EMOJI.get('success' if status == 'success' else 'failed', '❓')
         action_desc = {
             'stop_ec2': 'Stopped EC2 instance',
-            'block_s3_public': 'Blocked S3 public access'
+            'block_s3_public': 'Blocked S3 public access',
         }.get(action_type, f'Executed {action_type}')
-
-        message = f"""
-{status_emoji} <b>Auto-Response Action</b>
+        msg = f"""
+{status_icon} <b>Auto-Response Action</b>
 ━━━━━━━━━━━━━━━━━━━
 📋 Action: {action_desc}
 🎯 Resource: <code>{resource_id}</code>
 📊 Status: {status}
 ━━━━━━━━━━━━━━━━━━━
 """
-        return self.send_message(message)
-
-    def send_cloudtrail_alert(self, cloudtrail_data: Dict[str, Any], account_id: str = 'current',
-                             account_name: str = None) -> bool:
-        """Send CloudTrail suspicious API alert (Sprint 6) with multi-account support"""
-        severity = cloudtrail_data.get('severity', 'MEDIUM')
-        severity_icon = '🔴' if severity == 'CRITICAL' else '🟠' if severity == 'HIGH' else '🟡'
-
-        account_info = f"{account_name or account_id}"
-        if account_id != 'current':
-            account_info = f"{account_info} ({account_id})"
-
-        message = f"""{severity_icon} <b>CloudTrail: Suspicious API Calls</b> 🏢 {account_info}
-━━━━━━━━━━━━━━━━━━━━━━━━━
-📍 Severity: <b>{severity}</b>
-"""
-        anomalies = cloudtrail_data.get('details', {}).get('anomalies', [])
-        if anomalies:
-            message += f"\n🔍 <b>Detected Events ({len(anomalies)}):</b>"
-            for anomaly in anomalies[:5]:  # Show first 5
-                message += f"\n• <b>{anomaly.get('event_name')}</b>"
-                message += f"\n  👤 User: <code>{anomaly.get('username')}</code>"
-                message += f"\n  🌐 IP: <code>{anomaly.get('source_ip')}</code>"
-                message += f"\n  ⏰ Time: {anomaly.get('timestamp', 'N/A')}"
-
-        suggestion = cloudtrail_data.get('suggested_action')
-        if suggestion:
-            message += f"\n\n💡 <b>Suggested Action:</b>\n{suggestion}"
-
-        message += "\n━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-        return self.send_message(message)
-
-    def send_iam_alert(self, iam_data: Dict[str, Any], account_id: str = 'current',
-                      account_name: str = None) -> bool:
-        """Send IAM permission changes alert (Sprint 6) with multi-account support"""
-        severity = iam_data.get('severity', 'MEDIUM')
-        severity_icon = '🔴' if severity == 'CRITICAL' else '🟠' if severity == 'HIGH' else '🟡'
-
-        account_info = f"{account_name or account_id}"
-        if account_id != 'current':
-            account_info = f"{account_info} ({account_id})"
-
-        message = f"""{severity_icon} <b>IAM: Permission Changes Detected</b> 🏢 {account_info}
-━━━━━━━━━━━━━━━━━━━━━━━━━
-📍 Severity: <b>{severity}</b>
-"""
-        changes = iam_data.get('details', {}).get('changes', [])
-        if changes:
-            message += f"\n🔐 <b>Changes ({len(changes)}):</b>"
-            for change in changes[:5]:  # Show first 5
-                change_type = change.get('type', 'UNKNOWN')
-                icons = {
-                    'NEW_USER': '👤',
-                    'DELETED_USER': '🚫',
-                    'NEW_ACCESS_KEY': '🔑'
-                }
-                icon = icons.get(change_type, '⚙️')
-                message += f"\n{icon} <b>{change_type}</b>"
-                message += f"\n  📝 {change.get('detail')}"
-
-        suggestion = iam_data.get('suggested_action')
-        if suggestion:
-            message += f"\n\n💡 <b>Suggested Action:</b>\n{suggestion}"
-
-        message += "\n━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-        return self.send_message(message)
-
-    def send_guardduty_alert(self, guardduty_data: Dict[str, Any], account_id: str = 'current',
-                            account_name: str = None) -> bool:
-        """Send GuardDuty threat detection alert (Sprint 6) with multi-account support"""
-        severity = guardduty_data.get('severity', 'MEDIUM')
-        severity_icon = '🔴' if severity == 'CRITICAL' else '🟠' if severity == 'HIGH' else '🟡'
-
-        account_info = f"{account_name or account_id}"
-        if account_id != 'current':
-            account_info = f"{account_info} ({account_id})"
-
-        message = f"""{severity_icon} <b>GuardDuty: Threat Detected</b> 🏢 {account_info}
-━━━━━━━━━━━━━━━━━━━━━━━━━
-🛡️  Severity: <b>{severity}</b>
-"""
-        details = guardduty_data.get('details', {})
-        high_findings = details.get('high_severity', [])
-        med_findings = details.get('medium_severity', [])
-
-        if high_findings:
-            message += f"\n\n🔴 <b>High-Severity Threats ({len(high_findings)}):</b>"
-            for finding in high_findings[:3]:  # Show first 3
-                message += f"\n• <b>{finding.get('type', 'Unknown')}</b>"
-                if finding.get('resource_id'):
-                    message += f"\n  🎯 Resource: <code>{finding.get('resource_id')}</code>"
-                message += f"\n  📋 {finding.get('title', 'No title')}"
-
-        if med_findings:
-            message += f"\n\n🟡 <b>Medium-Severity Threats ({len(med_findings)}):</b>"
-            for finding in med_findings[:2]:  # Show first 2
-                message += f"\n• <b>{finding.get('type', 'Unknown')}</b>"
-
-        suggestion = guardduty_data.get('suggested_action')
-        if suggestion:
-            message += f"\n\n💡 <b>Remediation:</b>\n{suggestion}"
-
-        message += "\n━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-        return self.send_message(message)
-
-    def send_alert(self, check_name: str, alert_data: Dict[str, Any],
-                   account_id: str = 'current', account_name: str = None) -> bool:
-        """
-        Generic alert handler for all check types with multi-account support.
-        Dispatches to specific alert method based on check_name.
-
-        Args:
-            check_name: Type of check (cloudtrail, iam, guardduty, etc.)
-            alert_data: Alert details dictionary
-            account_id: AWS account ID (default: 'current' for single account)
-            account_name: Human-readable account name (optional)
-        """
-        alert_methods = {
-            'cloudtrail': self.send_cloudtrail_alert,
-            'iam': self.send_iam_alert,
-            'guardduty': self.send_guardduty_alert,
-            'cost': self.send_cost_alert,
-            'ec2': self.send_ec2_alert,
-            's3': self.send_s3_alert,
-        }
-
-        handler = alert_methods.get(check_name)
-        if handler:
-            return handler(alert_data, account_id=account_id, account_name=account_name)
-        else:
-            # Fallback generic alert
-            return self._send_generic_alert(check_name, alert_data, account_id=account_id, account_name=account_name)
-
-    def _send_generic_alert(self, check_name: str, alert_data: Dict[str, Any],
-                           account_id: str = 'current', account_name: str = None) -> bool:
-        """Fallback generic alert for unknown check types with multi-account support"""
-        severity = alert_data.get('severity', 'INFO')
-        severity_icon = '🔴' if severity == 'CRITICAL' else '🟠' if severity == 'HIGH' else '🟡' if severity == 'MEDIUM' else 'ℹ️'
-
-        account_info = f"{account_name or account_id}"
-        if account_id != 'current':
-            account_info = f"{account_info} ({account_id})"
-
-        message = f"""{severity_icon} <b>{check_name.upper()} Alert</b>
-━━━━━━━━━━━━━━━━━━━
-🏢 Account: {account_info}
-📍 Severity: {severity}
-📝 Message: {alert_data.get('message', 'No details')}
-"""
-        if alert_data.get('suggested_action'):
-            message += f"\n💡 Action: {alert_data.get('suggested_action')}"
-
-        message += "\n━━━━━━━━━━━━━━━━━━━"
-
-        return self.send_message(message)
+        return self.send_message(msg)
 
     def send_summary(self, summary_data: Dict[str, Any]) -> bool:
-        """Send daily summary"""
         total = summary_data.get('total_events', 0)
         by_type = summary_data.get('by_type', {})
         by_severity = summary_data.get('by_severity', {})
+        msg = f"\n📊 <b>AWS Guardian Daily Summary</b>\n━━━━━━━━━━━━━━━━━━━\n📈 Total Events: {total}\n\n<b>By Type:</b>"
+        for t, c in by_type.items():
+            msg += f"\n• {t}: {c}"
+        msg += "\n\n<b>By Severity:</b>"
+        for s, c in by_severity.items():
+            si = "🔴" if s == "critical" else "🟡" if s == "warning" else "ℹ️"
+            msg += f"\n{si} {s}: {c}"
+        msg += "\n━━━━━━━━━━━━━━━━━━━"
+        return self.send_message(msg)
 
-        message = f"""
-📊 <b>AWS Guardian Daily Summary</b>
-━━━━━━━━━━━━━━━━━━━
-📈 Total Events: {total}
-
-<b>By Type:</b>
-"""
-        for event_type, count in by_type.items():
-            message += f"\n• {event_type}: {count}"
-
-        message += f"\n\n<b>By Severity:</b>"
-        for severity, count in by_severity.items():
-            icon = "🔴" if severity == "critical" else "🟡" if severity == "warning" else "ℹ️"
-            message += f"\n{icon} {severity}: {count}"
-
-        message += "\n━━━━━━━━━━━━━━━━━━━"
-
-        return self.send_message(message)
+    @staticmethod
+    def _account_info(account_id: str, account_name: Optional[str]) -> str:
+        if account_id == 'current' and not account_name:
+            return ''
+        label = account_name or account_id
+        return f"{label} ({account_id})" if account_id != 'current' else label

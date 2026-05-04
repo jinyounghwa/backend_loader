@@ -1,17 +1,12 @@
 """Unit tests for auto-remediation functions"""
 import unittest
-from unittest.mock import patch, MagicMock, call
-import os
-import sys
+from unittest.mock import patch, MagicMock
 from datetime import datetime, timezone
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'lambda'))
 
 from guardian.responders.auto_remediation import (
     remediate_cost_overrun,
     remediate_hacking_suspicion
 )
-from guardian.aws_client_provider import AWSClientProvider
 
 
 class TestRemediateCostOverrun(unittest.TestCase):

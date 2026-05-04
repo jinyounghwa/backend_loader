@@ -1,14 +1,11 @@
 """Tests for EC2 checker - LocalStack integration tests"""
 import unittest
-import os
-import sys
 import time
 import boto3
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'lambda'))
-
 from guardian.checkers.ec2 import EC2Checker
 from guardian.config import Config
+from guardian.responders.aws_action_executor import AWSActionExecutor
 
 
 class TestEC2Checker(unittest.TestCase):
@@ -50,7 +47,7 @@ class TestEC2Checker(unittest.TestCase):
         self.ec2_checker = EC2Checker(authorized_regions=['us-east-1', 'us-west-2'])
 
     def test_get_all_instances(self):
-        instances = self.ec2_checker.get_all_instances()
+        instances = self.ec2_checker._get_all_instances()
         self.assertIsInstance(instances, dict)
         self.assertIn('us-east-1', instances)
         self.assertGreaterEqual(len(instances['us-east-1']), 2)
@@ -61,12 +58,12 @@ class TestEC2Checker(unittest.TestCase):
 
     def test_no_unauthorized_when_us_east_1_authorized(self):
         checker = EC2Checker(authorized_regions=['us-east-1'])
-        unauthorized = checker.get_unauthorized_regions_instances()
+        unauthorized = checker._get_unauthorized_regions_instances()
         self.assertEqual(len(unauthorized), 0)
 
     def test_unauthorized_detected_when_us_east_1_not_authorized(self):
         checker = EC2Checker(authorized_regions=['eu-west-1', 'ap-northeast-1'])
-        unauthorized = checker.get_unauthorized_regions_instances()
+        unauthorized = checker._get_unauthorized_regions_instances()
         self.assertIn('us-east-1', unauthorized)
 
     def test_check_ec2_anomalies_structure(self):
@@ -76,13 +73,19 @@ class TestEC2Checker(unittest.TestCase):
                      'exposed_instances', 'new_instances', 'anomalies', 'timestamp']:
             self.assertIn(key, data)
 
-    def test_stop_instance(self):
+    def test_stop_instance_via_executor(self):
         if not self.test_instance_ids:
             self.skipTest("No test instances available")
-        success = self.ec2_checker.stop_instance(
+        executor = AWSActionExecutor()
+        success = executor.stop_ec2_instance(
             self.test_instance_ids[0], 'us-east-1'
         )
         self.assertTrue(success)
+
+    def test_check_returns_check_result(self):
+        result = self.ec2_checker.check()
+        self.assertIn(result.severity, ['INFO', 'HIGH', 'CRITICAL'])
+        self.assertIsNotNone(result.details)
 
 
 if __name__ == '__main__':

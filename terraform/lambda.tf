@@ -4,8 +4,8 @@ resource "aws_lambda_function" "guardian" {
   role          = aws_iam_role.lambda_role.arn
   handler       = "lambda.guardian.handler.lambda_handler"
   runtime       = "python3.12"
-  timeout       = 300
-  memory_size   = 512  # Increased from 256MB for /export (csv/pdf) + /insights (Gemini) heavy operations
+  timeout       = var.lambda_timeout
+  memory_size   = var.lambda_memory_size
 
   environment {
     variables = {
@@ -125,9 +125,4 @@ resource "aws_api_gateway_stage" "discord_stage" {
   deployment_id = aws_api_gateway_deployment.discord_deployment.id
   rest_api_id   = aws_api_gateway_rest_api.discord_api.id
   stage_name    = "prod"
-}
-
-output "discord_webhook_endpoint" {
-  value       = "${aws_api_gateway_stage.discord_stage.invoke_url}/interactions"
-  description = "Discord webhook endpoint URL"
 }

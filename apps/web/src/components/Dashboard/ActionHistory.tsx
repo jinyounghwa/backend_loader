@@ -1,14 +1,16 @@
 'use client';
 
 import { useAccounts } from '@/components/Providers';
-import { useEffect, useState } from 'react';
-import { Check, X, Clock, Undo2, RefreshCw, Play, AlertCircle } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { Check, X, Clock, Undo2, RefreshCw, Play, AlertCircle, Wifi } from 'lucide-react';
+import { useEventStream } from '@/lib/hooks/useEventStream';
 import ConfirmationDialog from './ConfirmationDialog';
 
 interface Action {
   action_id: string;
   timestamp: string;
   user: string;
+  account_id?: string;
   action_type: 'stop_instance' | 'block_bucket' | 'remediate' | 'rollback';
   resource_id: string;
   status: 'success' | 'failed' | 'pending';
@@ -46,6 +48,21 @@ export default function ActionHistory() {
       setIsLoading(false);
     }
   };
+
+  const handleActionUpdate = useCallback((updatedAction: Action) => {
+    setActions(prev => {
+      const existing = prev.find(a => a.action_id === updatedAction.action_id);
+      if (existing) {
+        return prev.map(a => a.action_id === updatedAction.action_id ? updatedAction : a);
+      }
+      return [updatedAction, ...prev].slice(0, 10);
+    });
+  }, []);
+
+  const { isConnected } = useEventStream({
+    accountId: selectedAccountId || 'default',
+    onEvent: handleActionUpdate,
+  });
 
   useEffect(() => {
     loadActions();
@@ -189,7 +206,14 @@ export default function ActionHistory() {
     <>
       <div className="bg-[#1a1d27] border border-slate-800 rounded-lg p-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-slate-100">Action History</h2>
+          <div className="flex items-center space-x-2">
+            <h2 className="text-lg font-semibold text-slate-100">Action History</h2>
+            {isConnected && (
+              <div title="Live stream active">
+                <Wifi className="w-4 h-4 text-green-400" />
+              </div>
+            )}
+          </div>
           <button
             onClick={loadActions}
             disabled={isLoading}

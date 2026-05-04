@@ -1,12 +1,8 @@
 """Unit tests for IAM checker"""
 import unittest
-import sys
-import os
 import json
 from unittest.mock import Mock, patch
 from datetime import datetime, timezone
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'lambda'))
 
 from guardian.checkers.iam import IAMChecker
 from guardian.checkers.base import CheckResult

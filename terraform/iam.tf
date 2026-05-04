@@ -13,6 +13,11 @@ resource "aws_iam_role" "lambda_role" {
       }
     ]
   })
+
+  tags = {
+    Name        = "aws-guardian-lambda-role"
+    Environment = var.environment
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
@@ -30,13 +35,11 @@ resource "aws_iam_role_policy" "lambda_policy" {
       {
         Sid    = "CostExplorer"
         Effect = "Allow"
-        Action = [
-          "ce:GetCostAndUsage"
-        ]
+        Action = ["ce:GetCostAndUsage"]
         Resource = "*"
       },
       {
-        Sid    = "EC2Read"
+        Sid    = "EC2Describe"
         Effect = "Allow"
         Action = [
           "ec2:DescribeInstances",
@@ -48,10 +51,10 @@ resource "aws_iam_role_policy" "lambda_policy" {
       {
         Sid    = "EC2StopInstances"
         Effect = "Allow"
-        Action = [
-          "ec2:StopInstances"
+        Action = ["ec2:StopInstances"]
+        Resource = [
+          "arn:aws:ec2:*:*:instance/*"
         ]
-        Resource = "*"
         Condition = {
           StringEquals = {
             "ec2:ResourceTag/AutoManaged" = "true"
@@ -65,17 +68,16 @@ resource "aws_iam_role_policy" "lambda_policy" {
           "s3:ListAllMyBuckets",
           "s3:GetBucketAcl",
           "s3:GetBucketPolicy",
+          "s3:GetBucketLocation",
           "s3:GetPublicAccessBlock"
         ]
-        Resource = "*"
+        Resource = ["arn:aws:s3:::*"]
       },
       {
         Sid    = "S3WritePublicAccessBlock"
         Effect = "Allow"
-        Action = [
-          "s3:PutPublicAccessBlock"
-        ]
-        Resource = "*"
+        Action = ["s3:PutPublicAccessBlock"]
+        Resource = ["arn:aws:s3:::*"]
         Condition = {
           StringEquals = {
             "s3:ResourceTag/GuardianManaged" = "true"
@@ -85,10 +87,8 @@ resource "aws_iam_role_policy" "lambda_policy" {
       {
         Sid    = "CloudTrail"
         Effect = "Allow"
-        Action = [
-          "cloudtrail:LookupEvents"
-        ]
-        Resource = "*"
+        Action = ["cloudtrail:LookupEvents"]
+        Resource = ["*"]
       },
       {
         Sid    = "IAM"
@@ -98,7 +98,7 @@ resource "aws_iam_role_policy" "lambda_policy" {
           "iam:ListAccessKeys",
           "iam:GetUser"
         ]
-        Resource = "*"
+        Resource = ["arn:aws:iam::*:user/*"]
       },
       {
         Sid    = "GuardDuty"
@@ -108,7 +108,7 @@ resource "aws_iam_role_policy" "lambda_policy" {
           "guardduty:ListFindings",
           "guardduty:GetFindings"
         ]
-        Resource = "*"
+        Resource = ["arn:aws:guardduty:*:*:detector/*"]
       },
       {
         Sid    = "DynamoDB"
@@ -124,17 +124,9 @@ resource "aws_iam_role_policy" "lambda_policy" {
         Resource = [
           aws_dynamodb_table.events.arn,
           aws_dynamodb_table.responses.arn,
+          "${aws_dynamodb_table.events.arn}/index/*",
+          "${aws_dynamodb_table.responses.arn}/index/*",
           "arn:aws:dynamodb:*:*:table/guardian-iam-baseline"
-        ]
-      },
-      {
-        Sid    = "DynamoDBIndexes"
-        Effect = "Allow"
-        Action = [
-          "dynamodb:Query"
-        ]
-        Resource = [
-          "${aws_dynamodb_table.events.arn}/index/*"
         ]
       },
       {
@@ -144,18 +136,37 @@ resource "aws_iam_role_policy" "lambda_policy" {
           "ssm:GetParameter",
           "ssm:PutParameter"
         ]
-        Resource = "arn:aws:ssm:*:*:parameter/guardian/*"
+        Resource = ["arn:aws:ssm:*:*:parameter/aws-guardian/*"]
       },
       {
-        Sid    = "CloudWatch"
+        Sid    = "CloudWatchLogs"
         Effect = "Allow"
         Action = [
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
-          "logs:PutLogEvents",
-          "cloudwatch:PutMetricData"
+          "logs:PutLogEvents"
         ]
-        Resource = "*"
+        Resource = [
+          aws_cloudwatch_log_group.guardian_logs.arn,
+          aws_cloudwatch_log_group.discord_logs.arn
+        ]
+      },
+      {
+        Sid    = "CloudWatchMetrics"
+        Effect = "Allow"
+        Action = ["cloudwatch:PutMetricData"]
+        Resource = ["*"]
+      },
+      {
+        Sid    = "STSCrossAccount"
+        Effect = "Allow"
+        Action = ["sts:AssumeRole"]
+        Resource = ["arn:aws:iam::*:role/aws-guardian-cross-account-role"]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "true"
+          }
+        }
       }
     ]
   })

@@ -4,9 +4,6 @@ import logging
 import json
 import tempfile
 import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'lambda'))
 
 from guardian.logging_config import JSONFormatter, setup_logger, log_check_result, log_remediation
 

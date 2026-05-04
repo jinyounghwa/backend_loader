@@ -127,16 +127,3 @@ resource "aws_lambda_permission" "allow_eventbridge_daily" {
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.daily_cost_check.arn
 }
-
-# ============================================================================
-# Outputs
-# ============================================================================
-output "hourly_rule_arn" {
-  value       = aws_cloudwatch_event_rule.hourly_security_check.arn
-  description = "ARN of hourly security check rule"
-}
-
-output "daily_rule_arn" {
-  value       = aws_cloudwatch_event_rule.daily_cost_check.arn
-  description = "ARN of daily cost check rule"
-}

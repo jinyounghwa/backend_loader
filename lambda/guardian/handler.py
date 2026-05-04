@@ -23,7 +23,7 @@ cost_threshold = config.get_cost_threshold()
 telegram_config = config.get_telegram_config()
 discord_config = config.get_discord_config()
 
-cost_checker = CostChecker(cost_threshold=cost_threshold)
+cost_checker = CostChecker(config={'cost_threshold': cost_threshold})
 ec2_checker = EC2Checker()
 s3_checker = S3Checker()
 
@@ -31,7 +31,7 @@ storage = DynamoDBStorage()
 
 telegram_responder = TelegramResponder() if telegram_config['bot_token'] else None
 discord_responder = DiscordResponder() if discord_config['webhook_url'] else None
-auto_remediation_responder = AutoRemediationResponder(logger, storage, ec2_checker, s3_checker)
+auto_remediation_responder = AutoRemediationResponder(logger, storage)
 
 orchestrator = GuardianOrchestrator(
     logger=logger,

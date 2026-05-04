@@ -1,12 +1,8 @@
 """Unit tests for CloudTrail checker"""
 import unittest
-import sys
-import os
 import json
 from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime, timezone, timedelta
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'lambda'))
 
 from guardian.checkers.cloudtrail import CloudTrailChecker
 from guardian.checkers.base import CheckResult

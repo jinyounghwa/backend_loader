@@ -123,29 +123,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_memory_high" {
   namespace           = "aws-guardian"
   period              = 300
   statistic           = "Average"
-  threshold           = 400  # 400MB out of 512MB
+  threshold           = 400
   alarm_description   = "Alert when average memory usage exceeds 400MB"
   alarm_actions       = var.alarm_sns_topic_arn != "" ? [var.alarm_sns_topic_arn] : []
-}
-
-# CloudWatch Log Groups with retention policy
-
-resource "aws_cloudwatch_log_group" "guardian" {
-  name              = "/aws/lambda/aws-guardian-monitor"
-  retention_in_days = 14
-
-  tags = {
-    Name      = "aws-guardian-logs"
-    Component = "Logging"
-  }
-}
-
-resource "aws_cloudwatch_log_group" "discord_webhook" {
-  name              = "/aws/lambda/aws-guardian-discord"
-  retention_in_days = 7
-
-  tags = {
-    Name      = "discord-webhook-logs"
-    Component = "Webhooks"
-  }
 }

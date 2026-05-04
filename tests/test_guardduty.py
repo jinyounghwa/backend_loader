@@ -1,11 +1,7 @@
 """Unit tests for GuardDuty checker"""
 import unittest
-import sys
-import os
 from unittest.mock import Mock, patch
 from datetime import datetime, timezone
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'lambda'))
 
 from guardian.checkers.guardduty import GuardDutyChecker
 from guardian.checkers.base import CheckResult

@@ -1,8 +1,9 @@
 'use client';
 
 import { useAccounts } from '@/components/Providers';
-import { useEffect, useState } from 'react';
-import { AlertTriangle, AlertCircle, CheckCircle, Zap, RefreshCw } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import { AlertTriangle, AlertCircle, CheckCircle, Zap, Wifi, WifiOff } from 'lucide-react';
+import { useEventStream } from '@/lib/hooks/useEventStream';
 
 interface GuardianEvent {
   event_id: string;
@@ -16,28 +17,15 @@ interface GuardianEvent {
 export default function EventFeed() {
   const { selectedAccountId } = useAccounts();
   const [events, setEvents] = useState<GuardianEvent[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
 
-  const loadEvents = async () => {
-    setIsLoading(true);
-    try {
-      const res = await fetch(`/api/events?hours=24`);
-      if (res.ok) {
-        const data = await res.json();
-        setEvents((data.events || []).slice(0, 5));
-      }
-    } catch (error) {
-      console.error('Failed to load events:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const handleNewEvent = useCallback((event: GuardianEvent) => {
+    setEvents(prev => [event, ...prev].slice(0, 5));
+  }, []);
 
-  useEffect(() => {
-    loadEvents();
-    const interval = setInterval(loadEvents, 30000);
-    return () => clearInterval(interval);
-  }, [selectedAccountId]);
+  const { isConnected, error } = useEventStream({
+    accountId: selectedAccountId || 'default',
+    onEvent: handleNewEvent,
+  });
 
   const getSeverityIcon = (severity: GuardianEvent['severity']) => {
     switch (severity) {
@@ -70,15 +58,24 @@ export default function EventFeed() {
   return (
     <div className="bg-[#1a1d27] border border-slate-800 rounded-lg p-5">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-slate-100">Recent Events</h2>
-        <button
-          onClick={loadEvents}
-          disabled={isLoading}
-          className="p-1.5 rounded border border-slate-700 text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-        </button>
+        <div className="flex items-center space-x-2">
+          <h2 className="text-lg font-semibold text-slate-100">Recent Events</h2>
+          {isConnected ? (
+            <div title="Live stream active">
+              <Wifi className="w-4 h-4 text-green-400" />
+            </div>
+          ) : (
+            <div title="Live stream disconnected">
+              <WifiOff className="w-4 h-4 text-slate-500" />
+            </div>
+          )}
+        </div>
       </div>
+      {error && (
+        <div className="mb-3 p-2 bg-red-500/10 border border-red-500/30 rounded text-xs text-red-400">
+          {error}
+        </div>
+      )}
 
       <div className="space-y-3">
         {events.length === 0 ? (
