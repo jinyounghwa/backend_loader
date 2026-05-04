@@ -6,6 +6,7 @@ import { Check, X, Clock, Undo2, RefreshCw, Play, Wifi } from 'lucide-react';
 import { useEventStream } from '@/lib/hooks/useEventStream';
 import { useToast } from '@/lib/hooks/useToast';
 import ConfirmationDialog from './ConfirmationDialog';
+import ActionHistoryFilter, { FilterState } from './ActionHistoryFilter';
 
 interface Action {
   action_id: string;
@@ -33,12 +34,19 @@ export default function ActionHistory() {
   const [rollingBack, setRollingBack] = useState<string | null>(null);
   const [executing, setExecuting] = useState<string | null>(null);
   const [dialog, setDialog] = useState<DialogState>({ isOpen: false, actionId: null, actionType: null, resourceId: null });
+  const [filters, setFilters] = useState<FilterState>({ type: 'all', status: 'all' });
 
-  const loadActions = async () => {
+  const loadActions = useCallback(async () => {
     if (!selectedAccountId) return;
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/actions?account_id=${selectedAccountId}&limit=10`);
+      const url = new URL('/api/actions', window.location.origin);
+      url.searchParams.set('account_id', selectedAccountId);
+      url.searchParams.set('limit', '10');
+      if (filters.type !== 'all') url.searchParams.set('type', filters.type);
+      if (filters.status !== 'all') url.searchParams.set('status', filters.status);
+
+      const res = await fetch(url.toString());
       if (res.ok) {
         const data = await res.json();
         setActions(data.actions || []);
@@ -48,7 +56,7 @@ export default function ActionHistory() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedAccountId, filters]);
 
   const handleActionUpdate = useCallback((updatedAction: Action) => {
     setActions(prev => {
@@ -67,7 +75,7 @@ export default function ActionHistory() {
 
   useEffect(() => {
     loadActions();
-  }, [selectedAccountId]);
+  }, [selectedAccountId, filters, loadActions]);
 
   const handleRollback = async (actionId: string) => {
     setRollingBack(actionId);
@@ -253,6 +261,8 @@ export default function ActionHistory() {
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
         </div>
+
+        <ActionHistoryFilter onFilterChange={setFilters} />
 
         <div className="space-y-3">
           {actions.length === 0 ? (

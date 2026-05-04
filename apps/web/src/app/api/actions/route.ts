@@ -18,10 +18,12 @@ export async function GET(request: NextRequest) {
 
   const searchParams = request.nextUrl.searchParams;
   const accountId = searchParams.get('account_id') || 'all';
+  const typeFilter = searchParams.get('type') || 'all';
+  const statusFilter = searchParams.get('status') || 'all';
   const limit = Math.min(parseInt(searchParams.get('limit') || '10'), 50);
 
   try {
-    const actions: Action[] = [
+    let actions: Action[] = [
       {
         action_id: 'act-pending-001',
         timestamp: new Date(Date.now() - 300000).toISOString(),
@@ -62,9 +64,30 @@ export async function GET(request: NextRequest) {
         status: 'success' as const,
         message: 'GuardDuty finding auto-remediated',
       },
-    ].slice(0, limit);
+      {
+        action_id: 'act-004',
+        timestamp: new Date(Date.now() - 14400000).toISOString(),
+        account_id: accountId,
+        user: session.user?.email || 'system',
+        action_type: 'rollback' as const,
+        resource_id: 'i-0123456789abcdef0',
+        status: 'failed' as const,
+        message: 'Failed to rollback action - instance already terminated',
+      },
+    ];
 
-    return NextResponse.json({ actions });
+    // Apply filters
+    if (typeFilter !== 'all') {
+      actions = actions.filter(a => a.action_type === typeFilter);
+    }
+    if (statusFilter !== 'all') {
+      actions = actions.filter(a => a.status === statusFilter);
+    }
+
+    // Apply limit
+    actions = actions.slice(0, limit);
+
+    return NextResponse.json({ actions, total: actions.length });
   } catch (error) {
     console.error('Failed to fetch actions:', error);
     return NextResponse.json({ error: 'Failed to fetch actions' }, { status: 500 });
