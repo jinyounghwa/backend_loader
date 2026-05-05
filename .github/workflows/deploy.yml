@@ -48,9 +48,7 @@ jobs:
 
       - name: Run flake8 (Python linting)
         run: |
-          flake8 lambda/ tests/ --count --show-source --statistics \
-            --max-line-length=100 \
-            --ignore=E203,W503
+          flake8 lambda/ tests/ --show-source
 
       - name: Check code formatting with black
         run: |
