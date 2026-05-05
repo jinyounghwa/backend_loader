@@ -4,7 +4,6 @@ Tests to ensure Jest frontend API expectations match Python Lambda responses.
 This prevents drift between frontend and backend API contracts.
 """
 
-import pytest
 import sys
 from pathlib import Path
 import json
@@ -15,8 +14,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "lambda"))
 from guardian.models import (
     StatusResponse,
     EventsResponse,
-    CheckerResponse,
-    Finding,
 )
 
 

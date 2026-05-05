@@ -259,7 +259,7 @@ class TestGuardDutyChecker(unittest.TestCase):
         ]
 
         # Simulate findings with both high and medium severity
-        all_findings = high_findings + medium_findings
+        high_findings + medium_findings  # noqa: F841
 
         self.mock_clients['guardduty'].list_detectors.return_value = {
             'DetectorIds': ['detector-123']

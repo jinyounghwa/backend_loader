@@ -6,7 +6,7 @@ multi-region performance against v1.1 targets.
 
 import pytest
 from harness import LambdaHarness, CostCheckerHarness, EC2CheckerHarness, S3CheckerHarness
-from metrics import PerformanceMetrics, measure_performance
+from metrics import PerformanceMetrics
 
 
 class TestColdStart:

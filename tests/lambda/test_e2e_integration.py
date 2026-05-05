@@ -6,9 +6,8 @@ End-to-end tests simulating real Guardian workflows:
 3. Remediation decision → action execution → audit log
 """
 
-import pytest
 from harness import LambdaHarness, CostCheckerHarness, EC2CheckerHarness
-from guardian.models import EventBridgeScheduledEvent, CheckerResponse
+from guardian.models import EventBridgeScheduledEvent
 
 
 class TestFullMonitoringCycle:
@@ -225,7 +224,7 @@ class TestRemediationWorkflow:
         - Logs the reversal
         - Notifies on Telegram/Discord
         """
-        rollback_request = {
+        rollback_request = {  # noqa: F841
             "action_id": "action-001",
             "reason": "False positive - user needs instance running",
         }

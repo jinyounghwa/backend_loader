@@ -14,12 +14,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "lambda"))
 
 from guardian.models import (
     EventBridgeScheduledEvent,
-    EventBridgeDetail,
     CheckerResponse,
     Finding,
     ResponderInput,
     RemediationAction,
     AuditLogRecord,
+    RemediationMetricRecord,
     StatusResponse,
 )
 

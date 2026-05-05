@@ -1,7 +1,7 @@
 """Unit tests for auto-remediation functions"""
 import unittest
 from unittest.mock import patch, MagicMock
-from datetime import datetime, timezone
+from datetime import datetime
 
 from guardian.responders.auto_remediation import (
     remediate_cost_overrun,

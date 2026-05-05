@@ -1,7 +1,7 @@
 """Unit tests for CloudTrail checker"""
 import unittest
 import json
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock
 from datetime import datetime, timezone, timedelta
 
 from guardian.checkers.cloudtrail import CloudTrailChecker
@@ -288,5 +288,4 @@ class TestCloudTrailCheckerIntegration(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    import json
     unittest.main()

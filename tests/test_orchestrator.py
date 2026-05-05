@@ -1,7 +1,6 @@
 """Unit tests for GuardianOrchestrator - unified check pipeline"""
 import unittest
-import json
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 from datetime import datetime, timezone
 
 from guardian.orchestrator import GuardianOrchestrator
@@ -182,7 +181,7 @@ class TestGuardianOrchestratorCheckType(unittest.TestCase):
 
     def test_run_all_checks_with_check_type_cost(self):
         event = {'check_type': 'cost', 'time': datetime.now(timezone.utc).isoformat()}
-        result = self.orchestrator.run_all_checks(event)
+        self.orchestrator.run_all_checks(event)  # noqa: F841
 
         self.mock_cost_checker.check.assert_called_once()
         self.mock_ec2_checker.check.assert_not_called()
@@ -193,7 +192,7 @@ class TestGuardianOrchestratorCheckType(unittest.TestCase):
 
     def test_run_all_checks_with_check_type_security(self):
         event = {'check_type': 'security', 'time': datetime.now(timezone.utc).isoformat()}
-        result = self.orchestrator.run_all_checks(event)
+        self.orchestrator.run_all_checks(event)  # noqa: F841
 
         self.mock_cost_checker.check.assert_not_called()
         self.mock_ec2_checker.check.assert_called_once()
@@ -204,7 +203,7 @@ class TestGuardianOrchestratorCheckType(unittest.TestCase):
 
     def test_run_all_checks_with_check_type_all(self):
         event = {'check_type': 'all', 'time': datetime.now(timezone.utc).isoformat()}
-        result = self.orchestrator.run_all_checks(event)
+        self.orchestrator.run_all_checks(event)  # noqa: F841
 
         self.mock_cost_checker.check.assert_called_once()
         self.mock_ec2_checker.check.assert_called_once()
@@ -215,7 +214,7 @@ class TestGuardianOrchestratorCheckType(unittest.TestCase):
 
     def test_run_all_checks_default_check_type_all(self):
         event = {'time': datetime.now(timezone.utc).isoformat()}
-        result = self.orchestrator.run_all_checks(event)
+        self.orchestrator.run_all_checks(event)  # noqa: F841
 
         self.mock_cost_checker.check.assert_called_once()
         self.mock_cloudtrail_checker.check.assert_called_once()

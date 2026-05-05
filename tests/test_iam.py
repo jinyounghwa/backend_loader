@@ -1,7 +1,7 @@
 """Unit tests for IAM checker"""
 import unittest
 import json
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 from datetime import datetime, timezone
 
 from guardian.checkers.iam import IAMChecker

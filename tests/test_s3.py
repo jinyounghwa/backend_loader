@@ -1,7 +1,7 @@
 """Tests for S3 checker - LocalStack integration tests"""
 import unittest
 import boto3
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 
 from guardian.checkers.s3 import S3Checker
 from guardian.config import Config
