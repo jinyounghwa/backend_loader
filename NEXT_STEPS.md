@@ -750,21 +750,45 @@ MODIFIED:
 - 인메모리 캐싱 + fail-safe 모드
 - Priority 필드로 규칙 충돌 해결
 
-### Phase 3: Advanced AI-Powered Insights 📋 (Next)
-- Cross-region threat correlation via Gemini
-- Cost anomaly detection (20% spike detection)
-- Remediation effectiveness metrics
+### Phase 3: Advanced AI-Powered Insights 🔄 (진행 중)
 
-**Session Summary**:
-- **Duration**: ~2시간
-- **Components**: 4개 신규 (RegionSelector, RegionMetrics, RegionComparisonChart, ResponseRuleManager)
-- **API Endpoints**: 2개 신규 (/api/response-rules, 다중 리전 /api/status)
-- **Commits**: 2개 (Phase 1 + Phase 2 WIP)
-- **Gemini Collaboration**: 4개 phases 진행 중
+#### Phase 3a: Insights API + UI Integration ✅ (완료)
+- ✅ /api/analyze-insights 엔드포인트 (Gemini-ready)
+- ✅ useInsights hook (캐싱 + 에러 처리)
+- ✅ InsightsPanel 컴포넌트:
+  * Correlation score (0-100%)
+  * Threat type classification
+  * Confidence levels badge
+  * Urgency meter (1-10)
+  * Recommendations text
+  * Cost impact estimation
+  * Remediation effectiveness rate
+- ✅ Dashboard에 InsightsPanel 통합
+- ✅ Mock analysis (rule-based) for testing
+- ✅ Build: Zero errors, 1.9s
+
+#### Phase 3b: Cost Anomaly Detection 📋 (Next 45min)
+- Historical cost tracking (7-day rolling average)
+- Spike detection (20% threshold)
+- Per-resource cost attribution (EC2, S3, etc.)
+- DynamoDB: historical_costs table
+
+#### Phase 3c: Remediation Metrics 📋 (Next 45min)
+- Remediation outcome tracking
+- Effectiveness score calculation
+- Rule failure pattern analysis
+- Dashboard metrics chart
+
+**Session Summary (Current)**:
+- **Duration**: ~2시간 (Phase 1-3a 완료)
+- **Components**: 7개 신규 (Region selectors, ResponseRuleManager, InsightsPanel)
+- **API Endpoints**: 3개 신규 (/api/response-rules, /api/analyze-insights, multi-region /api/status)
+- **Commits**: 3개 (Phase 1 + Phase 2 refactor + Phase 3a)
+- **Gemini Collaboration**: Plan ✅ → Review ✅ → Implement 🔄
 
 **Next Steps**:
-1. Phase 2 마무리 (Lambda remediation_service.py 리팩토링)
-2. Phase 3 구현 (AI insights)
+1. Phase 3b: Cost anomaly detection (45분)
+2. Phase 3c: Remediation metrics (45분)
 3. 통합 테스트 및 검증
 4. Sprint 15 완료 문서화
 

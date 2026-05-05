@@ -11,7 +11,9 @@ import RiskScore from '@/components/Dashboard/RiskScore';
 import EventFeed from '@/components/Dashboard/EventFeed';
 import AIThreatPanel from '@/components/Dashboard/AIThreatPanel';
 import InsightsPanel from '@/components/Dashboard/InsightsPanel';
+import CostAnomalyCard from '@/components/Dashboard/CostAnomalyCard';
 import { useAIAnalysis } from '@/lib/hooks/useAIAnalysis';
+import { useCostAnomalies } from '@/lib/hooks/useCostAnomalies';
 import type { DashboardSummary, MultiRegionSummary } from '@/types/guardian';
 import type { AnomalyInput } from '@/lib/hooks/useInsights';
 
@@ -60,6 +62,7 @@ export default function DashboardPage() {
   const { cost, ec2, s3, recent_events, system_health } = data;
 
   const { analysis, loading: aiLoading, error: aiError, analyzeDebounced: analyzeEvents } = useAIAnalysis();
+  const { anomalies: costAnomalies, detect: detectCostAnomalies } = useCostAnomalies();
 
   const eventsForAnalysis = useMemo(() => recent_events.slice(0, 5), [recent_events]);
 
@@ -102,6 +105,15 @@ export default function DashboardPage() {
   const handleRegionsChange = useCallback((regions: string[]) => {
     setSelectedRegions(regions);
   }, []);
+
+  const handleCheckCostAnomalies = useCallback(() => {
+    const costData = isMultiRegion && summary && 'regions' in summary
+      ? Object.fromEntries(
+          (summary as MultiRegionSummary).regions.map(r => [r.region || 'unknown', r.cost])
+        )
+      : { [selectedRegions[0]]: cost };
+    detectCostAnomalies(selectedRegions, costData);
+  }, [summary, isMultiRegion, cost, selectedRegions, detectCostAnomalies]);
 
   return (
     <div className="space-y-6">
@@ -233,7 +245,14 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <InsightsPanel anomalies={anomaliesForInsights} onRefresh={refresh} />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="md:col-span-2">
+          <InsightsPanel anomalies={anomaliesForInsights} onRefresh={refresh} />
+        </div>
+        <div>
+          <CostAnomalyCard anomalies={costAnomalies} />
+        </div>
+      </div>
 
       <ActionHistory />
 
