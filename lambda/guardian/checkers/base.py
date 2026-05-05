@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class CheckResult:
     """Standard result format for all checkers."""
 
-    SEVERITY_LEVELS = ['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
+    SEVERITY_LEVELS = ["INFO", "LOW", "MEDIUM", "HIGH", "CRITICAL"]
 
     def __init__(
         self,
@@ -18,7 +18,7 @@ class CheckResult:
         title: str,
         message: str,
         details: Optional[Dict[str, Any]] = None,
-        suggested_action: Optional[str] = None
+        suggested_action: Optional[str] = None,
     ):
         if severity not in self.SEVERITY_LEVELS:
             raise ValueError(f"Invalid severity: {severity}. Must be one of {self.SEVERITY_LEVELS}")
@@ -32,29 +32,34 @@ class CheckResult:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
-            'severity': self.severity,
-            'title': self.title,
-            'message': self.message,
-            'details': self.details,
-            'suggested_action': self.suggested_action
+            "severity": self.severity,
+            "title": self.title,
+            "message": self.message,
+            "details": self.details,
+            "suggested_action": self.suggested_action,
         }
 
     @classmethod
-    def info(cls, title: str, message: str) -> 'CheckResult':
+    def info(cls, title: str, message: str) -> "CheckResult":
         """Create INFO result."""
-        return cls('INFO', title, message)
+        return cls("INFO", title, message)
 
     @classmethod
-    def error(cls, title: str, message: str) -> 'CheckResult':
+    def error(cls, title: str, message: str) -> "CheckResult":
         """Create ERROR result."""
-        return cls('HIGH', title, message, suggested_action='Manual investigation required')
+        return cls("HIGH", title, message, suggested_action="Manual investigation required")
 
 
 class BaseChecker(ABC):
     """Abstract base class for all checkers."""
 
-    def __init__(self, clients: Dict[str, Any], config: Dict[str, Any],
-                 account_id: Optional[str] = None, credentials: Optional[Dict[str, str]] = None):
+    def __init__(
+        self,
+        clients: Dict[str, Any],
+        config: Dict[str, Any],
+        account_id: Optional[str] = None,
+        credentials: Optional[Dict[str, str]] = None,
+    ):
         """
         Initialize checker with AWS clients and configuration.
 

@@ -53,9 +53,7 @@ class TestFullMonitoringCycle:
         5. Audit trail recorded
         """
         harness = EC2CheckerHarness()
-        event = harness.create_ec2_check_event(
-            regions=["ap-northeast-1", "us-east-1"]
-        )
+        event = harness.create_ec2_check_event(regions=["ap-northeast-1", "us-east-1"])
 
         # Step 1: Event validation
         event_obj = EventBridgeScheduledEvent(**event)
@@ -292,9 +290,7 @@ class TestDashboardDataFlow:
             "estimated_cost_saved": 3450,  # USD
         }
 
-        assert metrics["total_remediations"] == sum(
-            metrics["by_action_type"].values()
-        )
+        assert metrics["total_remediations"] == sum(metrics["by_action_type"].values())
         assert 0 <= metrics["success_rate"] <= 1.0
 
     def test_dashboard_status_endpoint(self):

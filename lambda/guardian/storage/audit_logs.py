@@ -1,4 +1,5 @@
 """Audit log storage for guardian admin actions"""
+
 import logging
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
@@ -9,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class AuditLogStorage:
-    def __init__(self, table_name: str = 'guardian-audit-logs'):
+    def __init__(self, table_name: str = "guardian-audit-logs"):
         self.table_name = table_name
         self._table = None
 
@@ -17,7 +18,7 @@ class AuditLogStorage:
     def table(self):
         if self._table is None:
             try:
-                self._table = AWSClientProvider.get_resource('dynamodb').Table(self.table_name)
+                self._table = AWSClientProvider.get_resource("dynamodb").Table(self.table_name)
             except Exception as e:
                 logger.error("Could not access audit log table: %s", e)
         return self._table
@@ -64,8 +65,9 @@ class AuditLogStorage:
             if self.table is None:
                 return []
             from boto3.dynamodb.conditions import Key
+
             response = self.table.query(
-                KeyConditionExpression=Key('user').eq(user),
+                KeyConditionExpression=Key("user").eq(user),
                 Limit=limit,
             )
             return response.get("Items", [])

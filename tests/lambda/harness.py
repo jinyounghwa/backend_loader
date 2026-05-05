@@ -30,7 +30,9 @@ class LambdaHarness:
         self.project_root = Path(__file__).parent.parent.parent
         self.performance_metrics = {}
 
-    def invoke_local(self, event: Dict[str, Any], env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    def invoke_local(
+        self, event: Dict[str, Any], env: Optional[Dict[str, str]] = None
+    ) -> Dict[str, Any]:
         """SAM local invoke를 통해 Lambda handler 호출.
 
         Args:

@@ -1,4 +1,5 @@
 """CloudWatch metrics helper for AWS Guardian performance monitoring"""
+
 import logging
 import time
 from datetime import datetime, timezone
@@ -32,7 +33,7 @@ class CloudWatchMetrics:
         metric_name: str,
         value: float,
         unit: Optional[str] = None,
-        dimensions: Optional[Dict[str, str]] = None
+        dimensions: Optional[Dict[str, str]] = None,
     ) -> None:
         """
         Emit a single metric to CloudWatch
@@ -48,29 +49,21 @@ class CloudWatchMetrics:
             return
 
         try:
-            cloudwatch = AWSClientProvider.get_client('cloudwatch')
+            cloudwatch = AWSClientProvider.get_client("cloudwatch")
 
             metric_data = {
-                'MetricName': metric_name,
-                'Value': value,
-                'Unit': unit or cls.METRICS[metric_name],
-                'Timestamp': datetime.now(timezone.utc)
+                "MetricName": metric_name,
+                "Value": value,
+                "Unit": unit or cls.METRICS[metric_name],
+                "Timestamp": datetime.now(timezone.utc),
             }
 
             if dimensions:
-                metric_data['Dimensions'] = [
-                    {'Name': k, 'Value': v} for k, v in dimensions.items()
-                ]
+                metric_data["Dimensions"] = [{"Name": k, "Value": v} for k, v in dimensions.items()]
 
-            cloudwatch.put_metric_data(
-                Namespace=cls.NAMESPACE,
-                MetricData=[metric_data]
-            )
+            cloudwatch.put_metric_data(Namespace=cls.NAMESPACE, MetricData=[metric_data])
 
-            logger.debug(
-                "Emitted metric: %s=%s %s",
-                metric_name, value, metric_data['Unit']
-            )
+            logger.debug("Emitted metric: %s=%s %s", metric_name, value, metric_data["Unit"])
         except Exception as e:
             logger.error("Failed to emit metric %s: %s", metric_name, e)
 
@@ -86,7 +79,7 @@ class CloudWatchMetrics:
             return
 
         try:
-            cloudwatch = AWSClientProvider.get_client('cloudwatch')
+            cloudwatch = AWSClientProvider.get_client("cloudwatch")
 
             metric_data = []
             for metric_name, value in metrics.items():
@@ -94,18 +87,17 @@ class CloudWatchMetrics:
                     logger.warning("Unknown metric: %s", metric_name)
                     continue
 
-                metric_data.append({
-                    'MetricName': metric_name,
-                    'Value': value,
-                    'Unit': cls.METRICS[metric_name],
-                    'Timestamp': datetime.now(timezone.utc)
-                })
+                metric_data.append(
+                    {
+                        "MetricName": metric_name,
+                        "Value": value,
+                        "Unit": cls.METRICS[metric_name],
+                        "Timestamp": datetime.now(timezone.utc),
+                    }
+                )
 
             if metric_data:
-                cloudwatch.put_metric_data(
-                    Namespace=cls.NAMESPACE,
-                    MetricData=metric_data
-                )
+                cloudwatch.put_metric_data(Namespace=cls.NAMESPACE, MetricData=metric_data)
                 logger.debug("Emitted %d metrics", len(metric_data))
         except Exception as e:
             logger.error("Failed to emit batch metrics: %s", e)

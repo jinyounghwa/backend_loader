@@ -1,26 +1,29 @@
 """Discord notification responder for AWS Guardian"""
+
 import logging
 import requests
 from typing import Dict, Any, Optional
 
 from guardian.responders.alert_formatter import (
-    AlertMessage, check_emoji, format_account_info,
+    AlertMessage,
+    check_emoji,
+    format_account_info,
 )
 
 logger = logging.getLogger(__name__)
 
 SEVERITY_COLORS = {
-    'CRITICAL': 16711680,
-    'HIGH': 16744192,
-    'MEDIUM': 16776960,
-    'LOW': 5814783,
-    'INFO': 65280,
+    "CRITICAL": 16711680,
+    "HIGH": 16744192,
+    "MEDIUM": 16776960,
+    "LOW": 5814783,
+    "INFO": 65280,
 }
 
 
 class DiscordResponder:
     def __init__(self, webhook_url: Optional[str] = None):
-        self.webhook_url = webhook_url or ''
+        self.webhook_url = webhook_url or ""
 
     def send_embed(self, embed: Dict[str, Any]) -> bool:
         if not self.webhook_url:
@@ -28,7 +31,7 @@ class DiscordResponder:
         try:
             response = requests.post(
                 self.webhook_url,
-                json={'embeds': [embed]},
+                json={"embeds": [embed]},
                 timeout=10,
             )
             return response.status_code in [200, 204]
@@ -42,30 +45,41 @@ class DiscordResponder:
         fields = []
 
         for item in alert.items:
-            if isinstance(item, dict) and 'label' in item:
-                details = item.get('details', [])
-                value = item['label']
+            if isinstance(item, dict) and "label" in item:
+                details = item.get("details", [])
+                value = item["label"]
                 if details:
-                    value += '\n' + '\n'.join(f"  └ {d}" for d in details[:3])
-                fields.append({'name': item.get('type', 'Item'), 'value': value, 'inline': False})
+                    value += "\n" + "\n".join(f"  └ {d}" for d in details[:3])
+                fields.append({"name": item.get("type", "Item"), "value": value, "inline": False})
             elif isinstance(item, dict):
                 for k, v in item.items():
-                    fields.append({'name': k, 'value': str(v), 'inline': True})
+                    fields.append({"name": k, "value": str(v), "inline": True})
 
-        footer_text = 'AWS Guardian'
+        footer_text = "AWS Guardian"
         if alert.account_info:
-            footer_text = f'{alert.account_info} | AWS Guardian'
+            footer_text = f"{alert.account_info} | AWS Guardian"
 
         return {
-            'title': f'{icon} {alert.title}',
-            'color': color,
-            'fields': fields if fields else [{'name': 'Status', 'value': alert.summary_line or 'No details', 'inline': False}],
-            'description': alert.summary_line or '',
-            'footer': {'text': footer_text},
+            "title": f"{icon} {alert.title}",
+            "color": color,
+            "fields": (
+                fields
+                if fields
+                else [
+                    {"name": "Status", "value": alert.summary_line or "No details", "inline": False}
+                ]
+            ),
+            "description": alert.summary_line or "",
+            "footer": {"text": footer_text},
         }
 
-    def send_alert(self, check_name: str, alert_data: Dict[str, Any],
-                   account_id: str = 'current', account_name: Optional[str] = None) -> bool:
+    def send_alert(
+        self,
+        check_name: str,
+        alert_data: Dict[str, Any],
+        account_id: str = "current",
+        account_name: Optional[str] = None,
+    ) -> bool:
         account_info = format_account_info(account_id, account_name)
         alert = AlertMessage.from_check_data(check_name, alert_data, account_info=account_info)
         return self.send_embed(self._render_alert_embed(alert))
@@ -84,29 +98,53 @@ class DiscordResponder:
 
     def send_status_embed(self, status_data: Dict[str, Any]) -> bool:
         fields = [
-            {'name': '💰 Monthly Cost', 'value': f"${status_data.get('monthly_cost', 0):.2f}", 'inline': True},
-            {'name': '🏃 Running EC2', 'value': str(status_data.get('running_instances', 0)), 'inline': True},
-            {'name': '🪣 S3 Buckets', 'value': str(status_data.get('total_buckets', 0)), 'inline': True},
+            {
+                "name": "💰 Monthly Cost",
+                "value": f"${status_data.get('monthly_cost', 0):.2f}",
+                "inline": True,
+            },
+            {
+                "name": "🏃 Running EC2",
+                "value": str(status_data.get("running_instances", 0)),
+                "inline": True,
+            },
+            {
+                "name": "🪣 S3 Buckets",
+                "value": str(status_data.get("total_buckets", 0)),
+                "inline": True,
+            },
         ]
-        return self.send_embed({
-            'title': '📊 AWS Guardian Status',
-            'color': 65280,
-            'fields': fields,
-            'footer': {'text': 'AWS Guardian'},
-        })
+        return self.send_embed(
+            {
+                "title": "📊 AWS Guardian Status",
+                "color": 65280,
+                "fields": fields,
+                "footer": {"text": "AWS Guardian"},
+            }
+        )
 
     def send_summary_embed(self, summary_data: Dict[str, Any]) -> bool:
-        total = summary_data.get('total_events', 0)
-        by_type = summary_data.get('by_type', {})
-        by_severity = summary_data.get('by_severity', {})
+        total = summary_data.get("total_events", 0)
+        by_type = summary_data.get("by_type", {})
+        by_severity = summary_data.get("by_severity", {})
         fields = [
-            {'name': 'Events by Type', 'value': '\n'.join(f"• {k}: {v}" for k, v in by_type.items()) or 'None', 'inline': False},
-            {'name': 'Events by Severity', 'value': '\n'.join(f"• {k}: {v}" for k, v in by_severity.items()) or 'None', 'inline': False},
+            {
+                "name": "Events by Type",
+                "value": "\n".join(f"• {k}: {v}" for k, v in by_type.items()) or "None",
+                "inline": False,
+            },
+            {
+                "name": "Events by Severity",
+                "value": "\n".join(f"• {k}: {v}" for k, v in by_severity.items()) or "None",
+                "inline": False,
+            },
         ]
-        return self.send_embed({
-            'title': '📊 AWS Guardian Daily Summary',
-            'color': 5814783,
-            'description': f'Total Events: {total}',
-            'fields': fields,
-            'footer': {'text': 'AWS Guardian'},
-        })
+        return self.send_embed(
+            {
+                "title": "📊 AWS Guardian Daily Summary",
+                "color": 5814783,
+                "description": f"Total Events: {total}",
+                "fields": fields,
+                "footer": {"text": "AWS Guardian"},
+            }
+        )

@@ -133,10 +133,7 @@ class PerformanceMetrics:
             for checker in sorted(checkers):
                 stats = self.get_statistics(checker)
                 if stats:
-                    print(
-                        f"  {checker}: {stats['mean']:.1f}ms "
-                        f"(n={int(stats['count'])})"
-                    )
+                    print(f"  {checker}: {stats['mean']:.1f}ms " f"(n={int(stats['count'])})")
 
         print()
 
@@ -162,20 +159,32 @@ class PerformanceMetrics:
             "**Generated**: " + datetime.utcnow().isoformat() + "\n",
             "**Total Measurements**: " + str(len(self.metrics)) + "\n",
             "\n## Cold Start\n",
-            f"- **Time**: {cold_starts[0]:.1f}ms (first invocation with SAM container startup)"
-            if cold_starts
-            else "- **Time**: Not measured",
+            (
+                f"- **Time**: {cold_starts[0]:.1f}ms (first invocation with SAM container startup)"
+                if cold_starts
+                else "- **Time**: Not measured"
+            ),
             "\n- **Target (v1.1)**: < 2500ms (includes SAM startup)",
             "\n- **Status**: ✅ PASS\n",
             "\n## Warm Invocation (Subsequent Calls)\n",
-            f"- **Average**: {warm_stats['mean']:.1f}ms" if warm_stats else "- **Average**: Not measured",
-            f"\n- **Range**: {warm_stats['min']:.1f}ms - {warm_stats['max']:.1f}ms"
-            if warm_stats
-            else "",
+            (
+                f"- **Average**: {warm_stats['mean']:.1f}ms"
+                if warm_stats
+                else "- **Average**: Not measured"
+            ),
+            (
+                f"\n- **Range**: {warm_stats['min']:.1f}ms - {warm_stats['max']:.1f}ms"
+                if warm_stats
+                else ""
+            ),
             "\n- **Target (v1.1)**: < 500ms",
             "\n- **Status**: ✅ PASS\n",
             "\n## Multi-Region (4 Regions Sequential)\n",
-            f"- **Average**: {multi_stats['mean']:.1f}ms" if multi_stats else "- **Average**: Not measured",
+            (
+                f"- **Average**: {multi_stats['mean']:.1f}ms"
+                if multi_stats
+                else "- **Average**: Not measured"
+            ),
             "\n- **Target (v1.1)**: < 15000ms",
             "\n- **Status**: ✅ PASS\n",
             "\n## Per-Checker Performance\n",
@@ -204,14 +213,18 @@ class PerformanceMetrics:
                 "|--------|--------|---------|--------|\n",
                 f"| Cold Start | < 2500ms | {cold_starts[0]:.0f}ms | "
                 f"{'✅' if cold_starts[0] < 2500 else '❌'} |\n",
-                f"| Warm Invocation | < 500ms | {warm_stats['mean']:.0f}ms | "
-                f"{'✅' if warm_stats['mean'] < 500 else '❌'} |\n"
-                if warm_stats
-                else "",
-                f"| Multi-Region | < 15000ms | {multi_stats['mean']:.0f}ms | "
-                f"{'✅' if multi_stats['mean'] < 15000 else '❌'} |\n"
-                if multi_stats
-                else "",
+                (
+                    f"| Warm Invocation | < 500ms | {warm_stats['mean']:.0f}ms | "
+                    f"{'✅' if warm_stats['mean'] < 500 else '❌'} |\n"
+                    if warm_stats
+                    else ""
+                ),
+                (
+                    f"| Multi-Region | < 15000ms | {multi_stats['mean']:.0f}ms | "
+                    f"{'✅' if multi_stats['mean'] < 15000 else '❌'} |\n"
+                    if multi_stats
+                    else ""
+                ),
                 "\n## Raw Metrics\n",
                 "```json\n",
                 self.to_json(),

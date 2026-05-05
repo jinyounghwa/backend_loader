@@ -1,4 +1,5 @@
 """APScheduler-based scheduler for AWS Guardian monitoring"""
+
 import os
 import sys
 import logging
@@ -12,10 +13,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from handler import lambda_handler
 
 logging.basicConfig(
-    level=logging.INFO,
-    format='[%(asctime)s] %(levelname)-8s [%(name)s] %(message)s'
+    level=logging.INFO, format="[%(asctime)s] %(levelname)-8s [%(name)s] %(message)s"
 )
-logger = logging.getLogger('Guardian Scheduler')
+logger = logging.getLogger("Guardian Scheduler")
 
 
 class GuardianScheduler:
@@ -26,12 +26,9 @@ class GuardianScheduler:
     def job_callback(self):
         try:
             logger.info("Starting scheduled check...")
-            event = {
-                'time': datetime.now(timezone.utc).isoformat(),
-                'source': 'scheduler'
-            }
+            event = {"time": datetime.now(timezone.utc).isoformat(), "source": "scheduler"}
             result = lambda_handler(event)
-            logger.info("Check completed: %s", result.get('status', 'unknown'))
+            logger.info("Check completed: %s", result.get("status", "unknown"))
         except Exception as e:
             logger.error("Scheduler error: %s", e)
 
@@ -41,9 +38,9 @@ class GuardianScheduler:
         self.job = self.scheduler.add_job(
             self.job_callback,
             trigger=CronTrigger(minute=f"*/{interval_minutes}"),
-            id='guardian_check',
-            name='AWS Guardian Monitoring Check',
-            misfire_grace_time=30
+            id="guardian_check",
+            name="AWS Guardian Monitoring Check",
+            misfire_grace_time=30,
         )
 
         self.scheduler.start()
@@ -61,7 +58,7 @@ class GuardianScheduler:
         self.job_callback()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     scheduler = GuardianScheduler()
     scheduler.run_once()
     scheduler.start(interval_minutes=60)

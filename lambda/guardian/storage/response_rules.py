@@ -1,4 +1,5 @@
 """DynamoDB response rules management for multi-region auto-remediation."""
+
 import logging
 import time
 from typing import Optional, List, Dict, Any
@@ -8,7 +9,7 @@ from guardian.aws_client_provider import AWSClientProvider
 
 logger = logging.getLogger(__name__)
 
-TABLE_NAME = 'guardian-response-rules'
+TABLE_NAME = "guardian-response-rules"
 CACHE_TTL_SECONDS = 300
 
 _rule_cache: Dict[str, tuple] = {}
@@ -16,7 +17,7 @@ _rule_cache: Dict[str, tuple] = {}
 
 def _get_table():
     try:
-        return AWSClientProvider.get_resource('dynamodb').Table(TABLE_NAME)
+        return AWSClientProvider.get_resource("dynamodb").Table(TABLE_NAME)
     except Exception as e:
         logger.error("Could not access response rules table: %s", e)
         return None
@@ -47,29 +48,29 @@ class ResponseRule:
 
     def to_item(self) -> Dict[str, Any]:
         return {
-            'rule_id': self.rule_id,
-            'region': self.region,
-            'event_type': self.event_type,
-            'action': self.action,
-            'enabled': self.enabled,
-            'priority': self.priority,
-            'dry_run': self.dry_run,
-            'created_at': self.created_at,
-            'created_by': self.created_by,
+            "rule_id": self.rule_id,
+            "region": self.region,
+            "event_type": self.event_type,
+            "action": self.action,
+            "enabled": self.enabled,
+            "priority": self.priority,
+            "dry_run": self.dry_run,
+            "created_at": self.created_at,
+            "created_by": self.created_by,
         }
 
     @classmethod
-    def from_item(cls, item: Dict[str, Any]) -> 'ResponseRule':
+    def from_item(cls, item: Dict[str, Any]) -> "ResponseRule":
         return cls(
-            rule_id=item['rule_id'],
-            region=item['region'],
-            event_type=item['event_type'],
-            action=item['action'],
-            enabled=item.get('enabled', True),
-            priority=item.get('priority', 100),
-            dry_run=item.get('dry_run', False),
-            created_at=item.get('created_at'),
-            created_by=item.get('created_by'),
+            rule_id=item["rule_id"],
+            region=item["region"],
+            event_type=item["event_type"],
+            action=item["action"],
+            enabled=item.get("enabled", True),
+            priority=item.get("priority", 100),
+            dry_run=item.get("dry_run", False),
+            created_at=item.get("created_at"),
+            created_by=item.get("created_by"),
         )
 
 
@@ -98,9 +99,9 @@ class ResponseRuleStorage:
         try:
             if self.table is None:
                 return None
-            response = self.table.get_item(Key={'rule_id': rule_id})
-            if 'Item' in response:
-                return ResponseRule.from_item(response['Item'])
+            response = self.table.get_item(Key={"rule_id": rule_id})
+            if "Item" in response:
+                return ResponseRule.from_item(response["Item"])
         except Exception as e:
             logger.error("Error getting rule %s: %s", rule_id, e)
         return None
@@ -119,22 +120,21 @@ class ResponseRuleStorage:
                 return []
 
             response_regional = self.table.query(
-                IndexName='region-event_type-index',
-                KeyConditionExpression='region = :region',
-                ExpressionAttributeValues={':region': region},
+                IndexName="region-event_type-index",
+                KeyConditionExpression="region = :region",
+                ExpressionAttributeValues={":region": region},
             )
 
             response_wildcard = self.table.query(
-                IndexName='region-event_type-index',
-                KeyConditionExpression='region = :region',
-                ExpressionAttributeValues={':region': '*'},
+                IndexName="region-event_type-index",
+                KeyConditionExpression="region = :region",
+                ExpressionAttributeValues={":region": "*"},
             )
 
             rules = [
                 ResponseRule.from_item(item)
-                for item in response_regional.get('Items', [])
-                + response_wildcard.get('Items', [])
-                if item.get('enabled', True)
+                for item in response_regional.get("Items", []) + response_wildcard.get("Items", [])
+                if item.get("enabled", True)
             ]
 
             rules.sort(key=lambda r: r.priority)
@@ -153,7 +153,7 @@ class ResponseRuleStorage:
         if regional:
             return regional[0]
 
-        wildcard = [r for r in matching if r.region == '*']
+        wildcard = [r for r in matching if r.region == "*"]
         if wildcard:
             return wildcard[0]
 
@@ -163,7 +163,7 @@ class ResponseRuleStorage:
         try:
             if self.table is None:
                 return False
-            self.table.delete_item(Key={'rule_id': rule_id})
+            self.table.delete_item(Key={"rule_id": rule_id})
             _clear_cache()
             return True
         except Exception as e:

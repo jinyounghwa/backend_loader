@@ -1,4 +1,5 @@
 """AWS Cost Explorer checker for AWS Guardian"""
+
 import os
 import logging
 from datetime import datetime, timedelta, timezone
@@ -10,7 +11,7 @@ from guardian.checkers.base import BaseChecker, CheckResult
 from guardian.config import Config
 from guardian.aws_client_provider import AWSClientProvider
 
-SSM_COST_THRESHOLD_PATH = '/guardian/cost-threshold'
+SSM_COST_THRESHOLD_PATH = "/guardian/cost-threshold"
 
 MOCK_DAILY_COST_DEFAULT = 5.50
 MOCK_MONTHLY_COST_DEFAULT = 150.50
@@ -29,27 +30,27 @@ class CostChecker(BaseChecker):
         credentials: Optional[Dict[str, str]] = None,
     ):
         effective_config = config or {}
-        effective_config.setdefault('cost_threshold', 10.0)
+        effective_config.setdefault("cost_threshold", 10.0)
         super().__init__(clients or {}, effective_config, account_id, credentials)
 
-        self.threshold = self.config['cost_threshold']
+        self.threshold = self.config["cost_threshold"]
         self.is_localstack = Config.is_localstack()
-        self.ssm_client = AWSClientProvider.get_client('ssm')
+        self.ssm_client = AWSClientProvider.get_client("ssm")
 
         if not self.is_localstack:
-            self.ce_client = AWSClientProvider.get_client('ce')
+            self.ce_client = AWSClientProvider.get_client("ce")
         else:
             self.ce_client = None
 
     def check(self) -> CheckResult:
         """Run cost anomaly check and return unified CheckResult."""
-        self._log_check_start('Cost')
+        self._log_check_start("Cost")
 
         try:
-            today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
             daily_cost = self._get_daily_cost(today)
 
-            yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime('%Y-%m-%d')
+            yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
             yesterday_cost = self._get_daily_cost(yesterday)
 
             monthly_cost = self._get_monthly_cost()
@@ -60,55 +61,55 @@ class CostChecker(BaseChecker):
             )
 
             details = {
-                'is_anomaly': is_anomaly,
-                'today_cost': daily_cost,
-                'yesterday_cost': yesterday_cost,
-                'monthly_cost': monthly_cost,
-                'threshold': self.threshold,
-                'date': today,
-                'increase_percent': increase_percent,
+                "is_anomaly": is_anomaly,
+                "today_cost": daily_cost,
+                "yesterday_cost": yesterday_cost,
+                "monthly_cost": monthly_cost,
+                "threshold": self.threshold,
+                "date": today,
+                "increase_percent": increase_percent,
             }
 
             if is_anomaly:
-                self._log_check_end('Cost', 'HIGH')
+                self._log_check_end("Cost", "HIGH")
                 return CheckResult(
-                    severity='HIGH',
-                    title='Cost Anomaly Detected',
+                    severity="HIGH",
+                    title="Cost Anomaly Detected",
                     message=f"Daily cost ${daily_cost:.2f} exceeds threshold ${self.threshold:.2f}",
                     details=details,
-                    suggested_action='Review top-cost services and consider scaling down resources',
+                    suggested_action="Review top-cost services and consider scaling down resources",
                 )
 
-            self._log_check_end('Cost', 'INFO')
+            self._log_check_end("Cost", "INFO")
             return CheckResult(
-                severity='INFO',
-                title='Cost Check',
+                severity="INFO",
+                title="Cost Check",
                 message=f"Daily cost ${daily_cost:.2f} is within threshold ${self.threshold:.2f}",
                 details=details,
             )
 
         except Exception as e:
-            self._log_error('Cost', e)
+            self._log_error("Cost", e)
             return CheckResult.error(
-                'Cost Check Failed',
-                f'Failed to check costs: {str(e)}',
+                "Cost Check Failed",
+                f"Failed to check costs: {str(e)}",
             )
 
     def _get_daily_cost(self, date: str) -> float:
         if self.is_localstack:
-            return float(os.getenv('MOCK_DAILY_COST', str(MOCK_DAILY_COST_DEFAULT)))
+            return float(os.getenv("MOCK_DAILY_COST", str(MOCK_DAILY_COST_DEFAULT)))
 
         try:
             response = self.ce_client.get_cost_and_usage(
-                TimePeriod={'Start': date, 'End': date},
-                Granularity='DAILY',
-                Metrics=['UnblendedCost']
+                TimePeriod={"Start": date, "End": date},
+                Granularity="DAILY",
+                Metrics=["UnblendedCost"],
             )
-            if response['ResultsByTime']:
-                return float(response['ResultsByTime'][0]['Total']['UnblendedCost']['Amount'])
+            if response["ResultsByTime"]:
+                return float(response["ResultsByTime"][0]["Total"]["UnblendedCost"]["Amount"])
             return 0.0
         except ClientError as e:
-            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            error_code = e.response.get("Error", {}).get("Code", "Unknown")
             logger.error("ClientError getting daily cost (%s): %s", error_code, e)
             return 0.0
         except Exception as e:
@@ -122,22 +123,22 @@ class CostChecker(BaseChecker):
             month = datetime.now(timezone.utc).month
 
         if self.is_localstack:
-            return float(os.getenv('MOCK_MONTHLY_COST', str(MOCK_MONTHLY_COST_DEFAULT)))
+            return float(os.getenv("MOCK_MONTHLY_COST", str(MOCK_MONTHLY_COST_DEFAULT)))
 
         start_date = f"{year}-{month:02d}-01"
         end_date = f"{year + 1}-01-01" if month == 12 else f"{year}-{month + 1:02d}-01"
 
         try:
             response = self.ce_client.get_cost_and_usage(
-                TimePeriod={'Start': start_date, 'End': end_date},
-                Granularity='MONTHLY',
-                Metrics=['UnblendedCost']
+                TimePeriod={"Start": start_date, "End": end_date},
+                Granularity="MONTHLY",
+                Metrics=["UnblendedCost"],
             )
-            if response['ResultsByTime']:
-                return float(response['ResultsByTime'][0]['Total']['UnblendedCost']['Amount'])
+            if response["ResultsByTime"]:
+                return float(response["ResultsByTime"][0]["Total"]["UnblendedCost"]["Amount"])
             return 0.0
         except ClientError as e:
-            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            error_code = e.response.get("Error", {}).get("Code", "Unknown")
             logger.error("ClientError getting monthly cost (%s): %s", error_code, e)
             return 0.0
         except Exception as e:
@@ -147,10 +148,7 @@ class CostChecker(BaseChecker):
     def set_threshold(self, amount: float) -> None:
         try:
             self.ssm_client.put_parameter(
-                Name=SSM_COST_THRESHOLD_PATH,
-                Value=str(amount),
-                Type='String',
-                Overwrite=True
+                Name=SSM_COST_THRESHOLD_PATH, Value=str(amount), Type="String", Overwrite=True
             )
             self.threshold = amount
         except Exception as e:
@@ -159,7 +157,7 @@ class CostChecker(BaseChecker):
     def get_threshold(self) -> float:
         try:
             response = self.ssm_client.get_parameter(Name=SSM_COST_THRESHOLD_PATH)
-            self.threshold = float(response['Parameter']['Value'])
+            self.threshold = float(response["Parameter"]["Value"])
             return self.threshold
         except self.ssm_client.exceptions.ParameterNotFound:
             return self.threshold

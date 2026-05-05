@@ -89,12 +89,14 @@ def aws_credentials():
 @pytest.fixture
 def load_event_fixture():
     """Load event fixture from JSON file."""
+
     def _load(filename: str) -> Dict[str, Any]:
         fixture_path = Path(__file__).parent / "fixtures" / "events" / filename
         if not fixture_path.exists():
             raise FileNotFoundError(f"Event fixture not found: {fixture_path}")
         with open(fixture_path) as f:
             return json.load(f)
+
     return _load
 
 

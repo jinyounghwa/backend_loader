@@ -16,84 +16,86 @@ class CloudTrailChecker(BaseChecker):
 
     # API events that modify resources (ReadOnly=False)
     SUSPICIOUS_EVENTS = {
-        'CreateAccessKey',
-        'CreateUser',
-        'AttachUserPolicy',
-        'PutUserPolicy',
-        'CreatePolicy',
-        'CreateRole',
-        'CreateSecurityGroup',
-        'DeleteBucket',
-        'DeleteTable',
-        'TerminateInstances',
-        'StopInstances',
-        'ModifyDBInstance',
-        'DeleteDBInstance'
+        "CreateAccessKey",
+        "CreateUser",
+        "AttachUserPolicy",
+        "PutUserPolicy",
+        "CreatePolicy",
+        "CreateRole",
+        "CreateSecurityGroup",
+        "DeleteBucket",
+        "DeleteTable",
+        "TerminateInstances",
+        "StopInstances",
+        "ModifyDBInstance",
+        "DeleteDBInstance",
     }
 
     # Event sources relevant to the suspicious events above
     RELEVANT_EVENT_SOURCES = {
-        'iam.amazonaws.com',
-        'ec2.amazonaws.com',
-        's3.amazonaws.com',
-        'dynamodb.amazonaws.com',
-        'rds.amazonaws.com',
+        "iam.amazonaws.com",
+        "ec2.amazonaws.com",
+        "s3.amazonaws.com",
+        "dynamodb.amazonaws.com",
+        "rds.amazonaws.com",
     }
 
-    def __init__(self, clients: Dict[str, Any], config: Dict[str, Any],
-                 account_id: Optional[str] = None, credentials: Optional[Dict[str, str]] = None):
+    def __init__(
+        self,
+        clients: Dict[str, Any],
+        config: Dict[str, Any],
+        account_id: Optional[str] = None,
+        credentials: Optional[Dict[str, str]] = None,
+    ):
         super().__init__(clients, config, account_id, credentials)
-        self.cloudtrail = clients.get('cloudtrail')
-        self.sts = clients.get('sts')
-        self.hours_lookback = config.get('cloudtrail_hours', 1)
-        self.authorized_regions = set(config.get('authorized_regions', ['us-east-1', 'us-west-2', 'eu-west-1']))
+        self.cloudtrail = clients.get("cloudtrail")
+        self.sts = clients.get("sts")
+        self.hours_lookback = config.get("cloudtrail_hours", 1)
+        self.authorized_regions = set(
+            config.get("authorized_regions", ["us-east-1", "us-west-2", "eu-west-1"])
+        )
 
     def check(self) -> CheckResult:
         """Check for suspicious CloudTrail events."""
-        self._log_check_start('CloudTrail')
+        self._log_check_start("CloudTrail")
 
         try:
             events = self._get_recent_events()
 
             if not events:
-                self._log_check_end('CloudTrail', 'INFO')
-                return CheckResult.info(
-                    'CloudTrail Check',
-                    'No suspicious API calls detected'
-                )
+                self._log_check_end("CloudTrail", "INFO")
+                return CheckResult.info("CloudTrail Check", "No suspicious API calls detected")
 
             anomalies = self._analyze_events(events)
 
             if anomalies:
                 severity = self._determine_severity(anomalies)
-                self._log_check_end('CloudTrail', severity)
+                self._log_check_end("CloudTrail", severity)
 
                 return CheckResult(
                     severity=severity,
-                    title='Suspicious API Calls Detected',
-                    message=f'Found {len(anomalies)} suspicious API events in CloudTrail',
-                    details={'anomalies': anomalies},
-                    suggested_action='Review user activity and verify legitimate changes'
+                    title="Suspicious API Calls Detected",
+                    message=f"Found {len(anomalies)} suspicious API events in CloudTrail",
+                    details={"anomalies": anomalies},
+                    suggested_action="Review user activity and verify legitimate changes",
                 )
             else:
-                self._log_check_end('CloudTrail', 'INFO')
+                self._log_check_end("CloudTrail", "INFO")
                 return CheckResult.info(
-                    'CloudTrail Check',
-                    f'Analyzed {len(events)} API events - all appear normal'
+                    "CloudTrail Check", f"Analyzed {len(events)} API events - all appear normal"
                 )
 
         except ClientError as e:
-            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
-            self._log_error('CloudTrail', e)
+            error_code = e.response.get("Error", {}).get("Code", "Unknown")
+            self._log_error("CloudTrail", e)
             return CheckResult.error(
-                'CloudTrail Check Failed',
-                f'AWS error ({error_code}): {e.response.get("Error", {}).get("Message", str(e))}'
+                "CloudTrail Check Failed",
+                f'AWS error ({error_code}): {e.response.get("Error", {}).get("Message", str(e))}',
             )
         except Exception as e:
-            self._log_error('CloudTrail', e)
+            self._log_error("CloudTrail", e)
             return CheckResult.error(
-                'CloudTrail Check Failed',
-                f'Failed to check CloudTrail: {str(e)}'
+                "CloudTrail Check Failed", f"Failed to check CloudTrail: {str(e)}"
             )
 
     def _get_recent_events(self) -> List[Dict[str, Any]]:
@@ -106,27 +108,24 @@ class CloudTrailChecker(BaseChecker):
 
         for source in self.RELEVANT_EVENT_SOURCES:
             try:
-                paginator = self.cloudtrail.get_paginator('lookup_events')
+                paginator = self.cloudtrail.get_paginator("lookup_events")
                 page_iterator = paginator.paginate(
-                    LookupAttributes=[
-                        {
-                            'AttributeKey': 'EventSource',
-                            'AttributeValue': source
-                        }
-                    ],
+                    LookupAttributes=[{"AttributeKey": "EventSource", "AttributeValue": source}],
                     StartTime=start_time,
                 )
 
                 for page in page_iterator:
-                    for event in page.get('Events', []):
-                        all_events.append({
-                            'EventName': event.get('EventName'),
-                            'Username': event.get('Username'),
-                            'EventTime': event.get('EventTime'),
-                            'SourceIPAddress': event.get('SourceIPAddress'),
-                            'CloudTrailEvent': event.get('CloudTrailEvent'),
-                            'EventSource': source,
-                        })
+                    for event in page.get("Events", []):
+                        all_events.append(
+                            {
+                                "EventName": event.get("EventName"),
+                                "Username": event.get("Username"),
+                                "EventTime": event.get("EventTime"),
+                                "SourceIPAddress": event.get("SourceIPAddress"),
+                                "CloudTrailEvent": event.get("CloudTrailEvent"),
+                                "EventSource": source,
+                            }
+                        )
 
             except ClientError as e:
                 logger.warning("ClientError fetching CloudTrail events for %s: %s", source, e)
@@ -142,63 +141,65 @@ class CloudTrailChecker(BaseChecker):
         for event in events:
             severity = self._analyze_event(event)
             if severity:
-                event_time = event.get('EventTime')
-                if event_time and hasattr(event_time, 'isoformat'):
+                event_time = event.get("EventTime")
+                if event_time and hasattr(event_time, "isoformat"):
                     timestamp = event_time.isoformat()
                 else:
                     timestamp = event_time
 
-                anomalies.append({
-                    'event_name': event.get('EventName'),
-                    'username': event.get('Username'),
-                    'source_ip': event.get('SourceIPAddress'),
-                    'event_source': event.get('EventSource', ''),
-                    'timestamp': timestamp,
-                    'severity': severity
-                })
+                anomalies.append(
+                    {
+                        "event_name": event.get("EventName"),
+                        "username": event.get("Username"),
+                        "source_ip": event.get("SourceIPAddress"),
+                        "event_source": event.get("EventSource", ""),
+                        "timestamp": timestamp,
+                        "severity": severity,
+                    }
+                )
 
         return anomalies
 
     def _analyze_event(self, event: Dict[str, Any]) -> Optional[str]:
         """Determine severity of a single event."""
-        username = event.get('Username', '')
-        event_name = event.get('EventName', '')
+        username = event.get("Username", "")
+        event_name = event.get("EventName", "")
 
         # Root account activity
-        if username == 'root' or username.endswith(':root'):
-            return 'CRITICAL'
+        if username == "root" or username.endswith(":root"):
+            return "CRITICAL"
 
         # Suspicious API events
         if event_name in self.SUSPICIOUS_EVENTS:
-            return 'HIGH'
+            return "HIGH"
 
         return None
 
     def _determine_severity(self, anomalies: List[Dict[str, Any]]) -> str:
         """Determine overall severity based on anomalies."""
-        if any(a['severity'] == 'CRITICAL' for a in anomalies):
-            return 'CRITICAL'
-        elif any(a['severity'] == 'HIGH' for a in anomalies):
-            return 'HIGH'
+        if any(a["severity"] == "CRITICAL" for a in anomalies):
+            return "CRITICAL"
+        elif any(a["severity"] == "HIGH" for a in anomalies):
+            return "HIGH"
         elif len(anomalies) >= 3:
-            return 'MEDIUM'
+            return "MEDIUM"
         else:
-            return 'LOW'
+            return "LOW"
 
     def _get_remediation_suggestion(self, anomalies: List[Dict[str, Any]]) -> str:
         """Generate remediation suggestion based on anomalies."""
         if not anomalies:
-            return 'Review CloudTrail logs for suspicious activity'
+            return "Review CloudTrail logs for suspicious activity"
 
-        event_names = {a.get('event_name') for a in anomalies}
+        event_names = {a.get("event_name") for a in anomalies}
 
-        if 'CreateAccessKey' in event_names or 'CreateUser' in event_names:
-            return 'Review and rotate access keys. Enable MFA for affected users.'
-        elif 'AttachUserPolicy' in event_names or 'PutUserPolicy' in event_names:
-            return 'Review IAM permission changes. Check for unauthorized policy modifications.'
-        elif 'TerminateInstances' in event_names or 'StopInstances' in event_names:
-            return 'Verify EC2 instance changes. Review if changes were authorized.'
-        elif 'DeleteBucket' in event_names or 'DeleteTable' in event_names:
-            return 'Alert: Critical resource deletion detected. Review deletion logs immediately.'
+        if "CreateAccessKey" in event_names or "CreateUser" in event_names:
+            return "Review and rotate access keys. Enable MFA for affected users."
+        elif "AttachUserPolicy" in event_names or "PutUserPolicy" in event_names:
+            return "Review IAM permission changes. Check for unauthorized policy modifications."
+        elif "TerminateInstances" in event_names or "StopInstances" in event_names:
+            return "Verify EC2 instance changes. Review if changes were authorized."
+        elif "DeleteBucket" in event_names or "DeleteTable" in event_names:
+            return "Alert: Critical resource deletion detected. Review deletion logs immediately."
         else:
-            return 'Review CloudTrail findings and take appropriate action'
+            return "Review CloudTrail findings and take appropriate action"

@@ -28,9 +28,7 @@ class TestEC2CheckerHarness:
 
     def test_ec2_checker_multi_region(self, harness):
         """Test: 여러 리전 EC2 확인"""
-        event = harness.create_ec2_check_event(
-            regions=["ap-northeast-1", "us-east-1", "eu-west-1"]
-        )
+        event = harness.create_ec2_check_event(regions=["ap-northeast-1", "us-east-1", "eu-west-1"])
         response = harness.invoke_local(event)
 
         assert response is not None

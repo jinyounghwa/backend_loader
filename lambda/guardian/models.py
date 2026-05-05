@@ -8,7 +8,6 @@ from datetime import datetime
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
-
 # ============================================================================
 # EventBridge Events
 # ============================================================================
@@ -52,9 +51,7 @@ class EventBridgeScheduledEvent(BaseModel):
 class Finding(BaseModel):
     """A security finding or anomaly"""
 
-    severity: str = Field(
-        ..., description="Finding severity (critical, high, medium, low, info)"
-    )
+    severity: str = Field(..., description="Finding severity (critical, high, medium, low, info)")
     title: str = Field(..., description="Finding title")
     description: str = Field(..., description="Finding description")
     resource: str = Field(..., description="Affected resource ID/ARN")
@@ -69,9 +66,7 @@ class CheckerResponse(BaseModel):
 
     checker_name: str = Field(..., description="Checker name (cost, ec2, s3, cloudtrail, etc)")
     findings: List[Finding] = Field(default_factory=list, description="List of findings")
-    summary: Dict[str, Any] = Field(
-        default_factory=dict, description="Aggregated summary data"
-    )
+    summary: Dict[str, Any] = Field(default_factory=dict, description="Aggregated summary data")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     region: str = Field(..., description="Region checked")
     status: str = Field(default="success", description="Checker status (success, partial, error)")

@@ -1,4 +1,5 @@
 """Gemini-powered threat analysis for AWS Guardian events"""
+
 import json
 import logging
 import hashlib

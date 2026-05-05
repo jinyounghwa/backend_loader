@@ -3,6 +3,7 @@
 Handles AWS API calls that modify resources (stop EC2, block S3, etc.)
 independently from detection logic in checkers.
 """
+
 import logging
 
 from guardian.config import Config
@@ -32,7 +33,7 @@ class AWSActionExecutor:
             return True
 
         try:
-            ec2 = AWSClientProvider.get_client('ec2', region=region)
+            ec2 = AWSClientProvider.get_client("ec2", region=region)
             ec2.stop_instances(InstanceIds=[instance_id])
             logger.info("Stopped EC2 instance %s in %s", instance_id, region)
             return True
@@ -54,15 +55,15 @@ class AWSActionExecutor:
             return True
 
         try:
-            s3 = AWSClientProvider.get_client('s3')
+            s3 = AWSClientProvider.get_client("s3")
             s3.put_public_access_block(
                 Bucket=bucket_name,
                 PublicAccessBlockConfiguration={
-                    'BlockPublicAcls': True,
-                    'IgnorePublicAcls': True,
-                    'BlockPublicPolicy': True,
-                    'RestrictPublicBuckets': True,
-                }
+                    "BlockPublicAcls": True,
+                    "IgnorePublicAcls": True,
+                    "BlockPublicPolicy": True,
+                    "RestrictPublicBuckets": True,
+                },
             )
             logger.info("Blocked public access for S3 bucket %s", bucket_name)
             return True

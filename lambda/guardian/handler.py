@@ -1,4 +1,5 @@
 """Main Lambda handler for AWS Guardian - lazy initialization for optimal cold start."""
+
 import os
 import sys
 import json
@@ -9,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from guardian.config import Config
 from guardian.logging_config import setup_logger
 
-logger = setup_logger('aws-guardian')
+logger = setup_logger("aws-guardian")
 
 
 class _LazyOrchestrator:
@@ -21,7 +22,7 @@ class _LazyOrchestrator:
 
     def __init__(self):
         self._orchestrator = None
-        self._logger = setup_logger('aws-guardian')
+        self._logger = setup_logger("aws-guardian")
 
     def _build(self):
         """Build the full orchestrator with all checkers and responders."""
@@ -41,15 +42,17 @@ class _LazyOrchestrator:
 
         storage = DynamoDBStorage()
 
-        telegram_responder = TelegramResponder() if telegram_config['bot_token'] else None
-        discord_responder = DiscordResponder() if discord_config['webhook_url'] else None
+        telegram_responder = TelegramResponder() if telegram_config["bot_token"] else None
+        discord_responder = DiscordResponder() if discord_config["webhook_url"] else None
         auto_remediation_responder = AutoRemediationResponder(
-            self._logger, storage, telegram=telegram_responder,
+            self._logger,
+            storage,
+            telegram=telegram_responder,
         )
 
         self._orchestrator = GuardianOrchestrator(
             logger=self._logger,
-            cost_checker=CostChecker(config={'cost_threshold': cost_threshold}),
+            cost_checker=CostChecker(config={"cost_threshold": cost_threshold}),
             ec2_checker=EC2Checker(),
             s3_checker=S3Checker(),
             storage=storage,
@@ -74,13 +77,10 @@ def lambda_handler(event: Dict[str, Any], context: Any = None) -> Dict[str, Any]
         return _lazy.orchestrator.run_all_checks(event)
     except Exception as e:
         logger.exception("Fatal error in lambda_handler: %s", e)
-        return {'statusCode': 500, 'body': json.dumps({'error': str(e)})}
+        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
 
 
-if __name__ == '__main__':
-    test_event = {
-        'time': '2024-01-01T00:00:00Z',
-        'source': 'aws.events'
-    }
+if __name__ == "__main__":
+    test_event = {"time": "2024-01-01T00:00:00Z", "source": "aws.events"}
     result = lambda_handler(test_event, None)
     print(json.dumps(result, indent=2))
