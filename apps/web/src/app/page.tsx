@@ -12,6 +12,7 @@ import EventFeed from '@/components/Dashboard/EventFeed';
 import AIThreatPanel from '@/components/Dashboard/AIThreatPanel';
 import InsightsPanel from '@/components/Dashboard/InsightsPanel';
 import CostAnomalyCard from '@/components/Dashboard/CostAnomalyCard';
+import RemediationMetricsPanel from '@/components/Dashboard/RemediationMetricsPanel';
 import { useAIAnalysis } from '@/lib/hooks/useAIAnalysis';
 import { useCostAnomalies } from '@/lib/hooks/useCostAnomalies';
 import type { DashboardSummary, MultiRegionSummary } from '@/types/guardian';
@@ -257,6 +258,8 @@ export default function DashboardPage() {
       <ActionHistory />
 
       <AuditLogViewer limit={50} />
+
+      <RemediationMetricsPanel />
 
       <ResponseRuleManager region={selectedRegions[0]} />
 
