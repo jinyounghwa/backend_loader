@@ -122,14 +122,17 @@ class GuardianOrchestrator:
         self._send_summary()
 
         elapsed_ms = (time.time() - start_time) * 1000
-        CloudWatchMetrics.emit_batch({
-            'Duration': elapsed_ms,
-            'EventsProcessed': len(results.get('accounts', [])),
-            'ErrorCount': sum(
-                1 for v in results.get('checks', {}).values()
-                if isinstance(v, dict) and 'error' in v
-            ),
-        })
+        try:
+            CloudWatchMetrics.emit_batch({
+                'Duration': elapsed_ms,
+                'EventsProcessed': len(results.get('accounts', [])),
+                'ErrorCount': sum(
+                    1 for v in results.get('checks', {}).values()
+                    if isinstance(v, dict) and 'error' in v
+                ),
+            })
+        except Exception as metrics_err:
+            self.logger.warning("Failed to emit CloudWatch metrics: %s", metrics_err)
 
         self.logger.info("AWS Guardian orchestration completed. Health: %s. Accounts: %d",
                          system_health, len(all_check_data))
@@ -163,19 +166,7 @@ class GuardianOrchestrator:
         if self.telegram:
             self.telegram.send_alert(check_name, alert_data, account_id=account_id, account_name=account_name)
         if self.discord:
-            self._notify_discord(check_name, alert_data)
-
-    def _notify_discord(self, check_name: str, alert_data: Dict[str, Any]):
-        if not self.discord:
-            return
-        dispatch = {
-            'cost': self.discord.send_cost_alert,
-            'ec2': self.discord.send_ec2_alert,
-            's3': self.discord.send_s3_alert,
-        }
-        handler = dispatch.get(check_name)
-        if handler:
-            handler(alert_data)
+            self.discord.send_alert(check_name, alert_data, account_id=account_id, account_name=account_name)
 
     def _get_checks_for_type(self, check_type: str) -> List[str]:
         if check_type == 'cost':
@@ -198,7 +189,7 @@ class GuardianOrchestrator:
             if self.checkers.get('iam'):
                 iam_clients = {
                     'iam': AWSClientProvider.get_client_for_account('iam', account_id, credentials),
-                    'dynamodb': AWSClientProvider.get_resource('dynamodb', region='us-east-1'),
+                    'dynamodb_resource': AWSClientProvider.get_resource('dynamodb', region='us-east-1'),
                 }
                 account_checkers['iam'] = IAMChecker(iam_clients, {}, account_id=account_id, credentials=credentials)
 

@@ -4,6 +4,8 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, timezone
 import logging
 
+from botocore.exceptions import ClientError
+
 from guardian.checkers.base import BaseChecker, CheckResult
 
 logger = logging.getLogger(__name__)
@@ -29,9 +31,18 @@ class CloudTrailChecker(BaseChecker):
         'DeleteDBInstance'
     }
 
-    # Authorized regions (customize as needed)
-    def __init__(self, clients: Dict[str, Any], config: Dict[str, Any]):
-        super().__init__(clients, config)
+    # Event sources relevant to the suspicious events above
+    RELEVANT_EVENT_SOURCES = {
+        'iam.amazonaws.com',
+        'ec2.amazonaws.com',
+        's3.amazonaws.com',
+        'dynamodb.amazonaws.com',
+        'rds.amazonaws.com',
+    }
+
+    def __init__(self, clients: Dict[str, Any], config: Dict[str, Any],
+                 account_id: Optional[str] = None, credentials: Optional[Dict[str, str]] = None):
+        super().__init__(clients, config, account_id, credentials)
         self.cloudtrail = clients.get('cloudtrail')
         self.sts = clients.get('sts')
         self.hours_lookback = config.get('cloudtrail_hours', 1)
@@ -42,7 +53,6 @@ class CloudTrailChecker(BaseChecker):
         self._log_check_start('CloudTrail')
 
         try:
-            # Get events from last N hours
             events = self._get_recent_events()
 
             if not events:
@@ -52,7 +62,6 @@ class CloudTrailChecker(BaseChecker):
                     'No suspicious API calls detected'
                 )
 
-            # Analyze events for anomalies
             anomalies = self._analyze_events(events)
 
             if anomalies:
@@ -73,6 +82,13 @@ class CloudTrailChecker(BaseChecker):
                     f'Analyzed {len(events)} API events - all appear normal'
                 )
 
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            self._log_error('CloudTrail', e)
+            return CheckResult.error(
+                'CloudTrail Check Failed',
+                f'AWS error ({error_code}): {e.response.get("Error", {}).get("Message", str(e))}'
+            )
         except Exception as e:
             self._log_error('CloudTrail', e)
             return CheckResult.error(
@@ -81,38 +97,41 @@ class CloudTrailChecker(BaseChecker):
             )
 
     def _get_recent_events(self) -> List[Dict[str, Any]]:
-        """Get CloudTrail events from last N hours."""
+        """Get CloudTrail events from last N hours across all relevant event sources."""
         if not self.cloudtrail:
             return []
 
         start_time = datetime.now(timezone.utc) - timedelta(hours=self.hours_lookback)
         all_events = []
 
-        try:
-            paginator = self.cloudtrail.get_paginator('lookup_events')
-            page_iterator = paginator.paginate(
-                LookupAttributes=[
-                    {
-                        'AttributeKey': 'EventSource',
-                        'AttributeValue': 'iam.amazonaws.com'
-                    }
-                ],
-                StartTime=start_time,
-                MaxResults=50
-            )
+        for source in self.RELEVANT_EVENT_SOURCES:
+            try:
+                paginator = self.cloudtrail.get_paginator('lookup_events')
+                page_iterator = paginator.paginate(
+                    LookupAttributes=[
+                        {
+                            'AttributeKey': 'EventSource',
+                            'AttributeValue': source
+                        }
+                    ],
+                    StartTime=start_time,
+                )
 
-            for page in page_iterator:
-                for event in page.get('Events', []):
-                    all_events.append({
-                        'EventName': event.get('EventName'),
-                        'Username': event.get('Username'),
-                        'EventTime': event.get('EventTime'),
-                        'SourceIPAddress': event.get('SourceIPAddress'),
-                        'CloudTrailEvent': event.get('CloudTrailEvent')
-                    })
+                for page in page_iterator:
+                    for event in page.get('Events', []):
+                        all_events.append({
+                            'EventName': event.get('EventName'),
+                            'Username': event.get('Username'),
+                            'EventTime': event.get('EventTime'),
+                            'SourceIPAddress': event.get('SourceIPAddress'),
+                            'CloudTrailEvent': event.get('CloudTrailEvent'),
+                            'EventSource': source,
+                        })
 
-        except Exception as e:
-            logger.warning("Error fetching CloudTrail events: %s", str(e))
+            except ClientError as e:
+                logger.warning("ClientError fetching CloudTrail events for %s: %s", source, e)
+            except Exception as e:
+                logger.warning("Error fetching CloudTrail events for %s: %s", source, e)
 
         return all_events
 
@@ -124,7 +143,6 @@ class CloudTrailChecker(BaseChecker):
             severity = self._analyze_event(event)
             if severity:
                 event_time = event.get('EventTime')
-                # Handle both datetime objects and strings
                 if event_time and hasattr(event_time, 'isoformat'):
                     timestamp = event_time.isoformat()
                 else:
@@ -134,6 +152,7 @@ class CloudTrailChecker(BaseChecker):
                     'event_name': event.get('EventName'),
                     'username': event.get('Username'),
                     'source_ip': event.get('SourceIPAddress'),
+                    'event_source': event.get('EventSource', ''),
                     'timestamp': timestamp,
                     'severity': severity
                 })

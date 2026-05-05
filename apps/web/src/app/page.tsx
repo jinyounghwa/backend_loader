@@ -3,8 +3,9 @@
 import { useCallback, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useDashboard } from '@/hooks/useGuardianData';
+import { ClientOnly } from '@/components/ClientOnly';
 import { mockDashboardSummary } from '@/lib/mock-data';
-import { DollarSign, Server, Database, AlertTriangle, ArrowUpRight, ArrowDownRight, Activity, RefreshCw } from 'lucide-react';
+import { DollarSign, Server, Database, AlertTriangle, ArrowUpRight, ArrowDownRight, Activity, RefreshCw, Zap, ClipboardList } from 'lucide-react';
 import AccountSelector from '@/components/Dashboard/AccountSelector';
 import RegionSelector from '@/components/Dashboard/RegionSelector';
 import RiskScore from '@/components/Dashboard/RiskScore';
@@ -18,6 +19,18 @@ import { useCostAnomalies } from '@/lib/hooks/useCostAnomalies';
 import type { DashboardSummary, MultiRegionSummary } from '@/types/guardian';
 import type { AnomalyInput } from '@/lib/hooks/useInsights';
 
+function getRelativeTime(dateString: string) {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (diffInSeconds < 60) return '방금 전';
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}분 전`;
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}시간 전`;
+  if (diffInSeconds < 172800) return '어제';
+  return `${Math.floor(diffInSeconds / 86400)}일 전`;
+}
+
 const ActionHistory = dynamic(() => import('@/components/Dashboard/ActionHistory'), {
   loading: () => <div className="h-64 bg-slate-800/50 rounded-lg animate-pulse" />,
 });
@@ -27,14 +40,17 @@ const AuditLogViewer = dynamic(() => import('@/components/Dashboard/AuditLogView
 });
 
 const ChartSection = dynamic(() => import('@/components/Dashboard/ChartSection'), {
+  ssr: false,
   loading: () => <div className="h-96 bg-slate-800/50 rounded-lg animate-pulse" />,
 });
 
 const RegionMetrics = dynamic(() => import('@/components/Dashboard/RegionMetrics'), {
+  ssr: false,
   loading: () => <div className="h-64 bg-slate-800/50 rounded-lg animate-pulse" />,
 });
 
 const RegionComparisonChart = dynamic(() => import('@/components/Dashboard/RegionComparisonChart'), {
+  ssr: false,
   loading: () => <div className="h-64 bg-slate-800/50 rounded-lg animate-pulse" />,
 });
 
@@ -201,7 +217,9 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <ChartSection cost={cost} ec2={ec2} s3={s3} />
+      <ClientOnly fallback={<div className="h-96 bg-slate-800/50 rounded-lg animate-pulse" />}>
+        <ChartSection cost={cost} ec2={ec2} s3={s3} />
+      </ClientOnly>
 
       {isMultiRegion && summary && 'regions' in summary && (
         <>
@@ -267,7 +285,7 @@ export default function DashboardPage() {
         <div className="p-3 md:p-5 border-b border-slate-800 flex items-center justify-between flex-col md:flex-row gap-2">
           <h2 className="text-base md:text-lg font-bold text-slate-200 flex items-center">
             <Activity className="w-4 md:w-5 h-4 md:h-5 mr-2 text-slate-400" />
-            Event Log
+            최근 이벤트 로그
           </h2>
           {isError && <span className="text-xs text-red-400">API unavailable — showing fallback data</span>}
         </div>
@@ -275,27 +293,38 @@ export default function DashboardPage() {
           <table className="w-full text-xs md:text-sm text-left">
             <thead className="text-xs text-slate-400 uppercase bg-slate-800/50 border-b border-slate-800">
               <tr>
-                <th className="px-2 md:px-6 py-2 md:py-3 font-medium">Time</th>
-                <th className="px-2 md:px-6 py-2 md:py-3 font-medium hidden sm:table-cell">Type</th>
-                <th className="px-2 md:px-6 py-2 md:py-3 font-medium hidden md:table-cell">Severity</th>
-                <th className="px-2 md:px-6 py-2 md:py-3 font-medium hidden lg:table-cell">Message</th>
-                <th className="px-2 md:px-6 py-2 md:py-3 font-medium">Status</th>
+                <th className="px-2 md:px-6 py-2 md:py-3 font-medium">발생 시간</th>
+                <th className="px-2 md:px-6 py-2 md:py-3 font-medium hidden sm:table-cell">유형</th>
+                <th className="px-2 md:px-6 py-2 md:py-3 font-medium hidden md:table-cell">심각도</th>
+                <th className="px-2 md:px-6 py-2 md:py-3 font-medium hidden lg:table-cell">제목</th>
+                <th className="px-2 md:px-6 py-2 md:py-3 font-medium">자동 대응</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/50">
               {recent_events.map((event, idx) => {
-                const date = new Date(event.timestamp);
-                const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const relativeTime = getRelativeTime(event.timestamp);
 
                 let severityClass = 'bg-blue-500/10 text-blue-400 border-blue-500/20';
                 if (event.severity === 'critical') severityClass = 'bg-red-500/10 text-red-400 border-red-500/20';
                 if (event.severity === 'warning') severityClass = 'bg-amber-500/10 text-amber-400 border-amber-500/20';
 
+                const getEventIcon = (type: string) => {
+                  switch (type) {
+                    case 'cost': return <DollarSign className="w-3.5 h-3.5 mr-1.5" />;
+                    case 'ec2': return <Server className="w-3.5 h-3.5 mr-1.5" />;
+                    case 's3': return <Database className="w-3.5 h-3.5 mr-1.5" />;
+                    case 'auto_response': return <Zap className="w-3.5 h-3.5 mr-1.5" />;
+                    case 'summary': return <ClipboardList className="w-3.5 h-3.5 mr-1.5" />;
+                    default: return <Activity className="w-3.5 h-3.5 mr-1.5" />;
+                  }
+                };
+
                 return (
                   <tr key={event.event_id ?? idx} className="hover:bg-slate-800/30 transition-colors">
-                    <td className="px-2 md:px-6 py-2 md:py-4 font-mono text-slate-400 whitespace-nowrap text-xs md:text-sm">{timeStr}</td>
+                    <td className="px-2 md:px-6 py-2 md:py-4 font-mono text-slate-400 whitespace-nowrap text-xs md:text-sm">{relativeTime}</td>
                     <td className="px-2 md:px-6 py-2 md:py-4 hidden sm:table-cell">
-                      <span className="uppercase tracking-wider text-xs font-bold text-slate-300">
+                      <span className="flex items-center uppercase tracking-wider text-xs font-bold text-slate-300">
+                        {getEventIcon(event.event_type)}
                         {event.event_type.replace('_', ' ').substring(0, 10)}
                       </span>
                     </td>
@@ -304,7 +333,9 @@ export default function DashboardPage() {
                         {event.severity.substring(0, 3).toUpperCase()}
                       </span>
                     </td>
-                    <td className="px-2 md:px-6 py-2 md:py-4 text-slate-300 hidden lg:table-cell">{(event.details?.message ?? '-').substring(0, 30)}</td>
+                    <td className="px-2 md:px-6 py-2 md:py-4 text-slate-300 hidden lg:table-cell font-medium">
+                      {event.details?.title || event.details?.message || '-'}
+                    </td>
                     <td className="px-2 md:px-6 py-2 md:py-4">
                       {event.auto_response ? (
                         <span className={`flex items-center text-xs font-medium ${

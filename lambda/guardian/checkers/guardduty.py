@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional
 
 from guardian.checkers.base import BaseChecker, CheckResult
+from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +19,9 @@ class GuardDutyChecker(BaseChecker):
         'LOW': 0.1
     }
 
-    def __init__(self, clients: Dict[str, Any], config: Dict[str, Any]):
-        super().__init__(clients, config)
+    def __init__(self, clients: Dict[str, Any], config: Dict[str, Any],
+                 account_id: Optional[str] = None, credentials: Optional[Dict[str, str]] = None):
+        super().__init__(clients, config, account_id, credentials)
         self.guardduty = clients.get('guardduty')
         self.ec2 = clients.get('ec2')
         self.lookback_hours = config.get('guardduty_lookback_hours', 24)
@@ -96,24 +98,28 @@ class GuardDutyChecker(BaseChecker):
             )
 
             if response.get('FindingIds'):
-                # Get finding details
-                findings_response = self.guardduty.get_findings(
-                    DetectorId=detector_id,
-                    FindingIds=response['FindingIds'][:20]  # Limit to 20
-                )
+                all_finding_ids = response['FindingIds']
+                for i in range(0, len(all_finding_ids), 50):
+                    batch = all_finding_ids[i:i + 50]
+                    findings_response = self.guardduty.get_findings(
+                        DetectorId=detector_id,
+                        FindingIds=batch
+                    )
 
-                for finding in findings_response.get('Findings', []):
-                    findings.append({
-                        'id': finding.get('Id'),
-                        'type': finding.get('Type'),
-                        'severity': float(finding.get('Severity', 0)),
-                        'title': finding.get('Title'),
-                        'description': finding.get('Description'),
-                        'resource_type': finding.get('Resource', {}).get('ResourceType'),
-                        'resource_id': finding.get('Resource', {}).get('InstanceDetails', {}).get('InstanceId'),
-                        'updated_at': finding.get('UpdatedAt')
-                    })
+                    for finding in findings_response.get('Findings', []):
+                        findings.append({
+                            'id': finding.get('Id'),
+                            'type': finding.get('Type'),
+                            'severity': float(finding.get('Severity', 0)),
+                            'title': finding.get('Title'),
+                            'description': finding.get('Description'),
+                            'resource_type': finding.get('Resource', {}).get('ResourceType'),
+                            'resource_id': finding.get('Resource', {}).get('InstanceDetails', {}).get('InstanceId'),
+                            'updated_at': finding.get('UpdatedAt')
+                        })
 
+        except ClientError as e:
+            logger.warning("ClientError fetching GuardDuty findings: %s", e)
         except Exception as e:
             logger.warning("Error fetching GuardDuty findings: %s", str(e))
 

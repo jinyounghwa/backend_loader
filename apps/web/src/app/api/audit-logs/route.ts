@@ -1,4 +1,4 @@
-import { auth } from '@auth';
+import { getAuthSession } from '@/lib/auth-utils';
 import { NextRequest, NextResponse } from 'next/server';
 
 interface AuditLog {
@@ -54,7 +54,7 @@ const mockAuditLogs: AuditLog[] = [
 ];
 
 export async function GET(request: NextRequest) {
-  const session = await auth();
+  const session = await getAuthSession();
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await auth();
+  const session = await getAuthSession();
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

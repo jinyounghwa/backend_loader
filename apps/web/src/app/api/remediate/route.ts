@@ -1,9 +1,9 @@
-import { auth } from '@auth';
+import { getAuthSession } from '@/lib/auth-utils';
 import { requireAdmin } from '@/lib/auth-utils';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
-  const session = await auth();
+  const session = await getAuthSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   if (!session.user?.role || !['admin', 'owner'].includes(session.user.role)) {

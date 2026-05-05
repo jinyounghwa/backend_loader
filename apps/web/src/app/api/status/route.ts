@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@auth';
+import { getAuthSession } from '@/lib/auth-utils';
 import { getLatestCheckResult, getRecentEvents } from '@/lib/dynamodb';
 import { mockCostData, mockEC2Data, mockS3Data, mockEvents } from '@/lib/mock-data';
-import type { CheckResultDetails, DashboardSummary, DynamoEventItem, GuardianEvent, MultiRegionSummary } from '@/types/guardian';
+import type { DashboardSummary, DynamoEventItem, GuardianEvent, MultiRegionSummary } from '@/types/guardian';
 
 export const dynamic = 'force-dynamic';
 const CHECK_INTERVAL_MINUTES = 60;
-const STALE_THRESHOLD_MINUTES = 65; // 60min + 5min buffer
+const STALE_THRESHOLD_MINUTES = 65;
 
 function generateNextCheckTime(): string {
   return new Date(Date.now() + CHECK_INTERVAL_MINUTES * 60 * 1000).toISOString();
@@ -46,6 +46,114 @@ function ddbItemToGuardianEvent(item: DynamoEventItem, index: number): GuardianE
   };
 }
 
+function extractCheckDetails(rawDetails: Record<string, any>) {
+  const costRaw = rawDetails.cost;
+  const ec2Raw = rawDetails.ec2;
+  const s3Raw = rawDetails.s3;
+
+  const costData = costRaw?.details ?? costRaw ?? mockCostData;
+  const ec2Data = ec2Raw?.details ?? ec2Raw ?? mockEC2Data;
+  const s3Data = s3Raw?.details ?? s3Raw ?? mockS3Data;
+
+  const normalizedCost = {
+    today_cost: costData.today_cost ?? 0,
+    yesterday_cost: costData.yesterday_cost ?? 0,
+    monthly_cost: costData.monthly_cost ?? 0,
+    increase_percent: costData.increase_percent ?? 0,
+    threshold: costData.threshold ?? 10,
+    is_anomaly: costData.is_anomaly ?? false,
+    date: costData.date ?? new Date().toISOString().split('T')[0],
+    daily_costs: costData.daily_costs ?? mockCostData.daily_costs,
+  };
+
+  const newInstances = ec2Data.new_instances ?? [];
+  const ec2Anomalies: Array<{
+    type: 'unauthorized_region' | 'open_port' | 'new_instance';
+    instance_id: string;
+    region: string;
+    details: string;
+    severity: 'critical' | 'warning' | 'info';
+  }> = [];
+  for (const inst of newInstances) {
+    ec2Anomalies.push({
+      type: 'new_instance',
+      instance_id: inst.instance_id,
+      region: inst.region,
+      details: `New instance ${inst.instance_id} (${inst.instance_type}) launched`,
+      severity: 'warning',
+    });
+  }
+  for (const exp of (ec2Data.exposed_instances ?? [])) {
+    ec2Anomalies.push({
+      type: 'open_port',
+      instance_id: exp.instance_id,
+      region: exp.region,
+      details: `Exposed security group on ${exp.instance_id}`,
+      severity: 'critical',
+    });
+  }
+  const normalizedEC2 = {
+    total_instances: ec2Data.total_instances ?? newInstances.length,
+    running_instances: ec2Data.running_instances ?? newInstances.length,
+    stopped_instances: ec2Data.stopped_instances ?? 0,
+    anomalies: ec2Anomalies,
+    exposed_instances: ec2Data.exposed_instances ?? [],
+    instances_by_region: ec2Data.instances_by_region ?? {},
+  };
+
+  const publicBuckets: Array<{ bucket_name: string; public_reasons: string[]; created: string }> = [];
+  for (const b of (s3Data.public_buckets ?? [])) {
+    publicBuckets.push({
+      bucket_name: b.bucket_name ?? b.BucketName ?? '',
+      public_reasons: b.public_reasons ?? [],
+      created: b.creation_date ?? b.created ?? '',
+    });
+  }
+  const newBuckets: Array<{ bucket_name: string; created: string }> = [];
+  for (const b of (s3Data.new_buckets ?? [])) {
+    newBuckets.push({
+      bucket_name: b.bucket_name ?? b.BucketName ?? '',
+      created: b.creation_date ?? b.created ?? '',
+    });
+  }
+  const s3Anomalies: Array<{
+    type: 'public_bucket' | 'new_bucket';
+    bucket_name: string;
+    details: string;
+    severity: 'critical' | 'warning' | 'info';
+  }> = [];
+  for (const b of publicBuckets) {
+    s3Anomalies.push({
+      type: 'public_bucket',
+      bucket_name: b.bucket_name,
+      details: `Public bucket: ${b.bucket_name} (${b.public_reasons.join(', ')})`,
+      severity: 'critical',
+    });
+  }
+  for (const b of newBuckets) {
+    s3Anomalies.push({
+      type: 'new_bucket',
+      bucket_name: b.bucket_name,
+      details: `New bucket: ${b.bucket_name}`,
+      severity: 'info',
+    });
+  }
+  const normalizedS3 = {
+    total_buckets: s3Data.total_buckets ?? (publicBuckets.length + newBuckets.length),
+    public_buckets: publicBuckets,
+    new_buckets: newBuckets,
+    anomalies: s3Anomalies,
+  };
+
+  return {
+    cost: normalizedCost,
+    ec2: normalizedEC2,
+    s3: normalizedS3,
+    last_check: rawDetails.last_check,
+    system_health: rawDetails.system_health ?? 'healthy',
+  };
+}
+
 async function fetchRegionData(region: string): Promise<DashboardSummary | null> {
   try {
     const [checkResult, rawEvents] = await Promise.all([
@@ -57,9 +165,11 @@ async function fetchRegionData(region: string): Promise<DashboardSummary | null>
       return null;
     }
 
-    const details: CheckResultDetails = typeof checkResult.details === 'string'
+    const rawDetails: Record<string, any> = typeof checkResult.details === 'string'
       ? JSON.parse(checkResult.details)
       : checkResult.details;
+
+    const details = extractCheckDetails(rawDetails);
 
     const recent_events = rawEvents.map((item, i) =>
       ddbItemToGuardianEvent(item as unknown as DynamoEventItem, i)
@@ -84,7 +194,7 @@ async function fetchRegionData(region: string): Promise<DashboardSummary | null>
 }
 
 export async function GET(request: Request) {
-  const session = await auth();
+  const session = await getAuthSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -96,14 +206,12 @@ export async function GET(request: Request) {
       ? regionsParam.split(',').filter(r => r.trim())
       : ['ap-northeast-1'];
 
-    // Single region mode (backward compatibility)
     if (regions.length === 1) {
       const region = regions[0];
       const data = await fetchRegionData(region);
       return NextResponse.json(data || buildFallbackSummary(region));
     }
 
-    // Multi-region mode
     const results = await Promise.allSettled(
       regions.map(region => fetchRegionData(region))
     );

@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional
 
 from guardian.responders.alert_formatter import (
     AlertMessage, severity_icon, check_emoji, EMOJI,
+    format_account_info,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,110 +56,128 @@ class TelegramResponder:
         parts.append("\n━━━━━━━━━━━━━━━━━━━")
         return '\n'.join(parts)
 
+    def send_alert(self, check_name: str, alert_data: Dict[str, Any],
+                   account_id: str = 'current', account_name: Optional[str] = None) -> bool:
+        account_info = format_account_info(account_id, account_name)
+
+        if check_name in ('cost', 'ec2', 's3'):
+            alert = AlertMessage.from_check_data(check_name, alert_data, account_info=account_info)
+            return self.send_message(self._render_alert(alert))
+
+        builder = {
+            'cloudtrail': self._render_cloudtrail_alert,
+            'iam': self._render_iam_alert,
+            'guardduty': self._render_guardduty_alert,
+        }
+        renderer = builder.get(check_name)
+        if renderer:
+            return self.send_message(renderer(alert_data, account_info))
+        return self._send_generic_alert(check_name, alert_data, account_info=account_info)
+
+    def _render_cloudtrail_alert(self, data: Dict[str, Any], account_info: str) -> str:
+        anomalies = data.get('details', {}).get('anomalies', [])
+        items = []
+        for a in anomalies[:5]:
+            items.append({
+                'type': 'anomaly',
+                'label': f"🔍 <b>{a.get('event_name')}</b>",
+                'details': [
+                    f"👤 <code>{a.get('username')}</code>",
+                    f"🌐 <code>{a.get('source_ip')}</code>",
+                ],
+            })
+
+        alert = AlertMessage(
+            title='CloudTrail: Suspicious API Calls',
+            severity=data.get('severity', 'MEDIUM'),
+            check_name='cloudtrail',
+            account_info=account_info,
+            items=items,
+            summary_line=f"Detected {len(anomalies)} suspicious events",
+            suggested_action=data.get('suggested_action'),
+        )
+        return self._render_alert(alert)
+
+    def _render_iam_alert(self, data: Dict[str, Any], account_info: str) -> str:
+        type_icons = {'NEW_USER': '👤', 'DELETED_USER': '🚫', 'NEW_ACCESS_KEY': '🔑'}
+        changes = data.get('details', {}).get('changes', [])
+        items = []
+        for c in changes[:5]:
+            icon = type_icons.get(c.get('type'), '⚙️')
+            items.append({
+                'type': 'change',
+                'label': f"{icon} <b>{c.get('type')}</b>",
+                'details': [c.get('detail', '')],
+            })
+
+        alert = AlertMessage(
+            title='IAM: Permission Changes Detected',
+            severity=data.get('severity', 'MEDIUM'),
+            check_name='iam',
+            account_info=account_info,
+            items=items,
+            summary_line=f"{len(changes)} changes detected",
+            suggested_action=data.get('suggested_action'),
+        )
+        return self._render_alert(alert)
+
+    def _render_guardduty_alert(self, data: Dict[str, Any], account_info: str) -> str:
+        details = data.get('details', {})
+        high = details.get('high_severity', [])
+        med = details.get('medium_severity', [])
+        items = []
+        if high:
+            items.append({
+                'type': 'high',
+                'label': f"🔴 High Severity ({len(high)})",
+                'details': [f"<b>{f.get('type')}</b> → <code>{f.get('resource_id', '')}</code>" for f in high[:3]],
+            })
+        if med:
+            items.append({
+                'type': 'medium',
+                'label': f"🟡 Medium Severity ({len(med)})",
+                'details': [f"<b>{f.get('type')}</b>" for f in med[:2]],
+            })
+
+        alert = AlertMessage(
+            title='GuardDuty: Threat Detected',
+            severity=data.get('severity', 'MEDIUM'),
+            check_name='guardduty',
+            account_info=account_info,
+            items=items,
+            summary_line=f"Total threats: {details.get('total', 0)}",
+            suggested_action=data.get('suggested_action'),
+        )
+        return self._render_alert(alert)
+
     def send_cost_alert(self, cost_data: Dict[str, Any], account_id: str = 'current',
                         account_name: Optional[str] = None) -> bool:
-        alert = AlertMessage.from_cost_data(cost_data, account_info=self._account_info(account_id, account_name))
-        return self.send_message(self._render_alert(alert))
+        return self.send_alert('cost', cost_data, account_id=account_id, account_name=account_name)
 
     def send_ec2_alert(self, ec2_data: Dict[str, Any], account_id: str = 'current',
                        account_name: Optional[str] = None) -> bool:
-        alert = AlertMessage.from_ec2_data(ec2_data, account_info=self._account_info(account_id, account_name))
-        return self.send_message(self._render_alert(alert))
+        return self.send_alert('ec2', ec2_data, account_id=account_id, account_name=account_name)
 
     def send_s3_alert(self, s3_data: Dict[str, Any], account_id: str = 'current',
                       account_name: Optional[str] = None) -> bool:
-        alert = AlertMessage.from_s3_data(s3_data, account_info=self._account_info(account_id, account_name))
-        return self.send_message(self._render_alert(alert))
+        return self.send_alert('s3', s3_data, account_id=account_id, account_name=account_name)
 
     def send_cloudtrail_alert(self, cloudtrail_data: Dict[str, Any], account_id: str = 'current',
                               account_name: Optional[str] = None) -> bool:
-        sev = cloudtrail_data.get('severity', 'MEDIUM')
-        icon = severity_icon(sev)
-        acct = self._account_info(account_id, account_name)
-        anomalies = cloudtrail_data.get('details', {}).get('anomalies', [])
-        msg = f"{icon} <b>CloudTrail: Suspicious API Calls</b> 🏢 {acct}\n━━━━━━━━━━━━━━━━━━━━━━━━"
-        msg += f"\n📍 Severity: <b>{sev}</b>"
-        if anomalies:
-            msg += f"\n🔍 <b>Detected Events ({len(anomalies)}):</b>"
-            for a in anomalies[:5]:
-                msg += f"\n• <b>{a.get('event_name')}</b>"
-                msg += f"\n  👤 <code>{a.get('username')}</code> 🌐 <code>{a.get('source_ip')}</code>"
-        suggestion = cloudtrail_data.get('suggested_action')
-        if suggestion:
-            msg += f"\n\n💡 <b>Suggested Action:</b>\n{suggestion}"
-        msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━"
-        return self.send_message(msg)
+        return self.send_alert('cloudtrail', cloudtrail_data, account_id=account_id, account_name=account_name)
 
     def send_iam_alert(self, iam_data: Dict[str, Any], account_id: str = 'current',
                        account_name: Optional[str] = None) -> bool:
-        sev = iam_data.get('severity', 'MEDIUM')
-        icon = severity_icon(sev)
-        acct = self._account_info(account_id, account_name)
-        changes = iam_data.get('details', {}).get('changes', [])
-        type_icons = {'NEW_USER': '👤', 'DELETED_USER': '🚫', 'NEW_ACCESS_KEY': '🔑'}
-        msg = f"{icon} <b>IAM: Permission Changes Detected</b> 🏢 {acct}\n━━━━━━━━━━━━━━━━━━━━━━━━"
-        msg += f"\n📍 Severity: <b>{sev}</b>"
-        if changes:
-            msg += f"\n🔐 <b>Changes ({len(changes)}):</b>"
-            for c in changes[:5]:
-                msg += f"\n{type_icons.get(c.get('type'), '⚙️')} <b>{c.get('type')}</b>"
-                msg += f"\n  📝 {c.get('detail')}"
-        suggestion = iam_data.get('suggested_action')
-        if suggestion:
-            msg += f"\n\n💡 <b>Suggested Action:</b>\n{suggestion}"
-        msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━"
-        return self.send_message(msg)
+        return self.send_alert('iam', iam_data, account_id=account_id, account_name=account_name)
 
     def send_guardduty_alert(self, guardduty_data: Dict[str, Any], account_id: str = 'current',
-                            account_name: Optional[str] = None) -> bool:
-        sev = guardduty_data.get('severity', 'MEDIUM')
-        icon = severity_icon(sev)
-        acct = self._account_info(account_id, account_name)
-        details = guardduty_data.get('details', {})
-        high = details.get('high_severity', [])
-        med = details.get('medium_severity', [])
-        msg = f"{icon} <b>GuardDuty: Threat Detected</b> 🏢 {acct}\n━━━━━━━━━━━━━━━━━━━━━━━━"
-        msg += f"\n🛡️  Severity: <b>{sev}</b>"
-        if high:
-            msg += f"\n\n🔴 <b>High ({len(high)}):</b>"
-            for f in high[:3]:
-                msg += f"\n• <b>{f.get('type')}</b> → <code>{f.get('resource_id', '')}</code>"
-        if med:
-            msg += f"\n\n🟡 <b>Medium ({len(med)}):</b>"
-            for f in med[:2]:
-                msg += f"\n• <b>{f.get('type')}</b>"
-        suggestion = guardduty_data.get('suggested_action')
-        if suggestion:
-            msg += f"\n\n💡 <b>Remediation:</b>\n{suggestion}"
-        msg += "\n━━━━━━━━━━━━━━━━━━━━━━━━━"
-        return self.send_message(msg)
-
-    def send_alert(self, check_name: str, alert_data: Dict[str, Any],
-                   account_id: str = 'current', account_name: Optional[str] = None) -> bool:
-        dispatch = {
-            'cost': self.send_cost_alert,
-            'ec2': self.send_ec2_alert,
-            's3': self.send_s3_alert,
-            'cloudtrail': self.send_cloudtrail_alert,
-            'iam': self.send_iam_alert,
-            'guardduty': self.send_guardduty_alert,
-        }
-        handler = dispatch.get(check_name)
-        if handler:
-            return handler(alert_data, account_id=account_id, account_name=account_name)
-        return self._send_generic_alert(check_name, alert_data, account_id=account_id, account_name=account_name)
+                             account_name: Optional[str] = None) -> bool:
+        return self.send_alert('guardduty', guardduty_data, account_id=account_id, account_name=account_name)
 
     def _send_generic_alert(self, check_name: str, alert_data: Dict[str, Any],
-                           account_id: str = 'current', account_name: Optional[str] = None) -> bool:
-        sev = alert_data.get('severity', 'INFO')
-        icon = severity_icon(sev)
-        acct = self._account_info(account_id, account_name)
-        msg = f"{icon} <b>{check_name.upper()} Alert</b>\n━━━━━━━━━━━━━━━━━━━"
-        msg += f"\n🏢 {acct}\n📍 Severity: {sev}\n📝 {alert_data.get('message', '')}"
-        if alert_data.get('suggested_action'):
-            msg += f"\n💡 {alert_data['suggested_action']}"
-        msg += "\n━━━━━━━━━━━━━━━━━━━"
-        return self.send_message(msg)
+                            account_info: str = '') -> bool:
+        alert = AlertMessage.from_generic(check_name, alert_data, account_info=account_info)
+        return self.send_message(self._render_alert(alert))
 
     def send_auto_response_notification(
         self,
@@ -211,7 +230,4 @@ class TelegramResponder:
 
     @staticmethod
     def _account_info(account_id: str, account_name: Optional[str]) -> str:
-        if account_id == 'current' and not account_name:
-            return ''
-        label = account_name or account_id
-        return f"{label} ({account_id})" if account_id != 'current' else label
+        return format_account_info(account_id, account_name)

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@auth';
+import { getAuthSession } from '@/lib/auth-utils';
 
 interface AnomalyInput {
   region: string;
@@ -62,7 +62,7 @@ async function analyzeWithGemini(anomalies: AnomalyInput[]): Promise<InsightsRes
 }
 
 export async function POST(request: Request) {
-  const session = await auth();
+  const session = await getAuthSession();
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

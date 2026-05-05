@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Shield, LayoutDashboard, DollarSign, Server, Database, Activity } from 'lucide-react';
+import { Shield, LayoutDashboard, DollarSign, Server, Database, Activity, MessageCircle } from 'lucide-react';
 
 const navItems = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -10,6 +10,7 @@ const navItems = [
   { name: 'EC2', href: '/ec2', icon: Server },
   { name: 'S3', href: '/s3', icon: Database },
   { name: 'Events', href: '/events', icon: Activity },
+  { name: 'Telegram', href: '/telegram', icon: MessageCircle },
 ];
 
 export function Sidebar() {

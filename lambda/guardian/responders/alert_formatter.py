@@ -35,6 +35,13 @@ def check_emoji(check_name: str) -> str:
     return EMOJI.get(check_name, '🔍')
 
 
+def format_account_info(account_id: str, account_name: Optional[str]) -> str:
+    if account_id == 'current' and not account_name:
+        return ''
+    label = account_name or account_id
+    return f"{label} ({account_id})" if account_id != 'current' else label
+
+
 @dataclass
 class AlertMessage:
     """Normalized alert data shared across all notification channels."""

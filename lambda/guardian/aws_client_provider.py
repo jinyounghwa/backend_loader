@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 class AWSClientProvider:
-    _clients: Dict[str, object] = {}
+    _clients: Dict[str, Any] = {}
     _session: Optional[boto3.Session] = None
     _account_sessions: Dict[str, boto3.Session] = {}
 
@@ -35,7 +35,7 @@ class AWSClientProvider:
 
     @classmethod
     def get_client_for_account(cls, service_name: str, account_id: str,
-                               credentials: Dict[str, str], region: Optional[str] = None) -> object:
+                               credentials: Dict[str, str], region: Optional[str] = None) -> Any:
         """Get a client using cross-account temporary credentials."""
         cache_key = f"{service_name}-account-{account_id}-{region or 'default'}"
 
@@ -56,7 +56,7 @@ class AWSClientProvider:
         return cls._clients[cache_key]
 
     @classmethod
-    def get_client(cls, service_name: str, region: Optional[str] = None) -> object:
+    def get_client(cls, service_name: str, region: Optional[str] = None) -> Any:
         cache_key = f"{service_name}-{region or 'default'}"
 
         if cache_key not in cls._clients:
@@ -75,7 +75,7 @@ class AWSClientProvider:
         return cls._clients[cache_key]
 
     @classmethod
-    def get_resource(cls, service_name: str, region: Optional[str] = None) -> object:
+    def get_resource(cls, service_name: str, region: Optional[str] = None) -> Any:
         cache_key = f"resource-{service_name}-{region or 'default'}"
 
         if cache_key not in cls._clients:

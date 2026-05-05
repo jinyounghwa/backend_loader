@@ -20,7 +20,8 @@ class CheckResult:
         details: Optional[Dict[str, Any]] = None,
         suggested_action: Optional[str] = None
     ):
-        assert severity in self.SEVERITY_LEVELS, f"Invalid severity: {severity}"
+        if severity not in self.SEVERITY_LEVELS:
+            raise ValueError(f"Invalid severity: {severity}. Must be one of {self.SEVERITY_LEVELS}")
 
         self.severity = severity
         self.title = title

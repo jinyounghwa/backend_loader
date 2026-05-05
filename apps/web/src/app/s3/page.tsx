@@ -4,6 +4,7 @@ import { useDashboard } from '@/hooks/useGuardianData';
 import { mockS3Data } from '@/lib/mock-data';
 import { Database, Globe, PlusCircle, Shield, ShieldAlert, RefreshCw } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { ClientOnly } from '@/components/ClientOnly';
 import type { S3PublicBucket, S3NewBucket, S3Anomaly } from '@/types/guardian';
 
 export default function S3Page() {
@@ -77,6 +78,7 @@ export default function S3Page() {
         <div className="bg-[#1a1d27] border border-slate-800 rounded-lg p-5">
           <h2 className="text-lg font-bold text-slate-200 mb-6">Security Status</h2>
           <div className="h-64 w-full relative">
+            <ClientOnly>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -99,6 +101,7 @@ export default function S3Page() {
                 />
               </PieChart>
             </ResponsiveContainer>
+            </ClientOnly>
             <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
               {public_buckets.length === 0 ? (
                 <Shield className="w-10 h-10 text-green-500 mb-1" />

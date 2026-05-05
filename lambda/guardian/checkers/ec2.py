@@ -3,6 +3,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 
+from botocore.exceptions import ClientError
+
 from guardian.checkers.base import BaseChecker, CheckResult
 from guardian.config import Config
 from guardian.aws_client_provider import AWSClientProvider
@@ -28,6 +30,13 @@ class EC2Checker(BaseChecker):
 
         self.authorized_regions = self.config.get('authorized_regions', [])
         self.is_localstack = Config.is_localstack()
+        self._client_cache: Dict[str, Any] = {}
+
+    def _get_regional_client(self, region: str) -> Any:
+        """Get or create a cached EC2 client for the given region."""
+        if region not in self._client_cache:
+            self._client_cache[region] = AWSClientProvider.get_client('ec2', region=region)
+        return self._client_cache[region]
 
     def check(self) -> CheckResult:
         """Run all EC2 security checks and return unified CheckResult."""
@@ -43,16 +52,22 @@ class EC2Checker(BaseChecker):
                 'timestamp': datetime.now(timezone.utc).isoformat(),
             }
 
+            # Fetch all instances once — reuse for every sub-check
+            all_instances = self._get_all_instances()
+
             if self.authorized_regions:
-                unauthorized = self._get_unauthorized_regions_instances()
+                unauthorized = {
+                    region: instances
+                    for region, instances in all_instances.items()
+                    if region not in self.authorized_regions
+                }
                 if unauthorized:
                     details['unauthorized_region_instances'] = unauthorized
                     anomalies.append(f"Instances in unauthorized regions: {list(unauthorized.keys())}")
 
-            all_instances = self._get_all_instances()
             for region, instances in all_instances.items():
                 for instance in instances:
-                    exposed_rules = self._check_security_group_exposure(instance)
+                    exposed_rules = self._check_security_group_exposure(instance, region)
                     if exposed_rules:
                         details['exposed_instances'].append({
                             'instance_id': instance['InstanceId'],
@@ -61,7 +76,7 @@ class EC2Checker(BaseChecker):
                         })
                         anomalies.append(f"Instance {instance['InstanceId']} has 0.0.0.0/0 exposure")
 
-            new_instances = self._get_new_instances()
+            new_instances = self._get_new_instances(all_instances)
             if new_instances:
                 details['new_instances'] = new_instances
                 anomalies.append(f"Detected {len(new_instances)} new instances")
@@ -83,22 +98,31 @@ class EC2Checker(BaseChecker):
                 suggested_action='Review and stop unauthorized/exposed instances',
             )
 
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            self._log_error('EC2', e)
+            return CheckResult.error(
+                'EC2 Check Failed',
+                f'AWS error ({error_code}): {e.response.get("Error", {}).get("Message", str(e))}'
+            )
         except Exception as e:
             self._log_error('EC2', e)
             return CheckResult.error('EC2 Check Failed', f'Failed to check EC2: {str(e)}')
 
     def _get_all_instances(self) -> Dict[str, List[Dict]]:
+        """Fetch running instances across all regions using a cached client pool."""
         instances_by_region: Dict[str, List[Dict]] = {}
 
         try:
             if self.is_localstack:
                 regions = ['us-east-1']
             else:
-                regions_response = AWSClientProvider.get_client('ec2').describe_regions()
+                ec2_global = AWSClientProvider.get_client('ec2')
+                regions_response = ec2_global.describe_regions()
                 regions = [r['RegionName'] for r in regions_response['Regions']]
 
             for region in regions:
-                regional_ec2 = AWSClientProvider.get_client('ec2', region=region)
+                regional_ec2 = self._get_regional_client(region)
                 try:
                     response = regional_ec2.describe_instances(
                         Filters=[{'Name': 'instance-state-name', 'Values': ['running']}]
@@ -108,31 +132,27 @@ class EC2Checker(BaseChecker):
                         instances.extend(reservation['Instances'])
                     if instances:
                         instances_by_region[region] = instances
+                except ClientError as e:
+                    logger.error("ClientError in region %s: %s", region, e)
                 except Exception as e:
                     logger.error("Error checking region %s: %s", region, e)
 
             return instances_by_region
+        except ClientError as e:
+            logger.error("ClientError getting regions: %s", e)
+            return {}
         except Exception as e:
             logger.error("Error getting all instances: %s", e)
             return {}
 
-    def _get_unauthorized_regions_instances(self) -> Dict[str, List[Dict]]:
-        if not self.authorized_regions:
-            return {}
-        all_instances = self._get_all_instances()
-        return {
-            region: instances
-            for region, instances in all_instances.items()
-            if region not in self.authorized_regions
-        }
-
-    def _check_security_group_exposure(self, instance: Dict) -> List[Dict]:
+    def _check_security_group_exposure(self, instance: Dict, region: str) -> List[Dict]:
+        """Check if the instance's security groups expose 0.0.0.0/0."""
         exposed_rules = []
+        regional_ec2 = self._get_regional_client(region)
+
         for sg in instance.get('SecurityGroups', []):
             sg_id = sg['GroupId']
             try:
-                region = instance['Placement']['AvailabilityZone'][:-1]
-                regional_ec2 = AWSClientProvider.get_client('ec2', region=region)
                 sg_response = regional_ec2.describe_security_groups(GroupIds=[sg_id])
 
                 for sg_detail in sg_response['SecurityGroups']:
@@ -147,13 +167,14 @@ class EC2Checker(BaseChecker):
                                     'to_port': rule.get('ToPort'),
                                     'cidr': '0.0.0.0/0',
                                 })
+            except ClientError as e:
+                logger.error("ClientError checking security group %s: %s", sg_id, e)
             except Exception as e:
                 logger.error("Error checking security group %s: %s", sg_id, e)
         return exposed_rules
 
-    def _get_new_instances(self) -> List[Dict]:
+    def _get_new_instances(self, all_instances: Dict[str, List[Dict]]) -> List[Dict]:
         cutoff_time = datetime.now(timezone.utc) - timedelta(hours=1)
-        all_instances = self._get_all_instances()
         new_instances = []
 
         for region, instances in all_instances.items():
@@ -171,8 +192,3 @@ class EC2Checker(BaseChecker):
                         'owner': instance.get('OwnerAlias', 'Unknown'),
                     })
         return new_instances
-
-    def check_ec2_anomalies(self):
-        """Backward-compatible entry point returning (is_anomaly, data) tuple."""
-        result = self.check()
-        return (result.severity != 'INFO', result.details)

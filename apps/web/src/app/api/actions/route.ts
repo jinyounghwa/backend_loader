@@ -1,4 +1,4 @@
-import { auth } from '@auth';
+import { getAuthSession } from '@/lib/auth-utils';
 import { NextRequest, NextResponse } from 'next/server';
 
 interface Action {
@@ -13,7 +13,7 @@ interface Action {
 }
 
 export async function GET(request: NextRequest) {
-  const session = await auth();
+  const session = await getAuthSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const searchParams = request.nextUrl.searchParams;

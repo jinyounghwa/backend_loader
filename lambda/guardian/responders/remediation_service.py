@@ -3,7 +3,7 @@ from typing import Dict, Any, Optional
 from logging import Logger
 
 from guardian.storage.dynamodb import DynamoDBStorage
-from guardian.storage.response_rules import ResponseRuleStorage
+from guardian.storage.response_rules import ResponseRuleStorage, ResponseRule
 from guardian.responders.aws_action_executor import AWSActionExecutor
 from guardian.responders.telegram import TelegramResponder
 from guardian.logging_config import log_remediation
@@ -70,7 +70,7 @@ class AutoRemediationResponder:
                 )
             return False
 
-    def _match_event_to_rule(self, event_type: str, region: str, resource_region: str) -> Optional[Dict]:
+    def _match_event_to_rule(self, event_type: str, region: str, resource_region: str) -> Optional[ResponseRule]:
         """Find the best matching rule for an event using priority."""
         rule = self.rule_storage.get_effective_rule(region, event_type)
         if not rule:
@@ -90,16 +90,16 @@ class AutoRemediationResponder:
             instance_region = anomaly.get('region', region)
 
             rule = self._match_event_to_rule('unauthorized_exposure', region, instance_region)
-            if not rule or not rule.get('enabled'):
+            if not rule or not rule.enabled:
                 self.logger.debug("No matching rule for instance %s", instance_id)
                 continue
 
             self._execute_action(
-                action_type=rule['action'],
+                action_type=rule.action,
                 resource_id=instance_id,
                 region=instance_region,
-                rule_id=rule['rule_id'],
-                dry_run=rule.get('dry_run', False),
+                rule_id=rule.rule_id,
+                dry_run=rule.dry_run,
             )
 
     def handle_s3_anomalies(self, s3_data: Dict[str, Any], region: str) -> None:
@@ -112,16 +112,16 @@ class AutoRemediationResponder:
             bucket_name = anomaly['bucket_name']
 
             rule = self._match_event_to_rule('public_bucket', region, region)
-            if not rule or not rule.get('enabled'):
+            if not rule or not rule.enabled:
                 self.logger.debug("No matching rule for bucket %s", bucket_name)
                 continue
 
             self._execute_action(
-                action_type=rule['action'],
+                action_type=rule.action,
                 resource_id=bucket_name,
                 region=region,
-                rule_id=rule['rule_id'],
-                dry_run=rule.get('dry_run', False),
+                rule_id=rule.rule_id,
+                dry_run=rule.dry_run,
             )
 
     def handle_check_result(self, check_name: str, check_result, region: str = '*') -> None:

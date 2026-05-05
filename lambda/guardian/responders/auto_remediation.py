@@ -5,6 +5,7 @@ from typing import List, Dict, Any
 
 from guardian.config import Config
 from guardian.aws_client_provider import AWSClientProvider
+from guardian.responders.aws_action_executor import AWSActionExecutor
 
 logger = logging.getLogger('auto_remediation')
 
@@ -113,6 +114,12 @@ def _is_protected_instance(instance: Dict[str, Any]) -> bool:
     return False
 
 
+def _get_all_regions() -> list:
+    ec2 = AWSClientProvider.get_client('ec2')
+    response = ec2.describe_regions()
+    return [r['RegionName'] for r in response['Regions']]
+
+
 def remediate_hacking_suspicion() -> dict:
     results = {
         'action': '해킹우려 수정',
@@ -127,6 +134,7 @@ def remediate_hacking_suspicion() -> dict:
         blocked_buckets: List[str] = []
 
         regions = ['us-east-1'] if Config.is_localstack() else _get_all_regions()
+        executor = AWSActionExecutor()
 
         for region in regions:
             ec2 = AWSClientProvider.get_client('ec2', region=region)
@@ -162,10 +170,16 @@ def remediate_hacking_suspicion() -> dict:
                         )
                         continue
 
-                    ec2.stop_instances(InstanceIds=stoppable_ids)
                     for iid in stoppable_ids:
-                        stopped_instances.append(f"{iid} ({region})")
-                        logger.info("Stopped instance: %s in %s", iid, region)
+                        success = executor.stop_ec2_instance(iid, region)
+                        if success:
+                            stopped_instances.append(f"{iid} ({region})")
+                        else:
+                            results['steps'].append({
+                                'name': f'EC2 중지 실패 ({region})',
+                                'detail': f'인스턴스 {iid} 중지 실패',
+                                'status': 'failed'
+                            })
             except Exception as e:
                 logger.error("Failed to stop instances in %s: %s", region, e)
                 results['steps'].append({
@@ -194,20 +208,11 @@ def remediate_hacking_suspicion() -> dict:
             buckets_response = s3.list_buckets()
             for bucket in buckets_response.get('Buckets', []):
                 bucket_name = bucket['Name']
-                try:
-                    s3.put_public_access_block(
-                        Bucket=bucket_name,
-                        PublicAccessBlockConfiguration={
-                            'BlockPublicAcls': True,
-                            'IgnorePublicAcls': True,
-                            'BlockPublicPolicy': True,
-                            'RestrictPublicBuckets': True
-                        }
-                    )
+                success = executor.block_s3_public_access(bucket_name)
+                if success:
                     blocked_buckets.append(bucket_name)
-                    logger.info("Blocked public access for bucket: %s", bucket_name)
-                except Exception as bucket_error:
-                    logger.warning("Failed to block public access for %s: %s", bucket_name, bucket_error)
+                else:
+                    logger.warning("Failed to block public access for %s", bucket_name)
 
             if blocked_buckets:
                 results['steps'].append({
@@ -243,9 +248,3 @@ def remediate_hacking_suspicion() -> dict:
         results['summary'] = f'자동 수정 실패: {str(e)}'
 
     return results
-
-
-def _get_all_regions() -> list:
-    ec2 = AWSClientProvider.get_client('ec2')
-    response = ec2.describe_regions()
-    return [r['RegionName'] for r in response['Regions']]

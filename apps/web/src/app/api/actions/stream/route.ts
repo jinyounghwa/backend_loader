@@ -1,4 +1,4 @@
-import { auth } from '@auth';
+import { getAuthSession } from '@/lib/auth-utils';
 import { NextRequest } from 'next/server';
 
 export const dynamic = 'force-dynamic';
@@ -38,7 +38,7 @@ const mockActionTemplates: Action[] = [
 ];
 
 export async function GET(request: NextRequest) {
-  const session = await auth();
+  const session = await getAuthSession();
   if (!session) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,

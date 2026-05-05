@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@auth';
+import { getAuthSession } from '@/lib/auth-utils';
 import {
   getRecentEvents,
   getEventsByGSI,
@@ -33,7 +33,7 @@ function transformEvents(rawEvents: any[]): GuardianEvent[] {
 }
 
 export async function GET(request: Request) {
-  const session = await auth();
+  const session = await getAuthSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

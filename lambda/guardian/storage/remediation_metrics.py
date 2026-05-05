@@ -1,70 +1,73 @@
 """Remediation outcome tracking and effectiveness metrics"""
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 from guardian.storage.dynamodb import DynamoDBStorage
+from guardian.aws_client_provider import AWSClientProvider
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class RemediationMetricsStorage:
-    """Track remediation actions and calculate effectiveness scores."""
 
     def __init__(self):
-        self.dynamodb = DynamoDBStorage()
+        self.storage = DynamoDBStorage()
         self.table_name = 'guardian-remediation-metrics'
 
     def save_remediation_outcome(self, action_id: str, action_type: str, resource_id: str,
-                                region: str, status: str, rule_id: str) -> None:
-        """Save remediation outcome."""
+                                 region: str, status: str, rule_id: str) -> None:
         item = {
             'PK': f'ACTION#{action_id}',
-            'SK': f'OUTCOME#{datetime.utcnow().isoformat()}',
-            'timestamp': int(datetime.utcnow().timestamp()),
+            'SK': f'OUTCOME#{datetime.now(timezone.utc).isoformat()}',
+            'timestamp': int(datetime.now(timezone.utc).timestamp()),
             'action_type': action_type,
             'resource_id': resource_id,
             'region': region,
             'status': status,
             'rule_id': rule_id,
             'follow_up_status': 'pending',
-            'TTL': int((datetime.utcnow() + timedelta(days=90)).timestamp()),
+            'TTL': int((datetime.now(timezone.utc) + timedelta(days=90)).timestamp()),
         }
-        self.dynamodb.put_item(self.table_name, item)
+        try:
+            table = AWSClientProvider.get_resource('dynamodb').Table(self.table_name)
+            table.put_item(Item=item)
+        except Exception as e:
+            logger.error("Error saving remediation outcome: %s", e)
 
     def update_follow_up_status(self, action_id: str, issue_resolved: bool) -> None:
-        """Mark if issue is still present in follow-up check."""
         try:
-            self.dynamodb.update_item(
-                self.table_name,
-                {'PK': f'ACTION#{action_id}'},
-                {
-                    'follow_up_status': 'resolved' if issue_resolved else 'recurring',
-                    'follow_up_timestamp': int(datetime.utcnow().timestamp()),
+            table = AWSClientProvider.get_resource('dynamodb').Table(self.table_name)
+            table.update_item(
+                Key={'PK': f'ACTION#{action_id}', 'SK': f'ACTION#{action_id}'},
+                UpdateExpression='SET follow_up_status = :s, follow_up_timestamp = :t',
+                ExpressionAttributeValues={
+                    ':s': 'resolved' if issue_resolved else 'recurring',
+                    ':t': int(datetime.now(timezone.utc).timestamp()),
                 },
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error("Error updating follow-up status for %s: %s", action_id, e)
 
     def get_rule_effectiveness(self, rule_id: str, days: int = 30) -> Optional[Dict]:
-        """Calculate effectiveness score for a rule."""
         try:
-            response = self.dynamodb.query(
-                self.table_name,
-                'SK',
-                f'RULE#{rule_id}',
-                limit=100,
+            table = AWSClientProvider.get_resource('dynamodb').Table(self.table_name)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+            cutoff_ts = int(cutoff.timestamp())
+
+            response = table.scan(
+                FilterExpression='rule_id = :rid AND #ts >= :cutoff',
+                ExpressionAttributeNames={'#ts': 'timestamp'},
+                ExpressionAttributeValues={':rid': rule_id, ':cutoff': cutoff_ts},
+                Limit=100,
             )
+
             items = response.get('Items', [])
             if not items:
                 return None
 
-            cutoff = datetime.utcnow() - timedelta(days=days)
-            recent_items = [i for i in items
-                          if int(i.get('timestamp', 0)) > cutoff.timestamp()]
-
-            if not recent_items:
-                return None
-
-            succeeded = len([i for i in recent_items if i.get('status') == 'success'])
-            total = len(recent_items)
-            resolved = len([i for i in recent_items if i.get('follow_up_status') == 'resolved'])
+            succeeded = len([i for i in items if i.get('status') == 'success'])
+            total = len(items)
+            resolved = len([i for i in items if i.get('follow_up_status') == 'resolved'])
 
             return {
                 'rule_id': rule_id,
@@ -75,42 +78,48 @@ class RemediationMetricsStorage:
                 'resolution_rate': (resolved / total) if total > 0 else 0,
                 'effectiveness_score': ((succeeded / total) * 0.6 + (resolved / total) * 0.4) if total > 0 else 0,
             }
-        except Exception:
+        except Exception as e:
+            logger.error("Error calculating effectiveness for rule %s: %s", rule_id, e)
             return None
 
     def get_all_rule_metrics(self, days: int = 30) -> List[Dict]:
-        """Get metrics for all rules."""
-        # In production: scan remediation-metrics table, group by rule_id
-        # For now: return mock data showing effectiveness
-        return [
-            {
-                'rule_id': 'rule-001',
-                'action_type': 'stop_instance',
-                'total_actions': 15,
-                'successful_actions': 14,
-                'success_rate': 0.93,
-                'resolved_issues': 13,
-                'resolution_rate': 0.87,
-                'effectiveness_score': 0.90,
-            },
-            {
-                'rule_id': 'rule-002',
-                'action_type': 'stop_instance',
-                'total_actions': 8,
-                'successful_actions': 7,
-                'success_rate': 0.88,
-                'resolved_issues': 6,
-                'resolution_rate': 0.75,
-                'effectiveness_score': 0.82,
-            },
-            {
-                'rule_id': 'rule-003',
-                'action_type': 'block_bucket',
-                'total_actions': 22,
-                'successful_actions': 22,
-                'success_rate': 1.0,
-                'resolved_issues': 21,
-                'resolution_rate': 0.95,
-                'effectiveness_score': 0.98,
-            },
-        ]
+        try:
+            table = AWSClientProvider.get_resource('dynamodb').Table(self.table_name)
+            cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+            cutoff_ts = int(cutoff.timestamp())
+
+            response = table.scan(
+                FilterExpression='#ts >= :cutoff',
+                ExpressionAttributeNames={'#ts': 'timestamp'},
+                ExpressionAttributeValues={':cutoff': cutoff_ts},
+                Limit=500,
+            )
+
+            items = response.get('Items', [])
+            rule_groups: Dict[str, List[Dict]] = {}
+            for item in items:
+                rid = item.get('rule_id', 'unknown')
+                if rid not in rule_groups:
+                    rule_groups[rid] = []
+                rule_groups[rid].append(item)
+
+            metrics = []
+            for rule_id, actions in rule_groups.items():
+                succeeded = len([a for a in actions if a.get('status') == 'success'])
+                resolved = len([a for a in actions if a.get('follow_up_status') == 'resolved'])
+                total = len(actions)
+                metrics.append({
+                    'rule_id': rule_id,
+                    'action_type': actions[0].get('action_type', 'unknown') if actions else 'unknown',
+                    'total_actions': total,
+                    'successful_actions': succeeded,
+                    'success_rate': (succeeded / total) if total > 0 else 0,
+                    'resolved_issues': resolved,
+                    'resolution_rate': (resolved / total) if total > 0 else 0,
+                    'effectiveness_score': ((succeeded / total) * 0.6 + (resolved / total) * 0.4) if total > 0 else 0,
+                })
+
+            return metrics
+        except Exception as e:
+            logger.error("Error getting all rule metrics: %s", e)
+            return []

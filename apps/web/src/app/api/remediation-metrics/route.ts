@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@auth';
+import { getAuthSession } from '@/lib/auth-utils';
 
 interface RuleMetric {
   rule_id: string;
@@ -47,7 +47,7 @@ const mockMetrics: RuleMetric[] = [
 ];
 
 export async function GET(request: Request) {
-  const session = await auth();
+  const session = await getAuthSession();
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

@@ -6,14 +6,16 @@ from datetime import datetime, timezone
 from typing import Dict, Any, List, Set, Optional
 
 from guardian.checkers.base import BaseChecker, CheckResult
+from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
 
 
 class IAMChecker(BaseChecker):
 
-    def __init__(self, clients: Dict[str, Any], config: Dict[str, Any]):
-        super().__init__(clients, config)
+    def __init__(self, clients: Dict[str, Any], config: Dict[str, Any],
+                 account_id: Optional[str] = None, credentials: Optional[Dict[str, str]] = None):
+        super().__init__(clients, config, account_id, credentials)
         self.iam = clients.get('iam')
         self.dynamodb_resource = clients.get('dynamodb_resource')
         self.baseline_key = 'iam-baseline'
@@ -68,6 +70,8 @@ class IAMChecker(BaseChecker):
                         'create_date': user['CreateDate'].isoformat(),
                         'path': user.get('Path', '/')
                     }
+        except ClientError as e:
+            logger.warning("ClientError fetching IAM users: %s", e)
         except Exception as e:
             logger.warning("Error fetching IAM users: %s", e)
 
@@ -90,6 +94,8 @@ class IAMChecker(BaseChecker):
                             'create_date': key['CreateDate'].isoformat()
                         })
                 keys[username] = user_keys
+        except ClientError as e:
+            logger.warning("ClientError fetching IAM access keys: %s", e)
         except Exception as e:
             logger.warning("Error fetching IAM access keys: %s", e)
 
@@ -110,6 +116,8 @@ class IAMChecker(BaseChecker):
                     'users': json.loads(item.get('users', '{}')),
                     'keys': json.loads(item.get('keys', '{}'))
                 }
+        except ClientError as e:
+            logger.warning("ClientError fetching IAM baseline: %s", e)
         except Exception as e:
             logger.warning("Error fetching IAM baseline: %s", e)
 
@@ -182,5 +190,7 @@ class IAMChecker(BaseChecker):
                 'keys': json.dumps(keys),
                 'timestamp': datetime.now(timezone.utc).isoformat()
             })
+        except ClientError as e:
+            logger.warning("ClientError saving IAM baseline: %s", e)
         except Exception as e:
             logger.warning("Error saving IAM baseline: %s", e)

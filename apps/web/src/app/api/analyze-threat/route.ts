@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@auth';
+import { getAuthSession } from '@/lib/auth-utils';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 export const dynamic = 'force-dynamic';
@@ -20,7 +20,7 @@ const MOCK_ANALYSIS = {
 };
 
 export async function POST(request: Request) {
-  const session = await auth();
+  const session = await getAuthSession();
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

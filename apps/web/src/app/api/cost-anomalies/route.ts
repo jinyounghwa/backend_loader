@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@auth';
+import { getAuthSession } from '@/lib/auth-utils';
 
 interface CostData {
   region: string;
@@ -27,7 +27,7 @@ const mockCostHistory: Record<string, number[]> = {
 };
 
 export async function POST(request: Request) {
-  const session = await auth();
+  const session = await getAuthSession();
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

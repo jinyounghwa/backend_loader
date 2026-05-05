@@ -3,16 +3,18 @@ import logging
 import requests
 from typing import Dict, Any, Optional
 
-from guardian.responders.alert_formatter import AlertMessage, severity_icon, check_emoji
+from guardian.responders.alert_formatter import (
+    AlertMessage, check_emoji, format_account_info,
+)
 
 logger = logging.getLogger(__name__)
 
 SEVERITY_COLORS = {
-    'CRITICAL': 16711680,   # Red
-    'HIGH': 16744192,       # Orange
-    'MEDIUM': 16776960,     # Yellow
-    'LOW': 5814783,         # Blue
-    'INFO': 65280,          # Green
+    'CRITICAL': 16711680,
+    'HIGH': 16744192,
+    'MEDIUM': 16776960,
+    'LOW': 5814783,
+    'INFO': 65280,
 }
 
 
@@ -50,13 +52,23 @@ class DiscordResponder:
                 for k, v in item.items():
                     fields.append({'name': k, 'value': str(v), 'inline': True})
 
+        footer_text = 'AWS Guardian'
+        if alert.account_info:
+            footer_text = f'{alert.account_info} | AWS Guardian'
+
         return {
             'title': f'{icon} {alert.title}',
             'color': color,
             'fields': fields if fields else [{'name': 'Status', 'value': alert.summary_line or 'No details', 'inline': False}],
             'description': alert.summary_line or '',
-            'footer': {'text': 'AWS Guardian'},
+            'footer': {'text': footer_text},
         }
+
+    def send_alert(self, check_name: str, alert_data: Dict[str, Any],
+                   account_id: str = 'current', account_name: Optional[str] = None) -> bool:
+        account_info = format_account_info(account_id, account_name)
+        alert = AlertMessage.from_check_data(check_name, alert_data, account_info=account_info)
+        return self.send_embed(self._render_alert_embed(alert))
 
     def send_cost_alert(self, cost_data: Dict[str, Any]) -> bool:
         alert = AlertMessage.from_cost_data(cost_data)

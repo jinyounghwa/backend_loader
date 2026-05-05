@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from guardian.responders.telegram import TelegramResponder
 from guardian.responders.auto_remediation import remediate_cost_overrun, remediate_hacking_suspicion
+from guardian.responders.aws_action_executor import AWSActionExecutor
 from guardian.config import Config
 from guardian.aws_client_provider import AWSClientProvider
 from guardian.storage.dynamodb import DynamoDBStorage
@@ -150,10 +151,9 @@ def remediate_finding(finding_id: str) -> dict:
     if not re.match(r'^finding-[a-f0-9\-]+$', finding_id):
         return {'error': f'Invalid finding ID format: {finding_id}'}
 
+    storage = DynamoDBStorage()
     try:
-        storage = DynamoDBStorage()
 
-        # Step 1: Check existing remediation status
         existing = storage.get_item_by_id(finding_id)
         if existing and existing.get('remediation_status') == 'InProgress':
             return {
@@ -171,13 +171,10 @@ def remediate_finding(finding_id: str) -> dict:
                 'timestamp': datetime.now(timezone.utc).isoformat()
             }
 
-        # Step 2: Mark as InProgress (TransactWriteItems)
         storage.update_remediation_status(finding_id, 'InProgress')
 
-        # Step 3: Execute remediation (AWS APIs are idempotent)
         result = _execute_remediation(finding_id, existing or {})
 
-        # Step 4: Update status to Completed
         storage.update_remediation_status(finding_id, 'Completed', result['action'])
 
         return {
@@ -198,21 +195,23 @@ def remediate_finding(finding_id: str) -> dict:
 
 
 def _execute_remediation(finding_id: str, finding_data: dict) -> dict:
-    """Execute remediation action based on finding type"""
     resource_type = finding_data.get('resource_type', 'unknown')
     resource_id = finding_data.get('resource_id', '')
+    executor = AWSActionExecutor()
 
     if resource_type == 'EC2':
-        ec2 = AWSClientProvider.get_client('ec2')
-        ec2.stop_instances(InstanceIds=[resource_id])
-        return {'action': 'stopped', 'message': f'✅ EC2 인스턴스 {resource_id} 중지됨'}
+        region = finding_data.get('region', 'us-east-1')
+        success = executor.stop_ec2_instance(resource_id, region)
+        return {
+            'action': 'stopped' if success else 'failed',
+            'message': f'{"✅" if success else "❌"} EC2 인스턴스 {resource_id} {"중지됨" if success else "중지 실패"}',
+        }
     elif resource_type == 'S3':
-        s3 = AWSClientProvider.get_client('s3')
-        s3.put_public_access_block(
-            Bucket=resource_id,
-            PublicAccessBlockConfiguration={'BlockPublicAcls': True}
-        )
-        return {'action': 'blocked', 'message': f'✅ S3 버킷 {resource_id} 퍼블릭 액세스 차단됨'}
+        success = executor.block_s3_public_access(resource_id)
+        return {
+            'action': 'blocked' if success else 'failed',
+            'message': f'{"✅" if success else "❌"} S3 버킷 {resource_id} 퍼블릭 액세스 {"차단됨" if success else "차단 실패"}',
+        }
     else:
         return {'action': 'logged', 'message': f'✅ 발견사항 {finding_id} 기록됨'}
 

@@ -1,14 +1,24 @@
 """DynamoDB storage for AWS Guardian"""
-import json
 import uuid
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Any, List
+from decimal import Decimal
+from typing import Dict, Any, List, Optional
 
 from guardian.config import Config
 from guardian.aws_client_provider import AWSClientProvider
 
 logger = logging.getLogger(__name__)
+
+
+def _convert_floats(obj: Any) -> Any:
+    if isinstance(obj, float):
+        return Decimal(str(obj))
+    if isinstance(obj, dict):
+        return {k: _convert_floats(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_convert_floats(v) for v in obj]
+    return obj
 
 
 class DynamoDBStorage:
@@ -36,7 +46,7 @@ class DynamoDBStorage:
                 'severity': severity,
                 'account_id': account_id,
                 'gsi_pk': 'EVENT',
-                'details': json.dumps(details) if isinstance(details, dict) else details
+                'details': _convert_floats(details) if isinstance(details, dict) else {'raw': details}
             }
 
             self.table.put_item(Item=item)
@@ -57,7 +67,7 @@ class DynamoDBStorage:
                 'action_type': action_type,
                 'resource_id': resource_id,
                 'status': status,
-                'details': json.dumps(details) if isinstance(details, dict) else details
+                'details': _convert_floats(details) if isinstance(details, dict) else {'raw': details}
             }
 
             self.table.put_item(Item=item)
@@ -239,4 +249,38 @@ class DynamoDBStorage:
                 logger.info("Table %s already exists", self.table_name)
                 return True
             logger.error("Error creating table: %s", e)
+            return False
+
+    def get_item_by_id(self, event_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            if not self.table:
+                return None
+            from boto3.dynamodb.conditions import Key
+            response = self.table.query(
+                KeyConditionExpression=Key('event_id').eq(event_id),
+                Limit=1,
+            )
+            items = response.get('Items', [])
+            return items[0] if items else None
+        except Exception as e:
+            logger.error("Error getting item by id %s: %s", event_id, e)
+            return None
+
+    def update_remediation_status(self, event_id: str, status: str, result: str = '') -> bool:
+        try:
+            if not self.table:
+                return False
+            update_expr = 'SET remediation_status = :s'
+            expr_values = {':s': status}
+            if result:
+                update_expr += ', remediation_result = :r'
+                expr_values[':r'] = result
+            self.table.update_item(
+                Key={'event_id': event_id},
+                UpdateExpression=update_expr,
+                ExpressionAttributeValues=expr_values,
+            )
+            return True
+        except Exception as e:
+            logger.error("Error updating remediation status for %s: %s", event_id, e)
             return False

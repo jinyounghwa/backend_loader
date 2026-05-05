@@ -36,7 +36,12 @@ resource "aws_iam_role_policy" "lambda_policy" {
         Sid    = "CostExplorer"
         Effect = "Allow"
         Action = ["ce:GetCostAndUsage"]
-        Resource = "*"
+        Resource = ["*"]
+        Condition = {
+          StringEquals = {
+            "aws:RequestedRegion" = var.aws_region
+          }
+        }
       },
       {
         Sid    = "EC2Describe"
@@ -46,7 +51,7 @@ resource "aws_iam_role_policy" "lambda_policy" {
           "ec2:DescribeRegions",
           "ec2:DescribeSecurityGroups"
         ]
-        Resource = "*"
+        Resource = ["*"]
       },
       {
         Sid    = "EC2StopInstances"
@@ -88,7 +93,7 @@ resource "aws_iam_role_policy" "lambda_policy" {
         Sid    = "CloudTrail"
         Effect = "Allow"
         Action = ["cloudtrail:LookupEvents"]
-        Resource = ["*"]
+        Resource = ["arn:aws:cloudtrail:*:*:trail/*"]
       },
       {
         Sid    = "IAM"
@@ -156,6 +161,11 @@ resource "aws_iam_role_policy" "lambda_policy" {
         Effect = "Allow"
         Action = ["cloudwatch:PutMetricData"]
         Resource = ["*"]
+        Condition = {
+          StringEquals = {
+            "cloudwatch:namespace" = "aws-guardian"
+          }
+        }
       },
       {
         Sid    = "STSCrossAccount"

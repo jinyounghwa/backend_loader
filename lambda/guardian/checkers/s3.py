@@ -4,6 +4,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional, Tuple
 
+from botocore.exceptions import ClientError
+
 from guardian.checkers.base import BaseChecker, CheckResult
 from guardian.config import Config
 from guardian.aws_client_provider import AWSClientProvider
@@ -69,9 +71,29 @@ class S3Checker(BaseChecker):
                 suggested_action='Block public access on exposed buckets',
             )
 
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            self._log_error('S3', e)
+            return CheckResult.error(
+                'S3 Check Failed',
+                f'AWS error ({error_code}): {e.response.get("Error", {}).get("Message", str(e))}'
+            )
         except Exception as e:
             self._log_error('S3', e)
             return CheckResult.error('S3 Check Failed', f'Failed to check S3: {str(e)}')
+
+    def _list_all_buckets(self) -> List[Dict[str, Any]]:
+        """List all S3 buckets. list_buckets is not paginated by AWS,
+        but we wrap it for consistency and future-proofing."""
+        try:
+            buckets_response = self.s3_client.list_buckets()
+            return buckets_response.get('Buckets', [])
+        except ClientError as e:
+            logger.error("ClientError listing buckets: %s", e)
+            return []
+        except Exception as e:
+            logger.error("Error listing buckets: %s", e)
+            return []
 
     def _is_bucket_public_acl(self, bucket_name: str) -> bool:
         try:
@@ -82,6 +104,9 @@ class S3Checker(BaseChecker):
                     uri = grantee.get('URI', '')
                     if 'AuthenticatedUsers' in uri or 'AllUsers' in uri:
                         return True
+            return False
+        except ClientError as e:
+            logger.error("ClientError checking ACL for %s: %s", bucket_name, e)
             return False
         except Exception as e:
             logger.error("Error checking ACL for %s: %s", bucket_name, e)
@@ -99,11 +124,14 @@ class S3Checker(BaseChecker):
                     if statement.get('Effect', '').upper() == 'ALLOW':
                         return True, statement
             return False, {}
-        except Exception as e:
-            error_code = getattr(e, 'response', {}).get('Error', {}).get('Code', str(type(e).__name__))
-            if 'NoSuchBucketPolicy' in str(error_code) or 'NoSuchBucketPolicy' in str(e):
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', '')
+            if 'NoSuchBucketPolicy' in str(error_code):
                 return False, {}
-            logger.error("Error checking policy for %s: %s - %s", bucket_name, error_code, e)
+            logger.error("ClientError checking policy for %s: %s", bucket_name, e)
+            return False, {}
+        except Exception as e:
+            logger.error("Error checking policy for %s: %s", bucket_name, e)
             return False, {}
 
     def _is_bucket_public_block_disabled(self, bucket_name: str) -> bool:
@@ -116,68 +144,59 @@ class S3Checker(BaseChecker):
                 and config.get('IgnorePublicAcls', False)
                 and config.get('RestrictPublicBuckets', False)
             )
-        except Exception as e:
-            error_code = getattr(e, 'response', {}).get('Error', {}).get('Code', '')
-            if 'NoSuchPublicAccessBlockConfiguration' in str(error_code) or \
-               'NoSuchPublicAccessBlockConfiguration' in str(e) or \
-               'AccessDenied' in str(error_code):
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', '')
+            if 'NoSuchPublicAccessBlockConfiguration' in str(error_code):
+                # No block configured — treat as potentially public
                 return True
+            logger.error("ClientError checking public access block for %s: %s", bucket_name, e)
+            return False
+        except Exception as e:
             logger.error("Error checking public access block for %s: %s", bucket_name, e)
             return False
 
     def _get_public_buckets(self) -> List[Dict]:
         public_buckets = []
-        try:
-            buckets_response = self.s3_client.list_buckets()
-            for bucket in buckets_response.get('Buckets', []):
-                bucket_name = bucket['Name']
-                is_public = False
-                public_reasons: List[str] = []
+        buckets = self._list_all_buckets()
 
-                if self._is_bucket_public_acl(bucket_name):
-                    is_public = True
-                    public_reasons.append('Public ACL')
+        for bucket in buckets:
+            bucket_name = bucket['Name']
+            is_public = False
+            public_reasons: List[str] = []
 
-                has_public_policy, _ = self._is_bucket_public_policy(bucket_name)
-                if has_public_policy:
-                    is_public = True
-                    public_reasons.append('Public Bucket Policy')
+            if self._is_bucket_public_acl(bucket_name):
+                is_public = True
+                public_reasons.append('Public ACL')
 
-                if self._is_bucket_public_block_disabled(bucket_name):
-                    is_public = True
-                    public_reasons.append('Public Access Block Disabled')
+            has_public_policy, _ = self._is_bucket_public_policy(bucket_name)
+            if has_public_policy:
+                is_public = True
+                public_reasons.append('Public Bucket Policy')
 
-                if is_public:
-                    public_buckets.append({
-                        'bucket_name': bucket_name,
-                        'creation_date': bucket['CreationDate'].isoformat(),
-                        'public_reasons': public_reasons,
-                    })
-            return public_buckets
-        except Exception as e:
-            logger.error("Error listing public buckets: %s", e)
-            return []
+            if self._is_bucket_public_block_disabled(bucket_name):
+                is_public = True
+                public_reasons.append('Public Access Block Disabled')
+
+            if is_public:
+                public_buckets.append({
+                    'bucket_name': bucket_name,
+                    'creation_date': bucket['CreationDate'].isoformat(),
+                    'public_reasons': public_reasons,
+                })
+        return public_buckets
 
     def _get_new_buckets(self, hours: int = 24) -> List[Dict]:
         cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
         new_buckets = []
-        try:
-            buckets_response = self.s3_client.list_buckets()
-            for bucket in buckets_response.get('Buckets', []):
-                creation_date = bucket['CreationDate']
-                if hasattr(creation_date, 'replace') and creation_date.tzinfo is not None:
-                    creation_date = creation_date.replace(tzinfo=None)
-                if creation_date > cutoff_time.replace(tzinfo=None):
-                    new_buckets.append({
-                        'bucket_name': bucket['Name'],
-                        'creation_date': creation_date.isoformat(),
-                    })
-            return new_buckets
-        except Exception as e:
-            logger.error("Error detecting new buckets: %s", e)
-            return []
+        buckets = self._list_all_buckets()
 
-    def check_s3_anomalies(self):
-        """Backward-compatible entry point returning (is_anomaly, data) tuple."""
-        result = self.check()
-        return (result.severity != 'INFO', result.details)
+        for bucket in buckets:
+            creation_date = bucket['CreationDate']
+            if hasattr(creation_date, 'replace') and creation_date.tzinfo is not None:
+                creation_date = creation_date.replace(tzinfo=None)
+            if creation_date > cutoff_time.replace(tzinfo=None):
+                new_buckets.append({
+                    'bucket_name': bucket['Name'],
+                    'creation_date': creation_date.isoformat(),
+                })
+        return new_buckets

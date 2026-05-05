@@ -4,6 +4,7 @@ import { useDashboard } from '@/hooks/useGuardianData';
 import { mockEC2Data } from '@/lib/mock-data';
 import { Server, Play, Square, AlertTriangle, ShieldAlert, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { ClientOnly } from '@/components/ClientOnly';
 import type { EC2Anomaly, EC2ExposedInstance } from '@/types/guardian';
 
 export default function EC2Page() {
@@ -81,6 +82,7 @@ export default function EC2Page() {
         <div className="bg-[#1a1d27] border border-slate-800 rounded-lg p-5">
           <h2 className="text-lg font-bold text-slate-200 mb-6">Instances by Region</h2>
           <div className="h-64 w-full">
+            <ClientOnly>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={regionData} margin={{ top: 5, right: 20, bottom: 25, left: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
@@ -106,6 +108,7 @@ export default function EC2Page() {
                 <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
+            </ClientOnly>
           </div>
         </div>
 

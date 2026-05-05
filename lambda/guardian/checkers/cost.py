@@ -4,14 +4,18 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional
 
+from botocore.exceptions import ClientError
+
 from guardian.checkers.base import BaseChecker, CheckResult
 from guardian.config import Config
 from guardian.aws_client_provider import AWSClientProvider
 
-logger = logging.getLogger(__name__)
+SSM_COST_THRESHOLD_PATH = '/guardian/cost-threshold'
 
 MOCK_DAILY_COST_DEFAULT = 5.50
 MOCK_MONTHLY_COST_DEFAULT = 150.50
+
+logger = logging.getLogger(__name__)
 
 
 class CostChecker(BaseChecker):
@@ -103,6 +107,10 @@ class CostChecker(BaseChecker):
             if response['ResultsByTime']:
                 return float(response['ResultsByTime'][0]['Total']['UnblendedCost']['Amount'])
             return 0.0
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            logger.error("ClientError getting daily cost (%s): %s", error_code, e)
+            return 0.0
         except Exception as e:
             logger.error("Error getting daily cost: %s", e)
             return 0.0
@@ -128,6 +136,10 @@ class CostChecker(BaseChecker):
             if response['ResultsByTime']:
                 return float(response['ResultsByTime'][0]['Total']['UnblendedCost']['Amount'])
             return 0.0
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            logger.error("ClientError getting monthly cost (%s): %s", error_code, e)
+            return 0.0
         except Exception as e:
             logger.error("Error getting monthly cost: %s", e)
             return 0.0
@@ -135,7 +147,7 @@ class CostChecker(BaseChecker):
     def set_threshold(self, amount: float) -> None:
         try:
             self.ssm_client.put_parameter(
-                Name='/guardian/cost-threshold',
+                Name=SSM_COST_THRESHOLD_PATH,
                 Value=str(amount),
                 Type='String',
                 Overwrite=True
@@ -146,7 +158,7 @@ class CostChecker(BaseChecker):
 
     def get_threshold(self) -> float:
         try:
-            response = self.ssm_client.get_parameter(Name='/guardian/cost-threshold')
+            response = self.ssm_client.get_parameter(Name=SSM_COST_THRESHOLD_PATH)
             self.threshold = float(response['Parameter']['Value'])
             return self.threshold
         except self.ssm_client.exceptions.ParameterNotFound:
@@ -155,7 +167,4 @@ class CostChecker(BaseChecker):
             logger.warning("Error getting threshold from SSM: %s", e)
             return self.threshold
 
-    def check_cost_anomaly(self):
-        """Backward-compatible entry point returning (is_anomaly, data) tuple."""
-        result = self.check()
-        return (result.severity != 'INFO', result.details)
+        self.threshold = amount

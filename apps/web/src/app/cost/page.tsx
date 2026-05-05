@@ -4,6 +4,7 @@ import { useDashboard } from '@/hooks/useGuardianData';
 import { mockCostData } from '@/lib/mock-data';
 import { DollarSign, TrendingUp, TrendingDown, AlertTriangle, Calendar, RefreshCw } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { ClientOnly } from '@/components/ClientOnly';
 
 export default function CostPage() {
   const { summary, isLoading, isError, refresh } = useDashboard();
@@ -86,7 +87,8 @@ export default function CostPage() {
       <div className="bg-[#1a1d27] border border-slate-800 rounded-lg p-5">
         <h2 className="text-lg font-bold text-slate-200 mb-6">30-Day Cost Trend</h2>
         <div className="h-96 w-full">
-          <ResponsiveContainer width="100%" height="100%">
+          <ClientOnly>
+            <ResponsiveContainer width="100%" height="100%">
             <LineChart data={daily_costs} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
               <XAxis
@@ -119,6 +121,7 @@ export default function CostPage() {
               />
             </LineChart>
           </ResponsiveContainer>
+          </ClientOnly>
         </div>
       </div>
 

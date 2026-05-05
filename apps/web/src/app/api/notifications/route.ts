@@ -1,4 +1,4 @@
-import { auth } from '@auth';
+import { getAuthSession } from '@/lib/auth-utils';
 import { NextRequest, NextResponse } from 'next/server';
 
 // Mock notification events (random security/cost alerts)
@@ -37,7 +37,7 @@ const mockNotifications = [
 
 export async function GET(request: NextRequest) {
   // 인증 확인 (Gemini 권고)
-  const session = await auth();
+  const session = await getAuthSession();
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
