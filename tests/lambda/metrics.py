@@ -3,12 +3,12 @@
 Utilities for collecting, analyzing, and reporting Lambda performance metrics.
 """
 
-import time
 import json
-from typing import Dict, Any, List, Callable
-from datetime import datetime
 import statistics
+import time
+from datetime import datetime
 from pathlib import Path
+from typing import Any, Callable, Dict, List
 
 
 class PerformanceMetrics:

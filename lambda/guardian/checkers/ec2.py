@@ -2,13 +2,12 @@
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
 
 from botocore.exceptions import ClientError
-
+from guardian.aws_client_provider import AWSClientProvider
 from guardian.checkers.base import BaseChecker, CheckResult
 from guardian.config import Config
-from guardian.aws_client_provider import AWSClientProvider
 
 logger = logging.getLogger(__name__)
 

@@ -1,10 +1,10 @@
 """Discord command handler Lambda for AWS Guardian"""
 
 import json
+import logging
 import os
 import re
 import sys
-import logging
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -12,8 +12,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from guardian.checkers.cost import CostChecker
 from guardian.checkers.ec2 import EC2Checker
 from guardian.checkers.s3 import S3Checker
-from guardian.responders.discord import DiscordResponder
 from guardian.responders.aws_action_executor import AWSActionExecutor
+from guardian.responders.discord import DiscordResponder
 from guardian.storage.dynamodb import DynamoDBStorage
 
 logger = logging.getLogger(__name__)
@@ -35,8 +35,8 @@ action_executor = AWSActionExecutor()
 
 def verify_discord_request(request_body: str, signature: str, timestamp: str) -> bool:
     try:
-        from nacl.signing import VerifyKey
         from nacl.exceptions import BadSignatureError
+        from nacl.signing import VerifyKey
 
         public_key = os.getenv("DISCORD_PUBLIC_KEY", "")
         if not public_key or not signature or not timestamp:

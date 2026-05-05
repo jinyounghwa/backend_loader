@@ -1,12 +1,12 @@
 """Unit tests for CloudTrail checker"""
 
-import unittest
 import json
+import unittest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
-from datetime import datetime, timezone, timedelta
 
-from guardian.checkers.cloudtrail import CloudTrailChecker
 from guardian.checkers.base import CheckResult
+from guardian.checkers.cloudtrail import CloudTrailChecker
 
 
 class TestCloudTrailChecker(unittest.TestCase):

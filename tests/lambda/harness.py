@@ -5,12 +5,12 @@ measure performance, and validate IAM permissions.
 """
 
 import json
+import logging
+import os
 import subprocess
 import time
-import os
-from typing import Any, Dict, Optional
 from pathlib import Path
-import logging
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 

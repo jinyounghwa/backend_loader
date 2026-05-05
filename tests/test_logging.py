@@ -1,12 +1,17 @@
 """Unit tests for logging configuration"""
 
-import unittest
-import logging
 import json
-import tempfile
+import logging
 import os
+import tempfile
+import unittest
 
-from guardian.logging_config import JSONFormatter, setup_logger, log_check_result, log_remediation
+from guardian.logging_config import (
+    JSONFormatter,
+    log_check_result,
+    log_remediation,
+    setup_logger,
+)
 
 
 class TestJSONFormatter(unittest.TestCase):

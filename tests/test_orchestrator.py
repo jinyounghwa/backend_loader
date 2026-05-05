@@ -1,11 +1,11 @@
 """Unit tests for GuardianOrchestrator - unified check pipeline"""
 
 import unittest
-from unittest.mock import Mock
 from datetime import datetime, timezone
+from unittest.mock import Mock
 
-from guardian.orchestrator import GuardianOrchestrator
 from guardian.checkers.base import CheckResult
+from guardian.orchestrator import GuardianOrchestrator
 
 
 def _make_info_result(title="OK", message="No issues"):

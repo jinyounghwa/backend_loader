@@ -1,11 +1,11 @@
 """Unit tests for GuardDuty checker"""
 
 import unittest
-from unittest.mock import Mock, patch
 from datetime import datetime, timezone
+from unittest.mock import Mock, patch
 
-from guardian.checkers.guardduty import GuardDutyChecker
 from guardian.checkers.base import CheckResult
+from guardian.checkers.guardduty import GuardDutyChecker
 
 
 class TestGuardDutyChecker(unittest.TestCase):

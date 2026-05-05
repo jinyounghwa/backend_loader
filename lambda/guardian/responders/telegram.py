@@ -2,15 +2,15 @@
 
 import logging
 import os
-import requests
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
+import requests
 from guardian.responders.alert_formatter import (
-    AlertMessage,
-    severity_icon,
-    check_emoji,
     EMOJI,
+    AlertMessage,
+    check_emoji,
     format_account_info,
+    severity_icon,
 )
 
 logger = logging.getLogger(__name__)

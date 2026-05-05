@@ -5,7 +5,12 @@ multi-region performance against v1.1 targets.
 """
 
 import pytest
-from harness import LambdaHarness, CostCheckerHarness, EC2CheckerHarness, S3CheckerHarness
+from harness import (
+    CostCheckerHarness,
+    EC2CheckerHarness,
+    LambdaHarness,
+    S3CheckerHarness,
+)
 from metrics import PerformanceMetrics
 
 

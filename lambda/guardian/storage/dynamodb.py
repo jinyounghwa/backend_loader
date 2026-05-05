@@ -1,13 +1,13 @@
 """DynamoDB storage for AWS Guardian"""
 
-import uuid
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
-from guardian.config import Config
 from guardian.aws_client_provider import AWSClientProvider
+from guardian.config import Config
 
 logger = logging.getLogger(__name__)
 

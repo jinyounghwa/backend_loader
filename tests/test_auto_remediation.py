@@ -1,10 +1,13 @@
 """Unit tests for auto-remediation functions"""
 
 import unittest
-from unittest.mock import patch, MagicMock
 from datetime import datetime
+from unittest.mock import MagicMock, patch
 
-from guardian.responders.auto_remediation import remediate_cost_overrun, remediate_hacking_suspicion
+from guardian.responders.auto_remediation import (
+    remediate_cost_overrun,
+    remediate_hacking_suspicion,
+)
 
 
 class TestRemediateCostOverrun(unittest.TestCase):

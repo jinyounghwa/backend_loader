@@ -6,8 +6,8 @@ independently from detection logic in checkers.
 
 import logging
 
-from guardian.config import Config
 from guardian.aws_client_provider import AWSClientProvider
+from guardian.config import Config
 
 logger = logging.getLogger(__name__)
 

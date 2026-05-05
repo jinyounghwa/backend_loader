@@ -2,9 +2,9 @@
 
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Optional, Dict, Any
 from contextlib import contextmanager
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 
 from guardian.aws_client_provider import AWSClientProvider
 

@@ -1,9 +1,9 @@
 """Singleton AWS Client Provider for managing boto3 clients"""
 
-import boto3
 import logging
-from typing import Dict, Optional, Any
+from typing import Any, Dict, Optional
 
+import boto3
 from guardian.config import Config
 
 logger = logging.getLogger(__name__)

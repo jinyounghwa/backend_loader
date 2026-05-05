@@ -1,22 +1,26 @@
 """Telegram bot listener - polls for user commands and executes auto-remediation"""
 
+import logging
 import os
 import re
+import signal
 import sys
 import time
-import logging
-import signal
-import requests
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import requests
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from guardian.responders.telegram import TelegramResponder
-from guardian.responders.auto_remediation import remediate_cost_overrun, remediate_hacking_suspicion
-from guardian.responders.aws_action_executor import AWSActionExecutor
-from guardian.config import Config
 from guardian.aws_client_provider import AWSClientProvider
+from guardian.config import Config
+from guardian.responders.auto_remediation import (
+    remediate_cost_overrun,
+    remediate_hacking_suspicion,
+)
+from guardian.responders.aws_action_executor import AWSActionExecutor
+from guardian.responders.telegram import TelegramResponder
 from guardian.storage.dynamodb import DynamoDBStorage
 
 logger = logging.getLogger("telegram_bot")
@@ -226,7 +230,10 @@ def _execute_remediation(finding_id: str, finding_data: dict) -> dict:
 
 def export_events(format_str: str, days: int = 7, severity: Optional[str] = None) -> dict:
     """Handle /export {csv|pdf|json} command (Gemini recommended memory optimization)"""
-    from guardian.reporters.event_exporter import EventExporter, query_events_with_pagination
+    from guardian.reporters.event_exporter import (
+        EventExporter,
+        query_events_with_pagination,
+    )
 
     # Strict format validation
     if not EventExporter.validate_format(format_str):

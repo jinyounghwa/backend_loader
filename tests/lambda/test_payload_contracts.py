@@ -4,22 +4,23 @@ Tests to ensure EventBridge event format and Lambda response format
 remain consistent between Jest (frontend) and Python (backend).
 """
 
-import pytest
-from datetime import datetime
 import sys
+from datetime import datetime
 from pathlib import Path
+
+import pytest
 
 # Add lambda module to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "lambda"))
 
 from guardian.models import (
-    EventBridgeScheduledEvent,
-    CheckerResponse,
-    Finding,
-    ResponderInput,
-    RemediationAction,
     AuditLogRecord,
+    CheckerResponse,
+    EventBridgeScheduledEvent,
+    Finding,
+    RemediationAction,
     RemediationMetricRecord,
+    ResponderInput,
     StatusResponse,
 )
 

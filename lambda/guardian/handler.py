@@ -1,9 +1,9 @@
 """Main Lambda handler for AWS Guardian - lazy initialization for optimal cold start."""
 
+import json
 import os
 import sys
-import json
-from typing import Dict, Any
+from typing import Any, Dict
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -29,11 +29,11 @@ class _LazyOrchestrator:
         from guardian.checkers.cost import CostChecker
         from guardian.checkers.ec2 import EC2Checker
         from guardian.checkers.s3 import S3Checker
-        from guardian.responders.telegram import TelegramResponder
+        from guardian.orchestrator import GuardianOrchestrator
         from guardian.responders.discord import DiscordResponder
         from guardian.responders.remediation_service import AutoRemediationResponder
+        from guardian.responders.telegram import TelegramResponder
         from guardian.storage.dynamodb import DynamoDBStorage
-        from guardian.orchestrator import GuardianOrchestrator
 
         config = Config()
         cost_threshold = config.get_cost_threshold()

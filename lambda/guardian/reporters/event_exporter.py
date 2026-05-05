@@ -3,9 +3,9 @@
 import csv
 import json
 import logging
-from io import StringIO
 from datetime import datetime, timedelta, timezone
-from typing import List, Dict, Any, Optional
+from io import StringIO
+from typing import Any, Dict, List, Optional
 
 try:
     from fpdf import FPDF

@@ -1,12 +1,12 @@
 """Unit tests for IAM checker"""
 
-import unittest
 import json
-from unittest.mock import Mock
+import unittest
 from datetime import datetime, timezone
+from unittest.mock import Mock
 
-from guardian.checkers.iam import IAMChecker
 from guardian.checkers.base import CheckResult
+from guardian.checkers.iam import IAMChecker
 
 
 class TestIAMChecker(unittest.TestCase):

@@ -1,10 +1,11 @@
 """Remediation outcome tracking and effectiveness metrics"""
 
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
-from guardian.storage.dynamodb import DynamoDBStorage
+
 from guardian.aws_client_provider import AWSClientProvider
-import logging
+from guardian.storage.dynamodb import DynamoDBStorage
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,7 @@
 """Tests for cost checker - LocalStack integration tests"""
 
-import unittest
 import os
+import unittest
 
 from guardian.checkers.cost import CostChecker
 

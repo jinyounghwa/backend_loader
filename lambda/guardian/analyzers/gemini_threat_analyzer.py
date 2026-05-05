@@ -1,10 +1,10 @@
 """Gemini-powered threat analysis for AWS Guardian events"""
 
+import hashlib
 import json
 import logging
-import hashlib
-from typing import Optional, Dict, Any
 from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 
 try:
     import google.generativeai as genai

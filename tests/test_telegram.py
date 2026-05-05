@@ -1,8 +1,8 @@
 """Unit tests for Telegram responder"""
 
-import unittest
-from unittest.mock import patch, MagicMock
 import os
+import unittest
+from unittest.mock import MagicMock, patch
 
 from guardian.responders.telegram import TelegramResponder
 

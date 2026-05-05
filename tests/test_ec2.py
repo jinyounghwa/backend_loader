@@ -1,9 +1,9 @@
 """Tests for EC2 checker - LocalStack integration tests"""
 
-import unittest
 import time
-import boto3
+import unittest
 
+import boto3
 from guardian.checkers.ec2 import EC2Checker
 from guardian.config import Config
 from guardian.responders.aws_action_executor import AWSActionExecutor

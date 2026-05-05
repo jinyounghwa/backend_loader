@@ -1,12 +1,12 @@
 """Tests for S3 checker - LocalStack integration tests"""
 
 import unittest
-import boto3
 from unittest.mock import MagicMock
 
+import boto3
+from guardian.aws_client_provider import AWSClientProvider
 from guardian.checkers.s3 import S3Checker
 from guardian.config import Config
-from guardian.aws_client_provider import AWSClientProvider
 from guardian.responders.aws_action_executor import AWSActionExecutor
 
 

@@ -1,9 +1,9 @@
 """Discord notification responder for AWS Guardian"""
 
 import logging
-import requests
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
+import requests
 from guardian.responders.alert_formatter import (
     AlertMessage,
     check_emoji,

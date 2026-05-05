@@ -2,7 +2,7 @@
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
 
 from guardian.aws_client_provider import AWSClientProvider
 

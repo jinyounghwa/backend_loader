@@ -1,8 +1,8 @@
 """Base class for all AWS Guardian checkers."""
 
-from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
 import logging
+from abc import ABC, abstractmethod
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 

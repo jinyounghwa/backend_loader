@@ -4,8 +4,8 @@ Provides a unified AlertMessage model that both Telegram and Discord
 responders use to render alerts, eliminating per-channel formatting duplication.
 """
 
-from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional
 
 SEVERITY_ICONS = {
     "CRITICAL": "🔴",

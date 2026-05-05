@@ -1,11 +1,10 @@
 """CloudTrail checker for suspicious API activity detection."""
 
-from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta, timezone
 import logging
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
 
 from botocore.exceptions import ClientError
-
 from guardian.checkers.base import BaseChecker, CheckResult
 
 logger = logging.getLogger(__name__)

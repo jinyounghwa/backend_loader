@@ -1,9 +1,10 @@
 """Shared test fixtures for AWS Guardian test suite."""
 
-import sys
 import os
-import pytest
+import sys
 from unittest.mock import Mock
+
+import pytest
 
 # Ensure lambda package is importable from all tests
 _LAMBDA_DIR = os.path.join(os.path.dirname(__file__), "..", "lambda")

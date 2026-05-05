@@ -6,8 +6,8 @@ End-to-end tests simulating real Guardian workflows:
 3. Remediation decision → action execution → audit log
 """
 
-from harness import LambdaHarness, CostCheckerHarness, EC2CheckerHarness
 from guardian.models import EventBridgeScheduledEvent
+from harness import CostCheckerHarness, EC2CheckerHarness, LambdaHarness
 
 
 class TestFullMonitoringCycle:
