@@ -79,6 +79,14 @@ export interface DashboardSummary {
   last_check: string;
   next_check: string;
   system_health: 'healthy' | 'warning' | 'critical';
+  region?: string;
+  is_stale?: boolean;
+}
+
+export interface MultiRegionSummary {
+  regions: DashboardSummary[];
+  last_check: string;
+  errors: Record<string, string>;
 }
 
 /** Raw DynamoDB check_result item stored by the Python handler */

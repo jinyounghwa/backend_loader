@@ -13,9 +13,14 @@ const defaultOptions = {
   shouldRetryOnError: true,
 };
 
-export function useDashboard() {
-  const { data, error, isLoading, mutate } = useSWR<DashboardSummary>(
-    '/api/status',
+export function useDashboard(regions?: string[]) {
+  const regionsParam = regions && regions.length > 0
+    ? `?regions=${regions.join(',')}`
+    : '';
+  const url = `/api/status${regionsParam}`;
+
+  const { data, error, isLoading, mutate } = useSWR<DashboardSummary | any>(
+    url,
     fetcher,
     { ...defaultOptions, refreshInterval: 60_000 }
   );

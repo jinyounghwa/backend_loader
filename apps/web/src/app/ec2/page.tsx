@@ -4,6 +4,7 @@ import { useDashboard } from '@/hooks/useGuardianData';
 import { mockEC2Data } from '@/lib/mock-data';
 import { Server, Play, Square, AlertTriangle, ShieldAlert, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import type { EC2Anomaly, EC2ExposedInstance } from '@/types/guardian';
 
 export default function EC2Page() {
   const { summary, isLoading, isError, refresh } = useDashboard();
@@ -121,7 +122,7 @@ export default function EC2Page() {
                 No anomalies detected
               </div>
             ) : (
-              anomalies.map((anomaly, idx) => (
+              anomalies.map((anomaly: EC2Anomaly, idx: number) => (
                 <div key={idx} className="bg-slate-800/30 border border-slate-700 rounded p-4">
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center">
@@ -169,7 +170,7 @@ export default function EC2Page() {
                   </td>
                 </tr>
               ) : (
-                exposed_instances.map((instance, idx) => (
+                exposed_instances.map((instance: EC2ExposedInstance, idx: number) => (
                   <tr key={idx} className="hover:bg-slate-800/30 transition-colors">
                     <td className="px-6 py-4 font-mono text-slate-300">{instance.instance_id}</td>
                     <td className="px-6 py-4 text-slate-400">{instance.region}</td>

@@ -2,15 +2,23 @@ import { NextResponse } from 'next/server';
 import { auth } from '@auth';
 import { getLatestCheckResult, getRecentEvents } from '@/lib/dynamodb';
 import { mockCostData, mockEC2Data, mockS3Data, mockEvents } from '@/lib/mock-data';
-import type { CheckResultDetails, DashboardSummary, DynamoEventItem, GuardianEvent } from '@/types/guardian';
+import type { CheckResultDetails, DashboardSummary, DynamoEventItem, GuardianEvent, MultiRegionSummary } from '@/types/guardian';
 
 export const dynamic = 'force-dynamic';
+const CHECK_INTERVAL_MINUTES = 60;
+const STALE_THRESHOLD_MINUTES = 65; // 60min + 5min buffer
 
 function generateNextCheckTime(): string {
-  return new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  return new Date(Date.now() + CHECK_INTERVAL_MINUTES * 60 * 1000).toISOString();
 }
 
-function buildFallbackSummary(): DashboardSummary {
+function isStaleData(lastCheckTime: string): boolean {
+  const lastCheckMs = new Date(lastCheckTime).getTime();
+  const ageMinutes = (Date.now() - lastCheckMs) / (1000 * 60);
+  return ageMinutes > STALE_THRESHOLD_MINUTES;
+}
+
+function buildFallbackSummary(region: string = 'ap-northeast-1'): DashboardSummary {
   return {
     cost: mockCostData,
     ec2: mockEC2Data,
@@ -19,6 +27,8 @@ function buildFallbackSummary(): DashboardSummary {
     last_check: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
     next_check: generateNextCheckTime(),
     system_health: 'warning',
+    region,
+    is_stale: false,
   };
 }
 
@@ -36,12 +46,7 @@ function ddbItemToGuardianEvent(item: DynamoEventItem, index: number): GuardianE
   };
 }
 
-export async function GET() {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+async function fetchRegionData(region: string): Promise<DashboardSummary | null> {
   try {
     const [checkResult, rawEvents] = await Promise.all([
       getLatestCheckResult(),
@@ -49,7 +54,7 @@ export async function GET() {
     ]);
 
     if (!checkResult) {
-      return NextResponse.json(buildFallbackSummary());
+      return null;
     }
 
     const details: CheckResultDetails = typeof checkResult.details === 'string'
@@ -68,9 +73,63 @@ export async function GET() {
       last_check: details.last_check,
       next_check: generateNextCheckTime(),
       system_health: details.system_health,
+      region,
+      is_stale: isStaleData(details.last_check),
     };
 
-    return NextResponse.json(summary);
+    return summary;
+  } catch {
+    return null;
+  }
+}
+
+export async function GET(request: Request) {
+  const session = await auth();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const regionsParam = searchParams.get('regions');
+    const regions = regionsParam
+      ? regionsParam.split(',').filter(r => r.trim())
+      : ['ap-northeast-1'];
+
+    // Single region mode (backward compatibility)
+    if (regions.length === 1) {
+      const region = regions[0];
+      const data = await fetchRegionData(region);
+      return NextResponse.json(data || buildFallbackSummary(region));
+    }
+
+    // Multi-region mode
+    const results = await Promise.allSettled(
+      regions.map(region => fetchRegionData(region))
+    );
+
+    const summaries: DashboardSummary[] = [];
+    const errors: Record<string, string> = {};
+
+    results.forEach((result, index) => {
+      const region = regions[index];
+      if (result.status === 'fulfilled' && result.value) {
+        summaries.push(result.value);
+      } else if (result.status === 'rejected') {
+        errors[region] = 'Failed to fetch region data';
+        summaries.push(buildFallbackSummary(region));
+      } else {
+        summaries.push(buildFallbackSummary(region));
+      }
+    });
+
+    const multiRegionSummary: MultiRegionSummary = {
+      regions: summaries,
+      last_check: new Date().toISOString(),
+      errors,
+    };
+
+    return NextResponse.json(multiRegionSummary);
   } catch {
     return NextResponse.json(buildFallbackSummary());
   }

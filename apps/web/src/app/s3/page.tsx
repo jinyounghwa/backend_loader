@@ -4,6 +4,7 @@ import { useDashboard } from '@/hooks/useGuardianData';
 import { mockS3Data } from '@/lib/mock-data';
 import { Database, Globe, PlusCircle, Shield, ShieldAlert, RefreshCw } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import type { S3PublicBucket, S3NewBucket, S3Anomaly } from '@/types/guardian';
 
 export default function S3Page() {
   const { summary, isLoading, isError, refresh } = useDashboard();
@@ -144,7 +145,7 @@ export default function S3Page() {
                       </td>
                     </tr>
                   ) : (
-                    public_buckets.map((bucket, idx) => {
+                    public_buckets.map((bucket: S3PublicBucket, idx: number) => {
                       const date = new Date(bucket.created);
                       return (
                         <tr key={idx} className="hover:bg-slate-800/30 transition-colors">
@@ -193,7 +194,7 @@ export default function S3Page() {
                       </td>
                     </tr>
                   ) : (
-                    new_buckets.map((bucket, idx) => {
+                    new_buckets.map((bucket: S3NewBucket, idx: number) => {
                       const date = new Date(bucket.created);
                       return (
                         <tr key={idx} className="hover:bg-slate-800/30 transition-colors">

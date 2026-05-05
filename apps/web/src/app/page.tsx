@@ -1,15 +1,17 @@
 'use client';
 
-import { useCallback, useMemo, Suspense } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useDashboard } from '@/hooks/useGuardianData';
 import { mockDashboardSummary } from '@/lib/mock-data';
 import { DollarSign, Server, Database, AlertTriangle, ArrowUpRight, ArrowDownRight, Activity, RefreshCw } from 'lucide-react';
 import AccountSelector from '@/components/Dashboard/AccountSelector';
+import RegionSelector from '@/components/Dashboard/RegionSelector';
 import RiskScore from '@/components/Dashboard/RiskScore';
 import EventFeed from '@/components/Dashboard/EventFeed';
 import AIThreatPanel from '@/components/Dashboard/AIThreatPanel';
 import { useAIAnalysis } from '@/lib/hooks/useAIAnalysis';
+import type { DashboardSummary, MultiRegionSummary } from '@/types/guardian';
 
 const ActionHistory = dynamic(() => import('@/components/Dashboard/ActionHistory'), {
   loading: () => <div className="h-64 bg-slate-800/50 rounded-lg animate-pulse" />,
@@ -23,9 +25,32 @@ const ChartSection = dynamic(() => import('@/components/Dashboard/ChartSection')
   loading: () => <div className="h-96 bg-slate-800/50 rounded-lg animate-pulse" />,
 });
 
+const RegionMetrics = dynamic(() => import('@/components/Dashboard/RegionMetrics'), {
+  loading: () => <div className="h-64 bg-slate-800/50 rounded-lg animate-pulse" />,
+});
+
+const RegionComparisonChart = dynamic(() => import('@/components/Dashboard/RegionComparisonChart'), {
+  loading: () => <div className="h-64 bg-slate-800/50 rounded-lg animate-pulse" />,
+});
+
 export default function DashboardPage() {
-  const { summary, isLoading, isError, refresh } = useDashboard();
-  const data = summary ?? mockDashboardSummary;
+  const [selectedRegions, setSelectedRegions] = useState<string[]>(['ap-northeast-1']);
+  const { summary, isLoading, isError, refresh } = useDashboard(selectedRegions);
+
+  const isMultiRegion = selectedRegions.length > 1;
+  const data: DashboardSummary = useMemo(() => {
+    if (!summary) return mockDashboardSummary;
+
+    // Multi-region response
+    if (isMultiRegion && 'regions' in summary) {
+      const multiSummary = summary as MultiRegionSummary;
+      return multiSummary.regions[0] ?? mockDashboardSummary;
+    }
+
+    // Single region response
+    return summary as DashboardSummary;
+  }, [summary, isMultiRegion]);
+
   const { cost, ec2, s3, recent_events, system_health } = data;
 
   const { analysis, loading: aiLoading, error: aiError, analyzeDebounced: analyzeEvents } = useAIAnalysis();
@@ -49,8 +74,14 @@ export default function DashboardPage() {
       ? 'bg-amber-500/10 text-amber-500 border-amber-500/20'
       : 'bg-green-500/10 text-green-500 border-green-500/20';
 
+  const handleRegionsChange = useCallback((regions: string[]) => {
+    setSelectedRegions(regions);
+  }, []);
+
   return (
     <div className="space-y-6">
+      <RegionSelector onRegionsChange={handleRegionsChange} />
+
       <div className="flex items-center justify-between flex-wrap gap-3 md:gap-4">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-slate-100 tracking-tight">System Overview</h1>
@@ -133,6 +164,27 @@ export default function DashboardPage() {
       </div>
 
       <ChartSection cost={cost} ec2={ec2} s3={s3} />
+
+      {isMultiRegion && summary && 'regions' in summary && (
+        <>
+          <RegionMetrics
+            metrics={(summary as MultiRegionSummary).regions.map(s => ({
+              region: s.region || 'unknown',
+              ec2: s.ec2,
+              s3: s.s3,
+              cost: s.cost,
+              isStale: s.is_stale,
+            }))}
+          />
+          <RegionComparisonChart
+            data={(summary as MultiRegionSummary).regions.map(s => ({
+              region: s.region || 'unknown',
+              displayName: s.region?.split('-').slice(0, 2).join('-') || 'unknown',
+              cost: s.cost.monthly_cost,
+            }))}
+          />
+        </>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <div>
