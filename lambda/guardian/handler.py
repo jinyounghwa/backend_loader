@@ -2,8 +2,7 @@
 import os
 import sys
 import json
-import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 

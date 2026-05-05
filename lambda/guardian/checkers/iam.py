@@ -3,7 +3,7 @@
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Set, Optional
+from typing import Dict, Any, List, Optional
 
 from guardian.checkers.base import BaseChecker, CheckResult
 from botocore.exceptions import ClientError

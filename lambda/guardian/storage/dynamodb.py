@@ -126,7 +126,7 @@ class DynamoDBStorage:
     def get_events_by_account(self, account_id: str, hours: int = 24) -> List[Dict]:
         """Query events for a specific account (Phase 4: Multi-account support)."""
         try:
-            from boto3.dynamodb.conditions import Key, Attr
+            from boto3.dynamodb.conditions import Attr
 
             cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
 

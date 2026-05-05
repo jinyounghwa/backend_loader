@@ -2,7 +2,6 @@
 import os
 import re
 import sys
-import json
 import time
 import logging
 import signal
@@ -222,7 +221,7 @@ def export_events(format_str: str, days: int = 7, severity: Optional[str] = None
 
     # Strict format validation
     if not EventExporter.validate_format(format_str):
-        return {'error': f'Invalid format. Must be: csv, pdf, or json'}
+        return {'error': 'Invalid format. Must be: csv, pdf, or json'}
 
     try:
         storage = DynamoDBStorage()
@@ -452,7 +451,7 @@ class TelegramBotListener:
 
         if 'steps' in result:
             lines = [
-                f"✅ <b>자동 수정 완료</b>",
+                "✅ <b>자동 수정 완료</b>",
                 f"📋 명령: {command_text}",
                 f"🕐 시간: {result['timestamp'][:10]}",
                 "",
@@ -465,7 +464,7 @@ class TelegramBotListener:
                 lines.append(f"   └ {step['detail']}")
 
             lines.append("")
-            lines.append(f"<b>요약:</b>")
+            lines.append("<b>요약:</b>")
             lines.append(result.get('summary', '완료'))
 
             self.telegram.send_message('\n'.join(lines))

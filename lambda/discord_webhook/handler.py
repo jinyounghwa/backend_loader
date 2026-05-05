@@ -14,7 +14,6 @@ from guardian.checkers.s3 import S3Checker
 from guardian.responders.discord import DiscordResponder
 from guardian.responders.aws_action_executor import AWSActionExecutor
 from guardian.storage.dynamodb import DynamoDBStorage
-from guardian.aws_client_provider import AWSClientProvider
 
 logger = logging.getLogger(__name__)
 

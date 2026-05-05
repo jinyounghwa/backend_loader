@@ -4,7 +4,6 @@ Handles AWS API calls that modify resources (stop EC2, block S3, etc.)
 independently from detection logic in checkers.
 """
 import logging
-from typing import Dict, Any
 
 from guardian.config import Config
 from guardian.aws_client_provider import AWSClientProvider

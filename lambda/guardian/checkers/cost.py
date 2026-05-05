@@ -2,7 +2,7 @@
 import os
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 
 from botocore.exceptions import ClientError
 
@@ -166,5 +166,3 @@ class CostChecker(BaseChecker):
         except Exception as e:
             logger.warning("Error getting threshold from SSM: %s", e)
             return self.threshold
-
-        self.threshold = amount
