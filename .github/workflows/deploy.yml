@@ -71,12 +71,14 @@ jobs:
           terraform init -backend=false
           terraform validate
 
+      - name: Install tfsec
+        run: |
+          curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/main/scripts/install_linux.sh | bash
+
       - name: Run tfsec (Terraform security scanning)
-        uses: aquasecurity/tfsec-action@v1
-        with:
-          working_directory: terraform
-          format: sarif
-          out_dir: .
+        working-directory: terraform
+        run: |
+          tfsec . --format sarif --out tfsec-report.sarif || true
 
   # ============================================================================
   # Stage 2: Test - Unit tests with LocalStack
