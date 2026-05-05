@@ -10,8 +10,10 @@ import RegionSelector from '@/components/Dashboard/RegionSelector';
 import RiskScore from '@/components/Dashboard/RiskScore';
 import EventFeed from '@/components/Dashboard/EventFeed';
 import AIThreatPanel from '@/components/Dashboard/AIThreatPanel';
+import InsightsPanel from '@/components/Dashboard/InsightsPanel';
 import { useAIAnalysis } from '@/lib/hooks/useAIAnalysis';
 import type { DashboardSummary, MultiRegionSummary } from '@/types/guardian';
+import type { AnomalyInput } from '@/lib/hooks/useInsights';
 
 const ActionHistory = dynamic(() => import('@/components/Dashboard/ActionHistory'), {
   loading: () => <div className="h-64 bg-slate-800/50 rounded-lg animate-pulse" />,
@@ -66,6 +68,25 @@ export default function DashboardPage() {
       analyzeEvents(eventsForAnalysis);
     }
   }, [eventsForAnalysis, analyzeEvents]);
+
+  const anomaliesForInsights = useMemo(() => {
+    const anom: AnomalyInput[] = [];
+    if (ec2.anomalies.length > 0) {
+      anom.push({
+        region: selectedRegions[0],
+        type: 'ec2_exposure',
+        count: ec2.anomalies.length,
+      });
+    }
+    if (s3.anomalies.length > 0) {
+      anom.push({
+        region: selectedRegions[0],
+        type: 's3_public',
+        count: s3.anomalies.length,
+      });
+    }
+    return anom;
+  }, [ec2.anomalies, s3.anomalies, selectedRegions]);
 
   const costTrend = cost.increase_percent > 0 ? 'up' : 'down';
   const costTrendColor = cost.is_anomaly ? 'text-red-500' : costTrend === 'up' ? 'text-amber-500' : 'text-green-500';
@@ -211,6 +232,8 @@ export default function DashboardPage() {
           <EventFeed />
         </div>
       </div>
+
+      <InsightsPanel anomalies={anomaliesForInsights} onRefresh={refresh} />
 
       <ActionHistory />
 
