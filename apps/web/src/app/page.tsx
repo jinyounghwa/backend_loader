@@ -33,6 +33,10 @@ const RegionComparisonChart = dynamic(() => import('@/components/Dashboard/Regio
   loading: () => <div className="h-64 bg-slate-800/50 rounded-lg animate-pulse" />,
 });
 
+const ResponseRuleManager = dynamic(() => import('@/components/Dashboard/ResponseRuleManager'), {
+  loading: () => <div className="h-96 bg-slate-800/50 rounded-lg animate-pulse" />,
+});
+
 export default function DashboardPage() {
   const [selectedRegions, setSelectedRegions] = useState<string[]>(['ap-northeast-1']);
   const { summary, isLoading, isError, refresh } = useDashboard(selectedRegions);
@@ -211,6 +215,8 @@ export default function DashboardPage() {
       <ActionHistory />
 
       <AuditLogViewer limit={50} />
+
+      <ResponseRuleManager region={selectedRegions[0]} />
 
       <div className="bg-[#1a1d27] border border-slate-800 rounded-lg overflow-hidden">
         <div className="p-3 md:p-5 border-b border-slate-800 flex items-center justify-between flex-col md:flex-row gap-2">

@@ -160,20 +160,39 @@ class TelegramResponder:
         msg += "\n━━━━━━━━━━━━━━━━━━━"
         return self.send_message(msg)
 
-    def send_auto_response_notification(self, action_type: str, resource_id: str, status: str) -> bool:
+    def send_auto_response_notification(
+        self,
+        action_type: str,
+        resource_id: str,
+        status: str,
+        region: Optional[str] = None,
+        rule_id: Optional[str] = None,
+        action_description: Optional[str] = None,
+    ) -> bool:
         status_icon = EMOJI.get('success' if status == 'success' else 'failed', '❓')
-        action_desc = {
+        action_desc = action_description or {
+            'stop_instance': 'Stopped EC2 instance',
             'stop_ec2': 'Stopped EC2 instance',
+            'block_bucket': 'Blocked S3 public access',
             'block_s3_public': 'Blocked S3 public access',
         }.get(action_type, f'Executed {action_type}')
+
         msg = f"""
-{status_icon} <b>Auto-Response Action</b>
-━━━━━━━━━━━━━━━━━━━
+{status_icon} <b>Auto-Response Action Executed</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 Action: {action_desc}
-🎯 Resource: <code>{resource_id}</code>
-📊 Status: {status}
-━━━━━━━━━━━━━━━━━━━
-"""
+🎯 Resource: <code>{resource_id}</code>"""
+
+        if region:
+            msg += f"\n🌍 Region: <code>{region}</code>"
+
+        if rule_id:
+            msg += f"\n📜 Rule ID: <code>{rule_id}</code>"
+
+        msg += f"""
+📊 Status: <b>{status.upper()}</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
+
         return self.send_message(msg)
 
     def send_summary(self, summary_data: Dict[str, Any]) -> bool:
