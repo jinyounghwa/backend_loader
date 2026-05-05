@@ -1,0 +1,14 @@
+{
+  "version": "0",
+  "id": "ec2-check-event-001",
+  "detail-type": "Scheduled Event",
+  "source": "aws.events",
+  "account": "123456789012",
+  "time": "2026-05-05T12:00:00Z",
+  "region": "ap-northeast-1",
+  "resources": [],
+  "detail": {
+    "checker_type": "ec2",
+    "regions": ["ap-northeast-1", "ap-southeast-1", "us-east-1"]
+  }
+}
