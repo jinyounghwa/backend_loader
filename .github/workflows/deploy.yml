@@ -69,12 +69,14 @@ jobs:
           terraform init -backend=false
           terraform validate
 
-      - name: Install Trivy (Terraform security scanning)
-        uses: aquasecurity/trivy-action@master
-
       - name: Run Trivy IaC scan
-        working-directory: terraform
-        run: trivy config --exit-code 0 --format sarif --output trivy-report.sarif . || true
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: config
+          scan-ref: terraform/
+          exit-code: '0'
+          format: sarif
+          output: trivy-report.sarif
 
   # ============================================================================
   # Stage 2: Test - Unit tests with LocalStack
