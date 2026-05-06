@@ -3,7 +3,7 @@
 **Status**: 🔄 PLANNED  
 **Start Date**: 2026-05-06 (이후)  
 **Duration**: 1-2 sessions  
-**Goals**: Multi-region parallelization, request caching, circuit breaker 구현
+**Goals**: Multi-region parallelization, request caching 구현
 
 ---
 
@@ -18,7 +18,6 @@
 **v1.2 성능 목표**:
 - Multi-region: 10s → **3-4s** (3배 향상)
 - Status endpoint: 원본 → **50% 단축** (캐싱)
-- Gemini API 안정성: **Circuit breaker** 추가
 
 ---
 
@@ -89,39 +88,6 @@ def get_status_cached():
 
 ---
 
-### Phase 3: Circuit Breaker (2시간)
-
-**현재 상태**:
-```python
-# Gemini 호출 실패 → 즉시 timeout
-# 폴백: MOCK_ANALYSIS
-```
-
-**최적화**:
-```python
-from circuitbreaker import circuit
-
-@circuit(failure_threshold=5, recovery_timeout=60)
-def call_gemini_api(events):
-    # 5번 연속 실패 → 60초 동안 호출 안 함
-    # 자동 복구 시도
-    return gemini.analyze(events)
-```
-
-**구현 항목**:
-- [ ] responders/alert_formatter.py: circuit breaker 패턴
-- [ ] 설정: failure_threshold=5, recovery_timeout=60
-- [ ] 모니터링: Circuit state 로깅
-- [ ] tests: 회로 차단/복구 테스트
-
-**검증**:
-- 연속 5번 실패 시 circuit open ✅
-- Open 상태에서 즉시 폴백 ✅
-- 60초 후 half-open → 자동 복구 시도 ✅
-- 로그에 circuit state 변화 기록 ✅
-
----
-
 ## Sprint 19 구성
 
 ### Phase별 진행
@@ -136,14 +102,9 @@ Phase 2: Request Caching (2시간)
 ├─ LRU cache 구현
 ├─ TTL 관리
 └─ 캐시 무효화 로직
-
-Phase 3: Circuit Breaker (2시간)
-├─ Circuit breaker 라이브러리 선택
-├─ 통합 및 테스트
-└─ 모니터링 설정
 ```
 
-**Total Duration**: ~8시간
+**Total Duration**: ~6시간
 
 ---
 
@@ -161,12 +122,6 @@ Phase 3: Circuit Breaker (2시간)
 - Lambda stateless 설계와 일치 ✅
 - 향후 ElastiCache로 확장 가능 ✅
 
-### Circuit Breaker
-**선택**: pybreaker 라이브러리 (또는 custom)
-- 가벼운 라이브러리 ✅
-- explicit state 추적 가능 ✅
-- 로깅 및 모니터링 용이 ✅
-
 ---
 
 ## 성공 지표
@@ -175,7 +130,6 @@ Phase 3: Circuit Breaker (2시간)
 |------|------|------|
 | Multi-region 성능 | 10s → 3-4s | 🔄 |
 | Status endpoint | 원본 → 50% 단축 | 🔄 |
-| Circuit breaker | 5회 실패 후 open | 🔄 |
 | 모든 테스트 | 82/82 passing | 🔄 |
 | CloudWatch 메트릭 | Duration p99 수집 | 🔄 |
 
@@ -193,21 +147,14 @@ Phase 3: Circuit Breaker (2시간)
    - Cache invalidation 명확하게
    - `?cache=false` 강제 새로고침 지원
 
-3. **Circuit Breaker**
-   - State 변화 로깅 (디버깅용)
-   - Half-open 상태에서 recovery 시도
-   - Fallback (MOCK_ANALYSIS) 확실하게
-
 ---
 
 ## 산출물
 
 - ✅ `lambda/guardian/handler.py` - asyncio 기반 병렬 처리
 - ✅ `lambda/guardian/checkers/base.py` - async 메서드
-- ✅ `lambda/guardian/responders/alert_formatter.py` - circuit breaker
 - ✅ `tests/lambda/test_performance.py` - 병렬 성능 테스트
 - ✅ `docs/v1.2_PERFORMANCE.md` - 성능 비교 문서
-- ✅ `docs/v1.2_DESIGN.md` - 최종 설계 문서
 - ✅ `v1.2` tag
 
 ---
