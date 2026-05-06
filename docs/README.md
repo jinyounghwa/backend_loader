@@ -21,10 +21,8 @@
 #### Development
 - **[Local Development](guides/LOCAL_DEVELOPMENT.md)** - 로컬 개발 환경 설정
 - **[CloudWatch Monitoring](guides/CLOUDWATCH_MONITORING.md)** - CloudWatch 메트릭 및 대시보드
-- **[Agentic Workflow](guides/AGENTIC_WORKFLOW.md)** - Gemini 협업 워크플로우
 
 ### 🏗️ Architecture
-- **[Gemini Collaboration](architecture/GEMINI_COLLABORATION.md)** - Gemini AI 통합 구조
 - **[System Architecture](../CLAUDE.md)** - 전체 시스템 구조 (CLAUDE.md 참조)
 
 ### 📝 Sprint Documentation
@@ -40,7 +38,6 @@
 | 새로운 개발자 온보딩 | [Local Development](guides/LOCAL_DEVELOPMENT.md) |
 | 프로덕션 배포 | [Production Deployment](guides/PRODUCTION_DEPLOYMENT.md) |
 | CloudWatch 모니터링 설정 | [CloudWatch Monitoring](guides/CLOUDWATCH_MONITORING.md) |
-| Gemini AI 협업 | [Agentic Workflow](guides/AGENTIC_WORKFLOW.md) |
 | Docker 배포 | [Docker Deployment](guides/DOCKER_DEPLOYMENT.md) |
 
 ### By Sprint Status
@@ -79,8 +76,7 @@ See **[NEXT_STEPS.md](../NEXT_STEPS.md)** for detailed progress.
 1. **처음 시작하는 경우**: [Local Development](guides/LOCAL_DEVELOPMENT.md) 시작
 2. **프로덕션 배포 필요**: [Production Deployment](guides/PRODUCTION_DEPLOYMENT.md) 참조
 3. **모니터링 설정**: [CloudWatch Monitoring](guides/CLOUDWATCH_MONITORING.md) 참조
-4. **Gemini 협업**: [Agentic Workflow](guides/AGENTIC_WORKFLOW.md) 참조
-5. **전체 상황 파악**: [NEXT_STEPS.md](../NEXT_STEPS.md) (스프린트별 상세)
+4. **전체 상황 파악**: [NEXT_STEPS.md](../NEXT_STEPS.md) (스프린트별 상세)
 
 ---
 
