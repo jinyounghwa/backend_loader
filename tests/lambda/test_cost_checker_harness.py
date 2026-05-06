@@ -35,15 +35,6 @@ class TestCostCheckerHarness:
         # findings 또는 statusCode 포함
         assert "statusCode" in response or "findings" in response
 
-    def test_cost_checker_api_key_missing(self, harness):
-        """Test: GOOGLE_API_KEY 없을 때 fallback"""
-        event = harness.create_cost_check_event()
-        # GOOGLE_API_KEY 없이 실행
-        response = harness.invoke_local(event, env={"GOOGLE_API_KEY": ""})
-
-        # Fallback 응답 또는 오류 처리
-        assert response is not None
-
     def test_cost_checker_performance(self, harness):
         """Test: Cost checker 성능 (target: <500ms)"""
         event = harness.create_cost_check_event()

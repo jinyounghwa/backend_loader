@@ -229,7 +229,7 @@ def _execute_remediation(finding_id: str, finding_data: dict) -> dict:
 
 
 def export_events(format_str: str, days: int = 7, severity: Optional[str] = None) -> dict:
-    """Handle /export {csv|pdf|json} command (Gemini recommended memory optimization)"""
+    """Handle /export {csv|pdf|json} command"""
     from guardian.reporters.event_exporter import (
         EventExporter,
         query_events_with_pagination,
@@ -270,56 +270,6 @@ def export_events(format_str: str, days: int = 7, severity: Optional[str] = None
     except Exception as e:
         logger.error("Error exporting events: %s", e)
         return {"error": f"보고서 생성 실패: {str(e)}"}
-
-
-def analyze_threats() -> dict:
-    """Handle /insights command (Gemini AI threat analysis with caching)"""
-    from guardian.analyzers.gemini_threat_analyzer import GeminiThreatAnalyzer
-    from guardian.reporters.event_exporter import query_events_with_pagination
-
-    try:
-        storage = DynamoDBStorage()
-
-        # Collect events from past 24 hours
-        events = query_events_with_pagination(storage.table, days=1, limit=1000)
-
-        if not events:
-            return {"analysis": "지난 24시간 위협 이벤트가 없습니다."}
-
-        # Prepare summary
-        summary = {
-            "total_events": len(events),
-            "by_severity": {},
-            "by_type": {},
-            "affected_resources": set(),
-        }
-
-        for event in events:
-            severity = event.get("severity", "UNKNOWN")
-            summary["by_severity"][severity] = summary["by_severity"].get(severity, 0) + 1
-
-            event_type = event.get("event_type", "unknown")
-            summary["by_type"][event_type] = summary["by_type"].get(event_type, 0) + 1
-
-            if "resource_id" in event:
-                summary["affected_resources"].add(event["resource_id"])
-
-        summary["affected_resources"] = list(summary["affected_resources"])[:5]
-
-        # Get Gemini analysis (with caching and fallback)
-        api_key = os.getenv("GEMINI_API_KEY")
-        analyzer = GeminiThreatAnalyzer(api_key)
-        analysis = analyzer.analyze_threats(summary)
-
-        return {
-            "action": "insights",
-            "analysis": analysis,
-            "event_count": len(events),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-    except Exception as e:
-        logger.error("Error analyzing threats: %s", e)
-        return {"error": f"분석 실패: {str(e)}"}
 
 
 class TelegramBotListener:
@@ -394,8 +344,6 @@ class TelegramBotListener:
                 severity = severity_match.group(1) if severity_match else None
 
                 return lambda: export_events(fmt, days, severity), f"/export {fmt} --days {days}"
-            elif command == "insights":
-                return analyze_threats, "/insights"
             elif command == "help":
                 return self._show_help, "/help"
 
@@ -426,7 +374,6 @@ class TelegramBotListener:
 <b>🔄 Sprint 9: 고급 명령어</b>
 /remediate <finding-id> - GuardDuty 발견사항 자동 대응
 /export [csv|pdf|json] --days 7 - 이벤트 보고서 생성
-/insights - AI 위협 분석 (Gemini)
 
 /help - 이 도움말 표시
 """
@@ -561,13 +508,6 @@ class TelegramBotListener:
                 f"이벤트: {result['event_count']}개\n"
                 f"파일: {result['file_path']}\n"
                 f"크기: {result['size_bytes'] / 1024:.1f} KB"
-            )
-
-        elif result.get("action") == "insights":
-            analysis = result.get("analysis", "분석 불가")
-            # Send analysis as markdown (Gemini output)
-            self.telegram.send_message(
-                f"🔍 <b>위협 분석</b> ({result.get('event_count', 0)}개 이벤트)\n\n{analysis}"
             )
 
     def run(self):

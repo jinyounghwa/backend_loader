@@ -264,63 +264,6 @@ class TestResponseRulesAPIContract:
         assert "message" in response
 
 
-class TestAnalyzeThreatAPIContract:
-    """POST /api/analyze-threat response contract"""
-
-    def test_analyze_threat_request_format(self):
-        """Test: POST /api/analyze-threat request format"""
-        request = {
-            "events": [
-                {
-                    "id": "evt-001",
-                    "type": "ec2",
-                    "severity": "high",
-                    "details": "Public security group",
-                },
-            ],
-            "context": "Multiple findings in one account",
-        }
-
-        assert "events" in request
-        assert len(request["events"]) > 0
-        assert "id" in request["events"][0]
-        assert "type" in request["events"][0]
-
-    def test_analyze_threat_response_format(self):
-        """Test: POST /api/analyze-threat response format"""
-        response = {
-            "analysis": {
-                "threat_level": "high",
-                "pattern": "Systematic exposure to public networks",
-                "recommendations": [
-                    "Review all security groups immediately",
-                    "Enable GuardDuty for automated detection",
-                ],
-            },
-            "source": "gemini",  # or "mock" if API key missing
-        }
-
-        assert "analysis" in response
-        assert "threat_level" in response["analysis"]
-        assert "recommendations" in response["analysis"]
-        assert "source" in response
-
-    def test_analyze_threat_fallback_when_no_api_key(self):
-        """Test: Fallback to mock analysis when GOOGLE_API_KEY missing"""
-        # Fallback response
-        response = {
-            "analysis": {
-                "threat_level": "medium",
-                "pattern": "MOCK_ANALYSIS",
-                "recommendations": ["Manual review recommended"],
-            },
-            "source": "mock",
-        }
-
-        assert response["source"] == "mock"
-        assert response["analysis"]["pattern"] == "MOCK_ANALYSIS"
-
-
 class TestAccountsAPIContract:
     """GET /api/accounts response contract"""
 
