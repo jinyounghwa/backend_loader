@@ -1,5 +1,6 @@
 """Guardian Orchestrator - Coordinates check execution and remediation flow"""
 
+import asyncio
 import json
 import time
 from datetime import datetime, timezone
@@ -62,6 +63,16 @@ class GuardianOrchestrator:
 
     def run_all_checks(self, event: Dict[str, Any]) -> Dict[str, Any]:
         """Execute checks based on event['check_type'] and return aggregated results."""
+        try:
+            return asyncio.run(self._async_run_all_checks(event))
+        except RuntimeError as e:
+            if "asyncio.run() cannot be called from a running event loop" in str(e):
+                loop = asyncio.get_event_loop()
+                return loop.run_until_complete(self._async_run_all_checks(event))
+            raise
+
+    async def _async_run_all_checks(self, event: Dict[str, Any]) -> Dict[str, Any]:
+        """Async implementation of run_all_checks with parallel check execution."""
         start_time = time.time()
         check_type = event.get("check_type", "all").lower()
         self.logger.info("AWS Guardian orchestration started (check_type=%s)", check_type)
@@ -99,23 +110,28 @@ class GuardianOrchestrator:
                 )
 
             account_check_data: Dict[str, Any] = {}
+            check_tasks = []
             for check_name in checks_to_run:
                 checker = account_checkers.get(check_name)
                 if not checker:
                     continue
-                try:
-                    check_result = self._run_single_check(
+                check_tasks.append(
+                    self._run_single_check_async(
                         check_name, checker, account_id, account_name
                     )
-                    account_check_data[check_name] = check_result.to_dict()
-                    results["checks"][f"{check_name}_{account_id}"] = check_result.to_dict()
-                except Exception as e:
-                    self.logger.error(
-                        "Error running %s check for account %s: %s", check_name, account_id, e
-                    )
-                    results["checks"][f"{check_name}_{account_id}"] = {
-                        "error": f"{check_name}_check_failed"
-                    }
+                )
+
+            if check_tasks:
+                check_results = await asyncio.gather(*check_tasks, return_exceptions=True)
+                for check_name, result in zip(checks_to_run, check_results):
+                    if isinstance(result, Exception):
+                        self.logger.error("Error in check %s: %s", check_name, result)
+                        results["checks"][f"{check_name}_{account_id}"] = {
+                            "error": f"{check_name}_check_failed"
+                        }
+                    elif result is not None:
+                        account_check_data[check_name] = result.to_dict()
+                        results["checks"][f"{check_name}_{account_id}"] = result.to_dict()
 
             all_check_data[account_id] = {
                 "account_id": account_id,
@@ -165,6 +181,36 @@ class GuardianOrchestrator:
         """Execute a single checker and handle logging, storage, notification, remediation."""
         self.logger.info("Checking %s...", check_name.upper())
         check_result = checker.check()
+        result_dict = check_result.to_dict()
+
+        if check_result.severity == "INFO":
+            log_check_result(self.logger, check_name, "ok", check_result.message)
+            return check_result
+
+        log_check_result(self.logger, check_name, check_result.severity, check_result.message)
+        self.storage.save_event(
+            check_name, check_result.severity, result_dict, account_id=account_id
+        )
+
+        self._notify_alert(
+            check_name, result_dict, account_id=account_id, account_name=account_name or ""
+        )
+
+        if self.remediation:
+            self.remediation.handle_check_result(check_name, check_result)
+
+        return check_result
+
+    async def _run_single_check_async(
+        self,
+        check_name: str,
+        checker: BaseChecker,
+        account_id: str = "current",
+        account_name: Optional[str] = None,
+    ) -> CheckResult:
+        """Async version of _run_single_check using check_async()."""
+        self.logger.info("Checking %s...", check_name.upper())
+        check_result = await checker.check_async()
         result_dict = check_result.to_dict()
 
         if check_result.severity == "INFO":

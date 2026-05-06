@@ -1,5 +1,6 @@
 """Base class for all AWS Guardian checkers."""
 
+import asyncio
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
@@ -85,6 +86,14 @@ class BaseChecker(ABC):
             CheckResult with severity, title, message, details, suggested_action
         """
         pass
+
+    async def check_async(self) -> CheckResult:
+        """Async version of check() - can be overridden for parallel execution.
+
+        Default implementation runs check() in thread pool for non-blocking I/O.
+        """
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.check)
 
     def _log_check_start(self, check_name: str):
         logger.info("Starting %s check", check_name)
