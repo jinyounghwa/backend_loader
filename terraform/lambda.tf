@@ -19,7 +19,7 @@ resource "aws_lambda_function" "guardian" {
   layers = [aws_lambda_layer_version.dependencies.arn]
 
   depends_on = [
-    aws_iam_role_policy_attachment.lambda_policy,
+    aws_iam_role_policy.lambda_policy,
     aws_cloudwatch_log_group.guardian_logs
   ]
 }
@@ -42,7 +42,7 @@ resource "aws_lambda_function" "discord_webhook" {
   layers = [aws_lambda_layer_version.dependencies.arn]
 
   depends_on = [
-    aws_iam_role_policy_attachment.lambda_policy,
+    aws_iam_role_policy.lambda_policy,
     aws_cloudwatch_log_group.discord_logs
   ]
 }
@@ -52,7 +52,7 @@ resource "aws_lambda_layer_version" "dependencies" {
   layer_name          = "aws-guardian-dependencies"
   compatible_runtimes = ["python3.12"]
 
-  source_code_hash = filebase64sha256("python_dependencies.zip")
+  source_code_hash = fileexists("${path.module}/python_dependencies.zip") ? filebase64sha256("${path.module}/python_dependencies.zip") : null
 }
 
 resource "aws_cloudwatch_log_group" "guardian_logs" {

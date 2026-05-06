@@ -182,9 +182,3 @@ resource "aws_iam_role_policy" "lambda_policy" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "lambda_policy" {
-  policy_arn = aws_iam_role_policy.lambda_policy.arn
-  role       = aws_iam_role.lambda_role.name
-
-  depends_on = [aws_iam_role_policy.lambda_policy]
-}
