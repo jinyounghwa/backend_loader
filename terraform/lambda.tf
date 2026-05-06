@@ -65,15 +65,6 @@ resource "aws_cloudwatch_log_group" "discord_logs" {
   retention_in_days = 7
 }
 
-# Lambda permission for EventBridge
-resource "aws_lambda_permission" "eventbridge_guardian" {
-  statement_id  = "AllowExecutionFromEventBridge"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.guardian.function_name
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.hourly_check.arn
-}
-
 # Lambda permission for API Gateway (Discord)
 resource "aws_lambda_permission" "api_gateway_discord" {
   statement_id  = "AllowExecutionFromAPIGateway"
