@@ -116,9 +116,7 @@ class GuardianOrchestrator:
                 if not checker:
                     continue
                 check_tasks.append(
-                    self._run_single_check_async(
-                        check_name, checker, account_id, account_name
-                    )
+                    self._run_single_check_async(check_name, checker, account_id, account_name)
                 )
 
             if check_tasks:
@@ -193,7 +191,10 @@ class GuardianOrchestrator:
         )
 
         self._notify_alert(
-            check_name, result_dict, account_id=account_id, account_name=account_name or ""
+            check_name,
+            result_dict,
+            account_id=account_id,
+            account_name=account_name or "",
         )
 
         if self.remediation:
@@ -223,7 +224,10 @@ class GuardianOrchestrator:
         )
 
         self._notify_alert(
-            check_name, result_dict, account_id=account_id, account_name=account_name or ""
+            check_name,
+            result_dict,
+            account_id=account_id,
+            account_name=account_name or "",
         )
 
         if self.remediation:
@@ -240,11 +244,17 @@ class GuardianOrchestrator:
     ):
         if self.telegram:
             self.telegram.send_alert(
-                check_name, alert_data, account_id=account_id, account_name=account_name
+                check_name,
+                alert_data,
+                account_id=account_id,
+                account_name=account_name,
             )
         if self.discord:
             self.discord.send_alert(
-                check_name, alert_data, account_id=account_id, account_name=account_name
+                check_name,
+                alert_data,
+                account_id=account_id,
+                account_name=account_name,
             )
 
     def _get_checks_for_type(self, check_type: str) -> List[str]:
