@@ -4,7 +4,7 @@ Description: "AWS Guardian - Serverless AWS Security & Cost Monitoring System"
 
 Globals:
   Function:
-    Runtime: python3.12
+    Runtime: python3.14
     Timeout: 60
     MemorySize: 256
     Environment:
@@ -17,8 +17,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: aws-guardian-monitor
-      Handler: guardian/handler.py::lambda_handler
-      CodeUri: ./lambda/guardian/
+      Handler: guardian.handler.lambda_handler
+      CodeUri: ./lambda/
       Description: Main Lambda handler for AWS Guardian security checks
       Policies:
         - Version: "2012-10-17"
@@ -46,8 +46,8 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: aws-guardian-discord-webhook
-      Handler: discord_webhook/handler.py::lambda_handler
-      CodeUri: ./lambda/discord_webhook/
+      Handler: discord_webhook.handler.lambda_handler
+      CodeUri: ./lambda/
       Description: Discord webhook handler for slash commands
       Timeout: 30
       Policies:
