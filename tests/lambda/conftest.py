@@ -2,12 +2,16 @@
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any, Dict
 
 import pytest
 
-# SAM local invoke 환경 설정
+_TESTS_LAMBDA_DIR = str(Path(__file__).parent)
+if _TESTS_LAMBDA_DIR not in sys.path:
+    sys.path.insert(0, _TESTS_LAMBDA_DIR)
+
 os.environ["AWS_REGION"] = "ap-northeast-1"
 os.environ["AWS_ENV"] = "localstack"
 os.environ["AWS_ACCOUNT_ID"] = "123456789012"
