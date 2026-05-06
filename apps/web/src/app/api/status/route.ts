@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth-utils';
 import { getLatestCheckResult, getRecentEvents } from '@/lib/dynamodb';
 import { mockCostData, mockEC2Data, mockS3Data, mockEvents } from '@/lib/mock-data';
+import { statusCache } from '@/lib/cache';
 import type { DashboardSummary, DynamoEventItem, GuardianEvent, MultiRegionSummary } from '@/types/guardian';
 
 export const dynamic = 'force-dynamic';
@@ -154,7 +155,16 @@ function extractCheckDetails(rawDetails: Record<string, any>) {
   };
 }
 
-async function fetchRegionData(region: string): Promise<DashboardSummary | null> {
+async function fetchRegionData(region: string, useCache: boolean = true): Promise<DashboardSummary | null> {
+  const cacheKey = `status_${region}`;
+
+  if (useCache) {
+    const cached = statusCache.get<DashboardSummary>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+  }
+
   try {
     const [checkResult, rawEvents] = await Promise.all([
       getLatestCheckResult(),
@@ -187,6 +197,7 @@ async function fetchRegionData(region: string): Promise<DashboardSummary | null>
       is_stale: isStaleData(details.last_check),
     };
 
+    statusCache.set(cacheKey, summary);
     return summary;
   } catch {
     return null;
@@ -202,18 +213,24 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const regionsParam = searchParams.get('regions');
+    const cacheParam = searchParams.get('cache');
+    const useCache = cacheParam !== 'false'; // Default to using cache unless explicitly disabled
     const regions = regionsParam
       ? regionsParam.split(',').filter(r => r.trim())
       : ['ap-northeast-1'];
 
     if (regions.length === 1) {
       const region = regions[0];
-      const data = await fetchRegionData(region);
-      return NextResponse.json(data || buildFallbackSummary(region));
+      const data = await fetchRegionData(region, useCache);
+      const response = NextResponse.json(data || buildFallbackSummary(region));
+
+      // Set cache-control header (5 minutes for browsers)
+      response.headers.set('cache-control', useCache ? 'public, max-age=300' : 'no-cache, no-store');
+      return response;
     }
 
     const results = await Promise.allSettled(
-      regions.map(region => fetchRegionData(region))
+      regions.map(region => fetchRegionData(region, useCache))
     );
 
     const summaries: DashboardSummary[] = [];
@@ -237,7 +254,9 @@ export async function GET(request: Request) {
       errors,
     };
 
-    return NextResponse.json(multiRegionSummary);
+    const response = NextResponse.json(multiRegionSummary);
+    response.headers.set('cache-control', useCache ? 'public, max-age=300' : 'no-cache, no-store');
+    return response;
   } catch {
     return NextResponse.json(buildFallbackSummary());
   }
