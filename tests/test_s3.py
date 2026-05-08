@@ -129,10 +129,10 @@ class TestS3Checker(unittest.TestCase):
         self.assertTrue(config["RestrictPublicBuckets"])
 
     def test_check_s3_anomalies_structure(self):
-        is_anomaly, data = self.s3_checker.check_s3_anomalies()
-        self.assertIsInstance(is_anomaly, bool)
+        result = self.s3_checker.check()
+        self.assertIsNotNone(result)
         for key in ["is_anomaly", "public_buckets", "new_buckets", "anomalies", "timestamp"]:
-            self.assertIn(key, data)
+            self.assertIn(key, result.details)
 
     def test_check_returns_check_result(self):
         result = self.s3_checker.check()

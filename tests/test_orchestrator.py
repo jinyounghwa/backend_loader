@@ -2,7 +2,7 @@
 
 import unittest
 from datetime import datetime, timezone
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 from guardian.checkers.base import CheckResult
 from guardian.orchestrator import GuardianOrchestrator
@@ -164,11 +164,17 @@ class TestGuardianOrchestratorCheckType(unittest.TestCase):
 
         info_result = _make_info_result()
         self.mock_cost_checker.check.return_value = info_result
+        self.mock_cost_checker.check_async = AsyncMock(return_value=info_result)
         self.mock_ec2_checker.check.return_value = info_result
+        self.mock_ec2_checker.check_async = AsyncMock(return_value=info_result)
         self.mock_s3_checker.check.return_value = info_result
+        self.mock_s3_checker.check_async = AsyncMock(return_value=info_result)
         self.mock_cloudtrail_checker.check.return_value = info_result
+        self.mock_cloudtrail_checker.check_async = AsyncMock(return_value=info_result)
         self.mock_iam_checker.check.return_value = info_result
+        self.mock_iam_checker.check_async = AsyncMock(return_value=info_result)
         self.mock_guardduty_checker.check.return_value = info_result
+        self.mock_guardduty_checker.check_async = AsyncMock(return_value=info_result)
 
         self.orchestrator = GuardianOrchestrator(
             logger=self.mock_logger,
@@ -186,41 +192,41 @@ class TestGuardianOrchestratorCheckType(unittest.TestCase):
         event = {"check_type": "cost", "time": datetime.now(timezone.utc).isoformat()}
         self.orchestrator.run_all_checks(event)  # noqa: F841
 
-        self.mock_cost_checker.check.assert_called_once()
-        self.mock_ec2_checker.check.assert_not_called()
-        self.mock_s3_checker.check.assert_not_called()
-        self.mock_cloudtrail_checker.check.assert_not_called()
-        self.mock_iam_checker.check.assert_not_called()
-        self.mock_guardduty_checker.check.assert_not_called()
+        self.mock_cost_checker.check_async.assert_called_once()
+        self.mock_ec2_checker.check_async.assert_not_called()
+        self.mock_s3_checker.check_async.assert_not_called()
+        self.mock_cloudtrail_checker.check_async.assert_not_called()
+        self.mock_iam_checker.check_async.assert_not_called()
+        self.mock_guardduty_checker.check_async.assert_not_called()
 
     def test_run_all_checks_with_check_type_security(self):
         event = {"check_type": "security", "time": datetime.now(timezone.utc).isoformat()}
         self.orchestrator.run_all_checks(event)  # noqa: F841
 
-        self.mock_cost_checker.check.assert_not_called()
-        self.mock_ec2_checker.check.assert_called_once()
-        self.mock_s3_checker.check.assert_called_once()
-        self.mock_cloudtrail_checker.check.assert_called_once()
-        self.mock_iam_checker.check.assert_called_once()
-        self.mock_guardduty_checker.check.assert_called_once()
+        self.mock_cost_checker.check_async.assert_not_called()
+        self.mock_ec2_checker.check_async.assert_called_once()
+        self.mock_s3_checker.check_async.assert_called_once()
+        self.mock_cloudtrail_checker.check_async.assert_called_once()
+        self.mock_iam_checker.check_async.assert_called_once()
+        self.mock_guardduty_checker.check_async.assert_called_once()
 
     def test_run_all_checks_with_check_type_all(self):
         event = {"check_type": "all", "time": datetime.now(timezone.utc).isoformat()}
         self.orchestrator.run_all_checks(event)  # noqa: F841
 
-        self.mock_cost_checker.check.assert_called_once()
-        self.mock_ec2_checker.check.assert_called_once()
-        self.mock_s3_checker.check.assert_called_once()
-        self.mock_cloudtrail_checker.check.assert_called_once()
-        self.mock_iam_checker.check.assert_called_once()
-        self.mock_guardduty_checker.check.assert_called_once()
+        self.mock_cost_checker.check_async.assert_called_once()
+        self.mock_ec2_checker.check_async.assert_called_once()
+        self.mock_s3_checker.check_async.assert_called_once()
+        self.mock_cloudtrail_checker.check_async.assert_called_once()
+        self.mock_iam_checker.check_async.assert_called_once()
+        self.mock_guardduty_checker.check_async.assert_called_once()
 
     def test_run_all_checks_default_check_type_all(self):
         event = {"time": datetime.now(timezone.utc).isoformat()}
         self.orchestrator.run_all_checks(event)  # noqa: F841
 
-        self.mock_cost_checker.check.assert_called_once()
-        self.mock_cloudtrail_checker.check.assert_called_once()
+        self.mock_cost_checker.check_async.assert_called_once()
+        self.mock_cloudtrail_checker.check_async.assert_called_once()
 
 
 if __name__ == "__main__":

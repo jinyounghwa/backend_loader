@@ -61,17 +61,17 @@ class TestEC2Checker(unittest.TestCase):
 
     def test_no_unauthorized_when_us_east_1_authorized(self):
         checker = EC2Checker(authorized_regions=["us-east-1"])
-        unauthorized = checker._get_unauthorized_regions_instances()
-        self.assertEqual(len(unauthorized), 0)
+        result = checker.check()
+        self.assertEqual(len(result.details.get("unauthorized_region_instances", {})), 0)
 
     def test_unauthorized_detected_when_us_east_1_not_authorized(self):
         checker = EC2Checker(authorized_regions=["eu-west-1", "ap-northeast-1"])
-        unauthorized = checker._get_unauthorized_regions_instances()
-        self.assertIn("us-east-1", unauthorized)
+        result = checker.check()
+        self.assertIn("us-east-1", result.details.get("unauthorized_region_instances", {}))
 
     def test_check_ec2_anomalies_structure(self):
-        is_anomaly, data = self.ec2_checker.check_ec2_anomalies()
-        self.assertIsInstance(is_anomaly, bool)
+        result = self.ec2_checker.check()
+        self.assertIsNotNone(result)
         for key in [
             "is_anomaly",
             "unauthorized_region_instances",
@@ -80,7 +80,7 @@ class TestEC2Checker(unittest.TestCase):
             "anomalies",
             "timestamp",
         ]:
-            self.assertIn(key, data)
+            self.assertIn(key, result.details)
 
     def test_stop_instance_via_executor(self):
         if not self.test_instance_ids:

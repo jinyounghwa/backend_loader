@@ -7,7 +7,7 @@ and responder inputs.
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 # ============================================================================
 # EventBridge Events
@@ -17,18 +17,19 @@ from pydantic import BaseModel, Field
 class EventBridgeDetail(BaseModel):
     """Base EventBridge event detail"""
 
+    model_config = ConfigDict(extra="allow")
+
     checker_type: Optional[str] = Field(None, description="Type of checker (cost, ec2, s3, etc)")
     regions: Optional[List[str]] = Field(
         default_factory=lambda: ["ap-northeast-1"],
         description="AWS regions to check",
     )
 
-    class Config:
-        extra = "allow"  # Allow additional fields
-
 
 class EventBridgeScheduledEvent(BaseModel):
     """EventBridge scheduled event from EventBridge cron/rate rule"""
+
+    model_config = ConfigDict(populate_by_name=True)
 
     version: str = Field(..., description="Event version")
     id: str = Field(..., description="Event ID")
@@ -39,9 +40,6 @@ class EventBridgeScheduledEvent(BaseModel):
     region: str = Field(..., description="AWS region")
     resources: List[str] = Field(default_factory=list, description="Associated resources")
     detail: EventBridgeDetail = Field(..., description="Event detail")
-
-    class Config:
-        populate_by_name = True  # Allow both alias and field name
 
 
 # ============================================================================
