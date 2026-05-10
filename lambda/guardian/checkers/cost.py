@@ -51,7 +51,7 @@ class CostChecker(BaseChecker):
 
             is_anomaly = daily_cost > self.threshold
             increase_percent = round(
-                (daily_cost - yesterday_cost) / yesterday_cost * 100 if yesterday_cost > 0 else 0, 2
+                ((daily_cost - yesterday_cost) / yesterday_cost) * 100 if yesterday_cost > 0 else 0, 2
             )
 
             details = {

@@ -1,7 +1,6 @@
 """APScheduler-based scheduler for AWS Guardian monitoring"""
 
 import logging
-import os
 from datetime import datetime, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
