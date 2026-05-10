@@ -25,7 +25,7 @@ class TestCachePerformance(unittest.TestCase):
 
         avg_time = elapsed / 10000
         assert avg_time < 0.0001  # < 0.1ms per operation
-        print(f"Memory cache set: {avg_time*1000:.4f}ms per operation")
+        print(f"Memory cache set: {avg_time * 1000:.4f}ms per operation")
 
     def test_memory_cache_get_performance(self):
         """Test in-memory cache get operation performance."""
@@ -42,7 +42,7 @@ class TestCachePerformance(unittest.TestCase):
 
         avg_time = elapsed / 1000
         assert avg_time < 0.001  # < 1ms per operation
-        print(f"Memory cache get: {avg_time*1000:.4f}ms per operation")
+        print(f"Memory cache get: {avg_time * 1000:.4f}ms per operation")
 
     def test_memory_cache_delete_performance(self):
         """Test in-memory cache delete operation performance."""
@@ -59,7 +59,7 @@ class TestCachePerformance(unittest.TestCase):
 
         avg_time = elapsed / 1000
         assert avg_time < 0.001  # < 1ms per operation
-        print(f"Memory cache delete: {avg_time*1000:.4f}ms per operation")
+        print(f"Memory cache delete: {avg_time * 1000:.4f}ms per operation")
 
     def test_memory_cache_clear_performance(self):
         """Test in-memory cache clear operation performance."""
@@ -74,7 +74,7 @@ class TestCachePerformance(unittest.TestCase):
         elapsed = time.time() - start
 
         assert elapsed < 0.1  # < 100ms to clear 10k items
-        print(f"Memory cache clear: {elapsed*1000:.2f}ms for 10k items")
+        print(f"Memory cache clear: {elapsed * 1000:.2f}ms for 10k items")
 
     def test_ttl_expiration_performance(self):
         """Test TTL expiration check performance."""
@@ -97,7 +97,7 @@ class TestCachePerformance(unittest.TestCase):
 
         assert expired_count == 1000
         assert elapsed < 0.1  # < 100ms for 1000 expiration checks
-        print(f"TTL expiration check: {elapsed*1000:.2f}ms for 1000 items")
+        print(f"TTL expiration check: {elapsed * 1000:.2f}ms for 1000 items")
 
 
 class TestAsyncCheckerPerformance(unittest.TestCase):
@@ -132,7 +132,7 @@ class TestAsyncCheckerPerformance(unittest.TestCase):
 
         # Measure async execution
         start = time.time()
-        result = self.loop.run_until_complete(checker.check_async())
+        _result = self.loop.run_until_complete(checker.check_async())
         async_time = time.time() - start
 
         # With parallel execution, should be close to 0.1s, not 0.3s
@@ -207,12 +207,12 @@ class TestCacheFailoverPerformance(unittest.TestCase):
         mock_redis.side_effect = Exception("Connection failed")
 
         start = time.time()
-        cache = RedisCache(redis_url="redis://invalid")
+        _cache = RedisCache(redis_url="redis://invalid")
         elapsed = time.time() - start
 
         # Fallback instantiation should be fast
         assert elapsed < 0.1
-        print(f"Redis to Memory fallback: {elapsed*1000:.2f}ms")
+        print(f"Redis to Memory fallback: {elapsed * 1000:.2f}ms")
 
     @patch("guardian.cache.redis.redis.from_url")
     def test_fallback_cache_operations(self, mock_redis):
@@ -235,7 +235,7 @@ class TestCacheFailoverPerformance(unittest.TestCase):
 
         assert set_time < 0.1
         assert get_time < 0.1
-        print(f"Fallback cache ops: set={set_time*1000:.2f}ms, get={get_time*1000:.2f}ms")
+        print(f"Fallback cache ops: set={set_time * 1000:.2f}ms, get={get_time * 1000:.2f}ms")
 
 
 class TestLoadTesting(unittest.TestCase):

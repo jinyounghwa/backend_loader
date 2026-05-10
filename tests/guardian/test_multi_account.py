@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from guardian.orchestrator import GuardianOrchestrator
 from guardian.checkers.base import CheckResult
 from guardian.storage.dynamodb import DynamoDBStorage
+from guardian.aws_client_provider import AWSClientProvider
 
 
 class AsyncTestCase(unittest.TestCase):

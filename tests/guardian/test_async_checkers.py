@@ -3,7 +3,7 @@
 import asyncio
 import unittest
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 from guardian.checkers.cost import CostChecker
 from guardian.checkers.ec2 import EC2Checker
