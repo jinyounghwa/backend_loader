@@ -1,10 +1,12 @@
 """CloudTrail checker for suspicious API activity detection."""
 
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from botocore.exceptions import ClientError
+from guardian.aws_client_provider import AWSClientProvider
 from guardian.checkers.base import BaseChecker, CheckResult
 
 logger = logging.getLogger(__name__)
@@ -47,19 +49,17 @@ class CloudTrailChecker(BaseChecker):
         credentials: Optional[Dict[str, str]] = None,
     ):
         super().__init__(clients, config, account_id, credentials)
-        self.cloudtrail = clients.get("cloudtrail")
-        self.sts = clients.get("sts")
         self.hours_lookback = config.get("cloudtrail_hours", 1)
         self.authorized_regions = set(
             config.get("authorized_regions", ["us-east-1", "us-west-2", "eu-west-1"])
         )
 
-    def check(self) -> CheckResult:
-        """Check for suspicious CloudTrail events."""
+    async def check_async(self) -> CheckResult:
+        """Check for suspicious CloudTrail events using async I/O."""
         self._log_check_start("CloudTrail")
 
         try:
-            events = self._get_recent_events()
+            events = await self._get_recent_events_async()
 
             if not events:
                 self._log_check_end("CloudTrail", "INFO")
@@ -97,39 +97,53 @@ class CloudTrailChecker(BaseChecker):
                 "CloudTrail Check Failed", f"Failed to check CloudTrail: {str(e)}"
             )
 
-    def _get_recent_events(self) -> List[Dict[str, Any]]:
-        """Get CloudTrail events from last N hours across all relevant event sources."""
-        if not self.cloudtrail:
-            return []
+    def check(self) -> CheckResult:
+        """Backward compatibility wrapper - delegates to check_async()."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
 
+        if loop and loop.is_running():
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(asyncio.run, self.check_async())
+                return future.result()
+        else:
+            return asyncio.run(self.check_async())
+
+    async def _get_recent_events_async(self) -> List[Dict[str, Any]]:
+        """Get CloudTrail events from last N hours using async I/O with pagination."""
         start_time = datetime.now(timezone.utc) - timedelta(hours=self.hours_lookback)
         all_events = []
 
-        for source in self.RELEVANT_EVENT_SOURCES:
-            try:
-                paginator = self.cloudtrail.get_paginator("lookup_events")
-                page_iterator = paginator.paginate(
-                    LookupAttributes=[{"AttributeKey": "EventSource", "AttributeValue": source}],
-                    StartTime=start_time,
-                )
+        async with await AWSClientProvider.get_async_client("cloudtrail") as cloudtrail:
+            for source in self.RELEVANT_EVENT_SOURCES:
+                try:
+                    paginator = cloudtrail.get_paginator("lookup_events")
+                    page_iterator = paginator.paginate(
+                        LookupAttributes=[{"AttributeKey": "EventSource", "AttributeValue": source}],
+                        StartTime=start_time,
+                    )
 
-                for page in page_iterator:
-                    for event in page.get("Events", []):
-                        all_events.append(
-                            {
-                                "EventName": event.get("EventName"),
-                                "Username": event.get("Username"),
-                                "EventTime": event.get("EventTime"),
-                                "SourceIPAddress": event.get("SourceIPAddress"),
-                                "CloudTrailEvent": event.get("CloudTrailEvent"),
-                                "EventSource": source,
-                            }
-                        )
+                    async for page in page_iterator:
+                        for event in page.get("Events", []):
+                            all_events.append(
+                                {
+                                    "EventName": event.get("EventName"),
+                                    "Username": event.get("Username"),
+                                    "EventTime": event.get("EventTime"),
+                                    "SourceIPAddress": event.get("SourceIPAddress"),
+                                    "CloudTrailEvent": event.get("CloudTrailEvent"),
+                                    "EventSource": source,
+                                }
+                            )
 
-            except ClientError as e:
-                logger.warning("ClientError fetching CloudTrail events for %s: %s", source, e)
-            except Exception as e:
-                logger.warning("Error fetching CloudTrail events for %s: %s", source, e)
+                except ClientError as e:
+                    logger.warning("ClientError fetching CloudTrail events for %s: %s", source, e)
+                except Exception as e:
+                    logger.warning("Error fetching CloudTrail events for %s: %s", source, e)
 
         return all_events
 
