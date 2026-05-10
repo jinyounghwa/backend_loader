@@ -4,10 +4,7 @@ import json
 import logging
 import os
 import re
-import sys
 from datetime import datetime, timezone
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from guardian.checkers.cost import CostChecker
 from guardian.checkers.ec2 import EC2Checker

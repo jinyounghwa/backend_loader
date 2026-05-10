@@ -1,11 +1,9 @@
 """Main Lambda handler for AWS Guardian - lazy initialization for optimal cold start."""
 
 import json
-import os
-import sys
+import threading
+import uuid
 from typing import Any, Dict
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from guardian.config import Config
 from guardian.logging_config import setup_logger
@@ -18,10 +16,12 @@ class _LazyOrchestrator:
 
     Avoids importing and constructing all checkers/responders during module load,
     which would penalize every cold start regardless of which check is requested.
+    Thread-safe: uses a lock to guard the build path.
     """
 
     def __init__(self):
         self._orchestrator = None
+        self._lock = threading.Lock()
         self._logger = setup_logger("aws-guardian")
 
     def _build(self):
@@ -64,7 +64,10 @@ class _LazyOrchestrator:
     @property
     def orchestrator(self):
         if self._orchestrator is None:
-            self._build()
+            with self._lock:
+                # Double-checked locking
+                if self._orchestrator is None:
+                    self._build()
         return self._orchestrator
 
 
@@ -76,8 +79,15 @@ def lambda_handler(event: Dict[str, Any], context: Any = None) -> Dict[str, Any]
     try:
         return _lazy.orchestrator.run_all_checks(event)
     except Exception as e:
-        logger.exception("Fatal error in lambda_handler: %s", e)
-        return {"statusCode": 500, "body": json.dumps({"error": str(e)})}
+        correlation_id = str(uuid.uuid4())
+        logger.exception("Fatal error in lambda_handler [correlation_id=%s]: %s", correlation_id, e)
+        return {
+            "statusCode": 500,
+            "body": json.dumps({
+                "error": "Internal server error",
+                "correlation_id": correlation_id,
+            }),
+        }
 
 
 if __name__ == "__main__":

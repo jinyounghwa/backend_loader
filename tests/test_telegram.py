@@ -66,7 +66,7 @@ class TestTelegramResponder(unittest.TestCase):
             "date": "2024-04-26",
         }
 
-        result = responder.send_cost_alert(cost_data)
+        result = responder.send_alert("cost", cost_data)
         self.assertTrue(result)
 
         # Verify the message contains cost information
@@ -97,7 +97,7 @@ class TestTelegramResponder(unittest.TestCase):
             "anomalies": [1],  # Non-empty list
         }
 
-        result = responder.send_ec2_alert(ec2_data)
+        result = responder.send_alert("ec2", ec2_data)
         self.assertTrue(result)
 
     @patch("guardian.responders.telegram.requests.post")
@@ -123,7 +123,7 @@ class TestTelegramResponder(unittest.TestCase):
             "anomalies": [1],
         }
 
-        result = responder.send_s3_alert(s3_data)
+        result = responder.send_alert("s3", s3_data)
         self.assertTrue(result)
 
     @patch("guardian.responders.telegram.requests.post")

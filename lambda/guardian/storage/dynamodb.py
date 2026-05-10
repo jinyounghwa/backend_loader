@@ -33,56 +33,52 @@ class DynamoDBStorage:
             logger.warning("Could not access table %s: %s", self.table_name, e)
             self.table = None
 
-    def save_event(
-        self, event_type: str, severity: str, details: Dict[str, Any], account_id: str = "current"
-    ) -> bool:
+    def _put_item(self, item: Dict[str, Any]) -> bool:
+        """Persist a single item to DynamoDB with error handling."""
         try:
             if not self.table:
                 logger.warning("DynamoDB table not available")
                 return False
-
-            item = {
-                "event_id": str(uuid.uuid4()),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "event_type": event_type,
-                "severity": severity,
-                "account_id": account_id,
-                "gsi_pk": "EVENT",
-                "details": (
-                    _convert_floats(details) if isinstance(details, dict) else {"raw": details}
-                ),
-            }
-
             self.table.put_item(Item=item)
             return True
         except Exception as e:
-            logger.error("Error saving event: %s", e)
+            logger.error("Error writing to DynamoDB: %s", e)
             return False
+
+    def save_event(
+        self, event_type: str, severity: str, details: Dict[str, Any], account_id: str = "current"
+    ) -> bool:
+        item = {
+            "event_id": str(uuid.uuid4()),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "event_type": event_type,
+            "severity": severity,
+            "account_id": account_id,
+            "gsi_pk": "EVENT",
+            "details": (
+                _convert_floats(details) if isinstance(details, dict) else {"raw": details}
+            ),
+        }
+        return self._put_item(item)
 
     def save_auto_response(
         self, action_type: str, resource_id: str, status: str, details: Dict[str, Any]
     ) -> bool:
-        try:
-            item = {
-                "event_id": str(uuid.uuid4()),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "event_type": "auto_response",
-                "severity": "info",
-                "account_id": "current",
-                "gsi_pk": "EVENT",
-                "action_type": action_type,
-                "resource_id": resource_id,
-                "status": status,
-                "details": (
-                    _convert_floats(details) if isinstance(details, dict) else {"raw": details}
-                ),
-            }
-
-            self.table.put_item(Item=item)
-            return True
-        except Exception as e:
-            logger.error("Error saving auto-response: %s", e)
-            return False
+        item = {
+            "event_id": str(uuid.uuid4()),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "event_type": "auto_response",
+            "severity": "info",
+            "account_id": "current",
+            "gsi_pk": "EVENT",
+            "action_type": action_type,
+            "resource_id": resource_id,
+            "status": status,
+            "details": (
+                _convert_floats(details) if isinstance(details, dict) else {"raw": details}
+            ),
+        }
+        return self._put_item(item)
 
     def get_recent_events(self, hours: int = 24, event_type: str = None) -> List[Dict]:
         try:
@@ -132,19 +128,30 @@ class DynamoDBStorage:
             return []
 
     def get_events_by_account(self, account_id: str, hours: int = 24) -> List[Dict]:
-        """Query events for a specific account (Phase 4: Multi-account support)."""
+        """Query events for a specific account (Phase 4: Multi-account support).
+
+        Falls back to scan if no account-specific GSI exists, but limits result size.
+        """
         try:
             from boto3.dynamodb.conditions import Attr
 
             cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
 
+            # Use scan with strict limit to prevent unbounded reads
             response = self.table.scan(
                 FilterExpression=Attr("account_id").eq(account_id)
                 & Attr("timestamp").gt(cutoff_time.isoformat()),
                 Limit=100,
             )
 
-            return response.get("Items", [])
+            items = response.get("Items", [])
+            # Do not paginate scans to avoid unbounded cost
+            if len(items) >= 100:
+                logger.warning(
+                    "Account %s scan hit limit (100 items). Results may be incomplete.",
+                    account_id,
+                )
+            return items
         except Exception as e:
             logger.error("Error getting events by account %s: %s", account_id, e)
             return []
@@ -274,16 +281,39 @@ class DynamoDBStorage:
             return None
 
     def update_remediation_status(self, event_id: str, status: str, result: str = "") -> bool:
+        """Update remediation status for an event.
+
+        Note: This table uses a composite key (event_id HASH + timestamp RANGE).
+        We query first to get the full key, then update.
+        """
         try:
             if not self.table:
                 return False
+
+            from boto3.dynamodb.conditions import Key
+
+            # Retrieve the item first to get the full composite key
+            query_response = self.table.query(
+                KeyConditionExpression=Key("event_id").eq(event_id),
+                Limit=1,
+            )
+            items = query_response.get("Items", [])
+            if not items:
+                logger.warning("No item found for event_id %s", event_id)
+                return False
+
+            item_key = {
+                "event_id": items[0]["event_id"],
+                "timestamp": items[0]["timestamp"],
+            }
+
             update_expr = "SET remediation_status = :s"
             expr_values = {":s": status}
             if result:
                 update_expr += ", remediation_result = :r"
                 expr_values[":r"] = result
             self.table.update_item(
-                Key={"event_id": event_id},
+                Key=item_key,
                 UpdateExpression=update_expr,
                 ExpressionAttributeValues=expr_values,
             )

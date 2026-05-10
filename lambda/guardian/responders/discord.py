@@ -33,6 +33,7 @@ class DiscordResponder:
                 self.webhook_url,
                 json={"embeds": [embed]},
                 timeout=10,
+                verify=True,
             )
             return response.status_code in [200, 204]
         except Exception as e:
@@ -82,18 +83,6 @@ class DiscordResponder:
     ) -> bool:
         account_info = format_account_info(account_id, account_name)
         alert = AlertMessage.from_check_data(check_name, alert_data, account_info=account_info)
-        return self.send_embed(self._render_alert_embed(alert))
-
-    def send_cost_alert(self, cost_data: Dict[str, Any]) -> bool:
-        alert = AlertMessage.from_cost_data(cost_data)
-        return self.send_embed(self._render_alert_embed(alert))
-
-    def send_ec2_alert(self, ec2_data: Dict[str, Any]) -> bool:
-        alert = AlertMessage.from_ec2_data(ec2_data)
-        return self.send_embed(self._render_alert_embed(alert))
-
-    def send_s3_alert(self, s3_data: Dict[str, Any]) -> bool:
-        alert = AlertMessage.from_s3_data(s3_data)
         return self.send_embed(self._render_alert_embed(alert))
 
     def send_status_embed(self, status_data: Dict[str, Any]) -> bool:

@@ -11,8 +11,6 @@ from typing import Optional
 
 import requests
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-
 from guardian.aws_client_provider import AWSClientProvider
 from guardian.config import Config
 from guardian.responders.auto_remediation import (
@@ -31,6 +29,9 @@ COMMANDS = {
 }
 
 INSTANCE_ID_RE = re.compile(r"^i-[0-9a-f]{8,17}$")
+MAX_EXPORT_DAYS = 90
+MAX_HISTORY_HOURS = 720  # 30 days
+ALLOWED_SEVERITIES = {"critical", "high", "medium", "low", "info"}
 
 
 def get_status() -> dict:
@@ -56,7 +57,10 @@ def get_status() -> dict:
         }
     except Exception as e:
         logger.error("Error getting status: %s", e)
-        return {"error": str(e), "timestamp": datetime.now(timezone.utc).isoformat()}
+        return {
+            "error": "상태 조회 실패",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
 
 
 def get_instances() -> dict:
@@ -90,7 +94,10 @@ def get_instances() -> dict:
         }
     except Exception as e:
         logger.error("Error getting instances: %s", e)
-        return {"error": str(e), "timestamp": datetime.now(timezone.utc).isoformat()}
+        return {
+            "error": "인스턴스 조회 실패",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
 
 
 def stop_instance(instance_id: str) -> dict:
@@ -111,7 +118,10 @@ def stop_instance(instance_id: str) -> dict:
         }
     except Exception as e:
         logger.error("Error stopping instance %s: %s", instance_id, e)
-        return {"error": str(e), "timestamp": datetime.now(timezone.utc).isoformat()}
+        return {
+            "error": "인스턴스 중지 실패",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
 
 
 def set_threshold(amount: str) -> dict:
@@ -135,10 +145,13 @@ def set_threshold(amount: str) -> dict:
             "status": "success",
         }
     except ValueError:
-        return {"error": "Invalid amount", "timestamp": datetime.now(timezone.utc).isoformat()}
+        return {"error": "잘못된 금액 형식", "timestamp": datetime.now(timezone.utc).isoformat()}
     except Exception as e:
         logger.error("Error setting threshold: %s", e)
-        return {"error": str(e), "timestamp": datetime.now(timezone.utc).isoformat()}
+        return {
+            "error": "임계값 설정 실패",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
 
 
 def get_history(hours: int = 24) -> dict:
@@ -156,7 +169,10 @@ def get_history(hours: int = 24) -> dict:
         }
     except Exception as e:
         logger.error("Error getting history: %s", e)
-        return {"error": str(e), "timestamp": datetime.now(timezone.utc).isoformat()}
+        return {
+            "error": "이벤트 이력 조회 실패",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
 
 
 def remediate_finding(finding_id: str) -> dict:
@@ -203,7 +219,7 @@ def remediate_finding(finding_id: str) -> dict:
             storage.update_remediation_status(finding_id, "Failed", str(e))
         except Exception as update_err:
             logger.warning("Failed to update remediation status for %s: %s", finding_id, update_err)
-        return {"error": f"대응 실행 실패: {str(e)}"}
+        return {"error": "대응 실행 실패"}
 
 
 def _execute_remediation(finding_id: str, finding_data: dict) -> dict:
@@ -269,13 +285,21 @@ def export_events(format_str: str, days: int = 7, severity: Optional[str] = None
         }
     except Exception as e:
         logger.error("Error exporting events: %s", e)
-        return {"error": f"보고서 생성 실패: {str(e)}"}
+        return {"error": "보고서 생성 실패"}
 
 
 class TelegramBotListener:
     def __init__(self):
         self.bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
         self.chat_id = os.getenv("TELEGRAM_CHAT_ID")
+
+        if not self.bot_token:
+            raise ValueError("TELEGRAM_BOT_TOKEN environment variable is required")
+        if not self.chat_id:
+            logger.warning(
+                "TELEGRAM_CHAT_ID not set — bot will reject all incoming messages for safety"
+            )
+
         self.api_url = f"https://api.telegram.org/bot{self.bot_token}"
         self.last_update_id = 0
         self.running = True
@@ -309,6 +333,10 @@ class TelegramBotListener:
             return None
         text = text.strip()
 
+        # Limit command length to prevent abuse
+        if len(text) > 200:
+            return None
+
         if text in COMMANDS:
             return COMMANDS[text], text
 
@@ -328,6 +356,7 @@ class TelegramBotListener:
             elif command == "history":
                 try:
                     hours = int(args) if args else 24
+                    hours = max(1, min(hours, MAX_HISTORY_HOURS))
                     return lambda: get_history(hours), f"/history {hours}"
                 except ValueError:
                     return lambda: get_history(), "/history"
@@ -341,7 +370,10 @@ class TelegramBotListener:
 
                 fmt = format_match.group(1) if format_match else "csv"
                 days = int(days_match.group(1)) if days_match else 7
-                severity = severity_match.group(1) if severity_match else None
+                days = max(1, min(days, MAX_EXPORT_DAYS))
+                severity = severity_match.group(1).lower() if severity_match else None
+                if severity and severity not in ALLOWED_SEVERITIES:
+                    severity = None
 
                 return lambda: export_events(fmt, days, severity), f"/export {fmt} --days {days}"
             elif command == "help":
@@ -385,7 +417,12 @@ class TelegramBotListener:
         text = message.get("text", "")
         from_user = message.get("from", {}).get("first_name", "User")
 
-        if self.chat_id and chat_id != self.chat_id:
+        # Security: reject messages from unauthorized chats
+        if not self.chat_id:
+            logger.warning("Rejecting message — TELEGRAM_CHAT_ID not configured")
+            return
+        if chat_id != self.chat_id:
+            logger.warning("Rejecting message from unauthorized chat_id: %s", chat_id)
             return
 
         parsed = self.parse_command(text)
@@ -399,8 +436,8 @@ class TelegramBotListener:
             result = handler()
             self._format_response(result, command_text)
         except Exception as e:
-            logger.error("Command error: %s", e)
-            self.telegram.send_message(f"❌ <b>명령 실패</b>\n명령: {command_text}\n오류: {str(e)}")
+            logger.error("Command error for '%s': %s", command_text, e)
+            self.telegram.send_message(f"❌ <b>명령 실패</b>\n명령: {command_text}\n오류: 내부 처리 오류")
 
     def _format_response(self, result: dict, command_text: str):
         if "error" in result:

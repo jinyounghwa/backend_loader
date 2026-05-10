@@ -44,67 +44,8 @@ class EC2Checker(BaseChecker):
         self._log_check_start("EC2")
 
         try:
-            anomalies: List[str] = []
-            details: Dict[str, Any] = {
-                "is_anomaly": False,
-                "unauthorized_region_instances": {},
-                "exposed_instances": [],
-                "new_instances": [],
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
-
-            # Fetch all instances once — reuse for every sub-check
             all_instances = self._get_all_instances()
-
-            if self.authorized_regions:
-                unauthorized = {
-                    region: instances
-                    for region, instances in all_instances.items()
-                    if region not in self.authorized_regions
-                }
-                if unauthorized:
-                    details["unauthorized_region_instances"] = unauthorized
-                    anomalies.append(
-                        f"Instances in unauthorized regions: {list(unauthorized.keys())}"
-                    )
-
-            for region, instances in all_instances.items():
-                for instance in instances:
-                    exposed_rules = self._check_security_group_exposure(instance, region)
-                    if exposed_rules:
-                        details["exposed_instances"].append(
-                            {
-                                "instance_id": instance["InstanceId"],
-                                "region": region,
-                                "exposed_rules": exposed_rules,
-                            }
-                        )
-                        anomalies.append(
-                            f"Instance {instance['InstanceId']} has 0.0.0.0/0 exposure"
-                        )
-
-            new_instances = self._get_new_instances(all_instances)
-            if new_instances:
-                details["new_instances"] = new_instances
-                anomalies.append(f"Detected {len(new_instances)} new instances")
-
-            details["is_anomaly"] = len(anomalies) > 0
-            details["anomalies"] = anomalies
-
-            if not anomalies:
-                self._log_check_end("EC2", "INFO")
-                return CheckResult.info("EC2 Check", "All instances secure")
-
-            severity = "CRITICAL" if details["exposed_instances"] else "HIGH"
-            self._log_check_end("EC2", severity)
-            return CheckResult(
-                severity=severity,
-                title="EC2 Security Issues Detected",
-                message=f"Found {len(anomalies)} EC2 issues",
-                details=details,
-                suggested_action="Review and stop unauthorized/exposed instances",
-            )
-
+            return self._analyze_instances(all_instances)
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "Unknown")
             self._log_error("EC2", e)
@@ -121,66 +62,8 @@ class EC2Checker(BaseChecker):
         self._log_check_start("EC2")
 
         try:
-            anomalies: List[str] = []
-            details: Dict[str, Any] = {
-                "is_anomaly": False,
-                "unauthorized_region_instances": {},
-                "exposed_instances": [],
-                "new_instances": [],
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
-
             all_instances = await self._get_all_instances_async()
-
-            if self.authorized_regions:
-                unauthorized = {
-                    region: instances
-                    for region, instances in all_instances.items()
-                    if region not in self.authorized_regions
-                }
-                if unauthorized:
-                    details["unauthorized_region_instances"] = unauthorized
-                    anomalies.append(
-                        f"Instances in unauthorized regions: {list(unauthorized.keys())}"
-                    )
-
-            for region, instances in all_instances.items():
-                for instance in instances:
-                    exposed_rules = self._check_security_group_exposure(instance, region)
-                    if exposed_rules:
-                        details["exposed_instances"].append(
-                            {
-                                "instance_id": instance["InstanceId"],
-                                "region": region,
-                                "exposed_rules": exposed_rules,
-                            }
-                        )
-                        anomalies.append(
-                            f"Instance {instance['InstanceId']} has 0.0.0.0/0 exposure"
-                        )
-
-            new_instances = self._get_new_instances(all_instances)
-            if new_instances:
-                details["new_instances"] = new_instances
-                anomalies.append(f"Detected {len(new_instances)} new instances")
-
-            details["is_anomaly"] = len(anomalies) > 0
-            details["anomalies"] = anomalies
-
-            if not anomalies:
-                self._log_check_end("EC2", "INFO")
-                return CheckResult.info("EC2 Check", "All instances secure")
-
-            severity = "CRITICAL" if details["exposed_instances"] else "HIGH"
-            self._log_check_end("EC2", severity)
-            return CheckResult(
-                severity=severity,
-                title="EC2 Security Issues Detected",
-                message=f"Found {len(anomalies)} EC2 issues",
-                details=details,
-                suggested_action="Review and stop unauthorized/exposed instances",
-            )
-
+            return self._analyze_instances(all_instances)
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "Unknown")
             self._log_error("EC2", e)
@@ -191,6 +74,66 @@ class EC2Checker(BaseChecker):
         except Exception as e:
             self._log_error("EC2", e)
             return CheckResult.error("EC2 Check Failed", f"Failed to check EC2: {str(e)}")
+
+    def _analyze_instances(self, all_instances: Dict[str, List[Dict]]) -> CheckResult:
+        """Analyze fetched instances for security issues (shared by sync/async)."""
+        anomalies: List[str] = []
+        details: Dict[str, Any] = {
+            "is_anomaly": False,
+            "unauthorized_region_instances": {},
+            "exposed_instances": [],
+            "new_instances": [],
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+        if self.authorized_regions:
+            unauthorized = {
+                region: instances
+                for region, instances in all_instances.items()
+                if region not in self.authorized_regions
+            }
+            if unauthorized:
+                details["unauthorized_region_instances"] = unauthorized
+                anomalies.append(
+                    f"Instances in unauthorized regions: {list(unauthorized.keys())}"
+                )
+
+        for region, instances in all_instances.items():
+            for instance in instances:
+                exposed_rules = self._check_security_group_exposure(instance, region)
+                if exposed_rules:
+                    details["exposed_instances"].append(
+                        {
+                            "instance_id": instance["InstanceId"],
+                            "region": region,
+                            "exposed_rules": exposed_rules,
+                        }
+                    )
+                    anomalies.append(
+                        f"Instance {instance['InstanceId']} has 0.0.0.0/0 exposure"
+                    )
+
+        new_instances = self._get_new_instances(all_instances)
+        if new_instances:
+            details["new_instances"] = new_instances
+            anomalies.append(f"Detected {len(new_instances)} new instances")
+
+        details["is_anomaly"] = len(anomalies) > 0
+        details["anomalies"] = anomalies
+
+        if not anomalies:
+            self._log_check_end("EC2", "INFO")
+            return CheckResult.info("EC2 Check", "All instances secure")
+
+        severity = "CRITICAL" if details["exposed_instances"] else "HIGH"
+        self._log_check_end("EC2", severity)
+        return CheckResult(
+            severity=severity,
+            title="EC2 Security Issues Detected",
+            message=f"Found {len(anomalies)} EC2 issues",
+            details=details,
+            suggested_action="Review and stop unauthorized/exposed instances",
+        )
 
     def _get_all_instances(self) -> Dict[str, List[Dict]]:
         """Fetch running instances across all regions using a cached client pool."""
@@ -242,7 +185,7 @@ class EC2Checker(BaseChecker):
             async def fetch_region_instances(region: str):
                 """Fetch instances for a single region."""
                 try:
-                    loop = asyncio.get_event_loop()
+                    loop = asyncio.get_running_loop()
                     regional_ec2 = self._get_regional_client(region)
 
                     def describe():
@@ -312,9 +255,10 @@ class EC2Checker(BaseChecker):
         for region, instances in all_instances.items():
             for instance in instances:
                 launch_time = instance["LaunchTime"]
-                if hasattr(launch_time, "replace") and launch_time.tzinfo is not None:
-                    launch_time = launch_time.replace(tzinfo=None)
-                if launch_time > cutoff_time.replace(tzinfo=None):
+                # Ensure timezone-aware comparison
+                if hasattr(launch_time, "tzinfo") and launch_time.tzinfo is None:
+                    launch_time = launch_time.replace(tzinfo=timezone.utc)
+                if launch_time > cutoff_time:
                     new_instances.append(
                         {
                             "instance_id": instance["InstanceId"],

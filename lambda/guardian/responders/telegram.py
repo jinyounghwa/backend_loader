@@ -28,6 +28,7 @@ class TelegramResponder:
                 f"{self.api_url}/sendMessage",
                 json={"chat_id": self.chat_id, "text": message, "parse_mode": parse_mode},
                 timeout=10,
+                verify=True,
             )
             return response.status_code == 200
         except Exception as e:
@@ -169,58 +170,6 @@ class TelegramResponder:
             suggested_action=data.get("suggested_action"),
         )
         return self._render_alert(alert)
-
-    def send_cost_alert(
-        self,
-        cost_data: Dict[str, Any],
-        account_id: str = "current",
-        account_name: Optional[str] = None,
-    ) -> bool:
-        return self.send_alert("cost", cost_data, account_id=account_id, account_name=account_name)
-
-    def send_ec2_alert(
-        self,
-        ec2_data: Dict[str, Any],
-        account_id: str = "current",
-        account_name: Optional[str] = None,
-    ) -> bool:
-        return self.send_alert("ec2", ec2_data, account_id=account_id, account_name=account_name)
-
-    def send_s3_alert(
-        self,
-        s3_data: Dict[str, Any],
-        account_id: str = "current",
-        account_name: Optional[str] = None,
-    ) -> bool:
-        return self.send_alert("s3", s3_data, account_id=account_id, account_name=account_name)
-
-    def send_cloudtrail_alert(
-        self,
-        cloudtrail_data: Dict[str, Any],
-        account_id: str = "current",
-        account_name: Optional[str] = None,
-    ) -> bool:
-        return self.send_alert(
-            "cloudtrail", cloudtrail_data, account_id=account_id, account_name=account_name
-        )
-
-    def send_iam_alert(
-        self,
-        iam_data: Dict[str, Any],
-        account_id: str = "current",
-        account_name: Optional[str] = None,
-    ) -> bool:
-        return self.send_alert("iam", iam_data, account_id=account_id, account_name=account_name)
-
-    def send_guardduty_alert(
-        self,
-        guardduty_data: Dict[str, Any],
-        account_id: str = "current",
-        account_name: Optional[str] = None,
-    ) -> bool:
-        return self.send_alert(
-            "guardduty", guardduty_data, account_id=account_id, account_name=account_name
-        )
 
     def _send_generic_alert(
         self, check_name: str, alert_data: Dict[str, Any], account_info: str = ""

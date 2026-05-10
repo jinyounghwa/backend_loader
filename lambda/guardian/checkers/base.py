@@ -50,6 +50,18 @@ class CheckResult:
         """Create ERROR result."""
         return cls("HIGH", title, message, suggested_action="Manual investigation required")
 
+    def __repr__(self) -> str:
+        return f"CheckResult(severity={self.severity!r}, title={self.title!r})"
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, CheckResult):
+            return NotImplemented
+        return (
+            self.severity == other.severity
+            and self.title == other.title
+            and self.message == other.message
+        )
+
 
 class BaseChecker(ABC):
     """Abstract base class for all checkers."""
@@ -92,7 +104,7 @@ class BaseChecker(ABC):
 
         Default implementation runs check() in thread pool for non-blocking I/O.
         """
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.check)
 
     def _log_check_start(self, check_name: str):

@@ -15,6 +15,13 @@ class AWSClientProvider:
     _account_sessions: Dict[str, boto3.Session] = {}
 
     @classmethod
+    def _get_clients_dict(cls) -> Dict[str, Any]:
+        """Return the class-level client cache, ensuring a fresh dict after clear_cache()."""
+        if cls._clients is None:
+            cls._clients = {}
+        return cls._clients
+
+    @classmethod
     def get_session(cls) -> boto3.Session:
         if cls._session is None:
             boto3_kwargs = Config.get_boto3_kwargs()
@@ -45,7 +52,8 @@ class AWSClientProvider:
         """Get a client using cross-account temporary credentials."""
         cache_key = f"{service_name}-account-{account_id}-{region or 'default'}"
 
-        if cache_key not in cls._clients:
+        clients = cls._get_clients_dict()
+        if cache_key not in clients:
             session = cls.create_session_from_credentials(credentials)
             client_kwargs = {}
             if region:
@@ -63,13 +71,14 @@ class AWSClientProvider:
                 region or "default",
             )
 
-        return cls._clients[cache_key]
+        return clients[cache_key]
 
     @classmethod
     def get_client(cls, service_name: str, region: Optional[str] = None) -> Any:
         cache_key = f"{service_name}-{region or 'default'}"
 
-        if cache_key not in cls._clients:
+        clients = cls._get_clients_dict()
+        if cache_key not in clients:
             session = cls.get_session()
             client_kwargs = {}
             if region:
@@ -79,18 +88,19 @@ class AWSClientProvider:
             if "endpoint_url" in boto3_kwargs:
                 client_kwargs["endpoint_url"] = boto3_kwargs["endpoint_url"]
 
-            cls._clients[cache_key] = session.client(service_name, **client_kwargs)
+            clients[cache_key] = session.client(service_name, **client_kwargs)
             logger.debug(
                 "Created new boto3 client for %s (region=%s)", service_name, region or "default"
             )
 
-        return cls._clients[cache_key]
+        return clients[cache_key]
 
     @classmethod
     def get_resource(cls, service_name: str, region: Optional[str] = None) -> Any:
         cache_key = f"resource-{service_name}-{region or 'default'}"
 
-        if cache_key not in cls._clients:
+        clients = cls._get_clients_dict()
+        if cache_key not in clients:
             session = cls.get_session()
             resource_kwargs = {}
             if region:
@@ -100,12 +110,12 @@ class AWSClientProvider:
             if "endpoint_url" in boto3_kwargs:
                 resource_kwargs["endpoint_url"] = boto3_kwargs["endpoint_url"]
 
-            cls._clients[cache_key] = session.resource(service_name, **resource_kwargs)
+            clients[cache_key] = session.resource(service_name, **resource_kwargs)
             logger.debug(
                 "Created new boto3 resource for %s (region=%s)", service_name, region or "default"
             )
 
-        return cls._clients[cache_key]
+        return clients[cache_key]
 
     @classmethod
     def clear_cache(cls):

@@ -64,12 +64,19 @@ class GuardianOrchestrator:
     def run_all_checks(self, event: Dict[str, Any]) -> Dict[str, Any]:
         """Execute checks based on event['check_type'] and return aggregated results."""
         try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            # Already inside an async context (e.g. Lambda runtime)
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(asyncio.run, self._async_run_all_checks(event))
+                return future.result()
+        else:
             return asyncio.run(self._async_run_all_checks(event))
-        except RuntimeError as e:
-            if "asyncio.run() cannot be called from a running event loop" in str(e):
-                loop = asyncio.get_event_loop()
-                return loop.run_until_complete(self._async_run_all_checks(event))
-            raise
 
     async def _async_run_all_checks(self, event: Dict[str, Any]) -> Dict[str, Any]:
         """Async implementation of run_all_checks with parallel check execution."""
@@ -176,31 +183,10 @@ class GuardianOrchestrator:
         account_id: str = "current",
         account_name: Optional[str] = None,
     ) -> CheckResult:
-        """Execute a single checker and handle logging, storage, notification, remediation."""
+        """Execute a single checker (sync) and process result."""
         self.logger.info("Checking %s...", check_name.upper())
         check_result = checker.check()
-        result_dict = check_result.to_dict()
-
-        if check_result.severity == "INFO":
-            log_check_result(self.logger, check_name, "ok", check_result.message)
-            return check_result
-
-        log_check_result(self.logger, check_name, check_result.severity, check_result.message)
-        self.storage.save_event(
-            check_name, check_result.severity, result_dict, account_id=account_id
-        )
-
-        self._notify_alert(
-            check_name,
-            result_dict,
-            account_id=account_id,
-            account_name=account_name or "",
-        )
-
-        if self.remediation:
-            self.remediation.handle_check_result(check_name, check_result)
-
-        return check_result
+        return self._process_check_result(check_name, check_result, account_id, account_name)
 
     async def _run_single_check_async(
         self,
@@ -209,9 +195,19 @@ class GuardianOrchestrator:
         account_id: str = "current",
         account_name: Optional[str] = None,
     ) -> CheckResult:
-        """Async version of _run_single_check using check_async()."""
+        """Execute a single checker (async) and process result."""
         self.logger.info("Checking %s...", check_name.upper())
         check_result = await checker.check_async()
+        return self._process_check_result(check_name, check_result, account_id, account_name)
+
+    def _process_check_result(
+        self,
+        check_name: str,
+        check_result: CheckResult,
+        account_id: str,
+        account_name: Optional[str],
+    ) -> CheckResult:
+        """Handle logging, storage, notification, and remediation for a check result."""
         result_dict = check_result.to_dict()
 
         if check_result.severity == "INFO":
@@ -359,18 +355,30 @@ class GuardianOrchestrator:
             return None
 
     def _determine_system_health(self, checks: Dict[str, Any]) -> str:
-        has_critical = False
-        has_warning = False
+        """Determine system health from check results.
 
-        for _check_name, check_data in checks.items():
+        Uses a single pass with explicit severity ordering.
+        """
+        severity_priority = {"CRITICAL": 3, "HIGH": 2, "MEDIUM": 1, "LOW": 0}
+        max_severity = -1
+
+        for check_data in checks.values():
             if not isinstance(check_data, dict):
                 continue
-            if check_data.get("is_anomaly") or check_data.get("severity") in ("CRITICAL", "HIGH"):
-                has_critical = True
+            # Direct severity field
+            sev = check_data.get("severity", "")
+            max_severity = max(max_severity, severity_priority.get(sev, -1))
+            # Structural anomaly flags
+            if check_data.get("is_anomaly"):
+                max_severity = max(max_severity, 1)
             if check_data.get("new_instances") or check_data.get("new_buckets"):
-                has_warning = True
+                max_severity = max(max_severity, 0)
 
-        return "critical" if has_critical else "warning" if has_warning else "healthy"
+        if max_severity >= 2:
+            return "critical"
+        if max_severity >= 1:
+            return "warning"
+        return "healthy"
 
     def _save_check_results(self, all_check_data: Dict[str, Any], system_health: str):
         try:

@@ -9,8 +9,6 @@ logger = logging.getLogger(__name__)
 _DEFAULTS = {
     "LOCALSTACK_ENDPOINT": "http://localhost:4566",
     "AWS_REGION": "us-east-1",
-    "AWS_ACCESS_KEY_ID": "test",
-    "AWS_SECRET_ACCESS_KEY": "test",
     "COST_THRESHOLD": 10.0,
     "DYNAMODB_TABLE_NAME": "aws-guardian-events",
     "CROSS_ACCOUNT_ROLE_NAME": "aws-guardian-cross-account-role",
@@ -34,16 +32,29 @@ class Config:
     @classmethod
     def get_boto3_kwargs(cls) -> Dict:
         if cls._boto3_kwargs is None:
-            cls._boto3_kwargs = {
+            is_local = cls._env("AWS_ENV", "localstack") == "localstack"
+            kwargs = {
                 "region_name": cls._env("AWS_REGION", _DEFAULTS["AWS_REGION"]),
-                "aws_access_key_id": cls._env("AWS_ACCESS_KEY_ID", _DEFAULTS["AWS_ACCESS_KEY_ID"]),
-                "aws_secret_access_key": cls._env(
-                    "AWS_SECRET_ACCESS_KEY", _DEFAULTS["AWS_SECRET_ACCESS_KEY"]
-                ),
             }
-            endpoint = cls.get_endpoint_url()
+
+            # In LocalStack mode, use test credentials; otherwise require real env vars
+            if is_local:
+                kwargs["aws_access_key_id"] = cls._env("AWS_ACCESS_KEY_ID", "test")
+                kwargs["aws_secret_access_key"] = cls._env("AWS_SECRET_ACCESS_KEY", "test")
+            else:
+                access_key = cls._env("AWS_ACCESS_KEY_ID")
+                secret_key = cls._env("AWS_SECRET_ACCESS_KEY")
+                if access_key:
+                    kwargs["aws_access_key_id"] = access_key
+                if secret_key:
+                    kwargs["aws_secret_access_key"] = secret_key
+                # When neither key is provided, boto3 falls back to
+                # IAM role / instance profile (the expected production path)
+
+            endpoint = cls.get_endpoint_url() if is_local else ""
             if endpoint:
-                cls._boto3_kwargs["endpoint_url"] = endpoint
+                kwargs["endpoint_url"] = endpoint
+            cls._boto3_kwargs = kwargs
         return cls._boto3_kwargs.copy()
 
     @classmethod
@@ -98,5 +109,10 @@ class Config:
 
     @classmethod
     def reset_cache(cls) -> None:
+        """Reset all cached configuration values.
+
+        Creates new empty containers so that concurrent readers never
+        observe a half-reset state.
+        """
         cls._boto3_kwargs = None
         cls._is_localstack = None

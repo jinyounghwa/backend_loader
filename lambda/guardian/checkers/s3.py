@@ -196,9 +196,10 @@ class S3Checker(BaseChecker):
 
         for bucket in buckets:
             creation_date = bucket["CreationDate"]
-            if hasattr(creation_date, "replace") and creation_date.tzinfo is not None:
-                creation_date = creation_date.replace(tzinfo=None)
-            if creation_date > cutoff_time.replace(tzinfo=None):
+            # Ensure timezone-aware comparison
+            if hasattr(creation_date, "tzinfo") and creation_date.tzinfo is None:
+                creation_date = creation_date.replace(tzinfo=timezone.utc)
+            if creation_date > cutoff_time:
                 new_buckets.append(
                     {
                         "bucket_name": bucket["Name"],

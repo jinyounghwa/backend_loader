@@ -4,7 +4,7 @@ Provides type-safe validation for EventBridge events, checker responses,
 and responder inputs.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -56,7 +56,7 @@ class Finding(BaseModel):
     resource: str = Field(..., description="Affected resource ID/ARN")
     resource_type: str = Field(..., description="Resource type (ec2, s3, etc)")
     region: str = Field(..., description="AWS region")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -66,7 +66,7 @@ class CheckerResponse(BaseModel):
     checker_name: str = Field(..., description="Checker name (cost, ec2, s3, cloudtrail, etc)")
     findings: List[Finding] = Field(default_factory=list, description="List of findings")
     summary: Dict[str, Any] = Field(default_factory=dict, description="Aggregated summary data")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     region: str = Field(..., description="Region checked")
     status: str = Field(default="success", description="Checker status (success, partial, error)")
     error_message: Optional[str] = Field(None, description="Error message if status is error")
@@ -97,7 +97,7 @@ class ResponderInput(BaseModel):
     actions: List[RemediationAction] = Field(
         default_factory=list, description="Remediation actions"
     )
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     tags: Dict[str, str] = Field(default_factory=dict, description="Custom tags")
 
 
@@ -110,7 +110,7 @@ class AuditLogRecord(BaseModel):
     """DynamoDB audit log record"""
 
     log_id: str = Field(..., description="Unique log ID")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     action: str = Field(..., description="Action performed")
     resource: str = Field(..., description="Affected resource")
     severity: str = Field(default="info")
@@ -123,7 +123,7 @@ class RemediationMetricRecord(BaseModel):
 
     metric_id: str = Field(..., description="Unique metric ID")
     rule_id: str = Field(..., description="Associated rule ID")
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     action_type: str = Field(..., description="Action type")
     success: bool = Field(default=False)
     execution_time_ms: int = Field(..., description="Execution time in milliseconds")
@@ -164,5 +164,5 @@ class ResponseRuleRecord(BaseModel):
     action: str = Field(..., description="Action to execute")
     enabled: bool = Field(default=True)
     regions: List[str] = Field(default_factory=list)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

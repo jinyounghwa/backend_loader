@@ -5,7 +5,7 @@ remain consistent between Jest (frontend) and Python (backend).
 """
 
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -287,7 +287,7 @@ class TestAPIResponseContract:
         """Test: Valid status response"""
         response = StatusResponse(
             status="healthy",
-            last_check=datetime.utcnow(),
+            last_check=datetime.now(timezone.utc),
             checks={
                 "cost": {"status": "ok"},
                 "ec2": {"status": "ok"},
@@ -302,7 +302,7 @@ class TestAPIResponseContract:
         """Test: Degraded status response"""
         response = StatusResponse(
             status="degraded",
-            last_check=datetime.utcnow(),
+            last_check=datetime.now(timezone.utc),
             checks={
                 "cost": {"status": "ok"},
                 "ec2": {"status": "error", "message": "API throttled"},
@@ -315,7 +315,7 @@ class TestAPIResponseContract:
         """Test: Status response with multi-region data"""
         response = StatusResponse(
             status="healthy",
-            last_check=datetime.utcnow(),
+            last_check=datetime.now(timezone.utc),
             checks={},
             regions=[
                 {"region": "ap-northeast-1", "status": "ok"},

@@ -42,7 +42,7 @@ class TestStatusAPIContract:
         assert response.regions is None
 
         # Should be serializable to JSON
-        json_str = response.json()
+        json_str = response.model_dump_json()
         assert "status" in json_str
         assert "checks" in json_str
 
@@ -70,7 +70,7 @@ class TestStatusAPIContract:
             checks={"ec2": {"instances": 5, "vulnerable": 1}},
         )
 
-        json_data = json.loads(response.json())
+        json_data = json.loads(response.model_dump_json())
         assert json_data["status"] == "healthy"
         assert "ec2" in json_data["checks"]
 
@@ -127,7 +127,7 @@ class TestEventsAPIContract:
             ],
         )
 
-        json_data = json.loads(response.json())
+        json_data = json.loads(response.model_dump_json())
         assert json_data["total"] == 1
         assert json_data["events"][0]["type"] == "cost"
 

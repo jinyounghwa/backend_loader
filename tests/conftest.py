@@ -33,6 +33,16 @@ def aws_env(monkeypatch):
     monkeypatch.setenv("DYNAMODB_TABLE_NAME", "aws-guardian-events")
 
 
+@pytest.fixture(autouse=True)
+def _reset_config_cache():
+    """Reset Config and AWSClientProvider caches between tests."""
+    from guardian.aws_client_provider import AWSClientProvider
+    from guardian.config import Config
+    yield
+    Config.reset_cache()
+    AWSClientProvider.clear_cache()
+
+
 @pytest.fixture
 def mock_telegram():
     t = Mock()

@@ -2,15 +2,12 @@
 
 import logging
 import os
-import sys
 from datetime import datetime, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-
-from handler import lambda_handler
+from guardian.handler import lambda_handler
 
 logging.basicConfig(
     level=logging.INFO, format="[%(asctime)s] %(levelname)-8s [%(name)s] %(message)s"

@@ -36,9 +36,17 @@ class JSONFormatter(logging.Formatter):
 
 
 def setup_logger(name: str, log_file: str = None, level: int = logging.INFO) -> logging.Logger:
-    """Configure logger with both console and file handlers"""
+    """Configure logger with both console and file handlers.
+
+    Guard against duplicate handlers when called multiple times
+    (e.g. in tests or Lambda re-initialization).
+    """
     logger = logging.getLogger(name)
     logger.setLevel(level)
+
+    # Prevent duplicate handlers on repeated calls
+    if logger.handlers:
+        return logger
 
     # Console handler (INFO+)
     console_handler = logging.StreamHandler(sys.stdout)
