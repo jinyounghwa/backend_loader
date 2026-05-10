@@ -20,10 +20,38 @@ class Config:
 
     _boto3_kwargs: Optional[Dict] = None
     _is_localstack: Optional[bool] = None
+    _ssm_cache: Dict[str, str] = {}
 
     @classmethod
     def _env(cls, key: str, default: str = "") -> str:
         return os.getenv(key, default)
+
+    @classmethod
+    def _get_ssm_value(cls, param_name: str) -> str:
+        """Fetch a parameter from SSM Parameter Store (cached).
+
+        In production, Lambda env vars hold the SSM *path* rather than
+        the secret itself.  This method resolves the path to the actual
+        value at runtime, avoiding secrets in Lambda environment config.
+        """
+        if param_name in cls._ssm_cache:
+            return cls._ssm_cache[param_name]
+
+        if cls.is_localstack():
+            # In LocalStack mode, SSM may not be available
+            return ""
+
+        try:
+            import boto3
+
+            ssm = boto3.client("ssm", region_name=cls._env("AWS_REGION", _DEFAULTS["AWS_REGION"]))
+            response = ssm.get_parameter(Name=param_name, WithDecryption=True)
+            value = response["Parameter"]["Value"]
+            cls._ssm_cache[param_name] = value
+            return value
+        except Exception as e:
+            logger.warning("Failed to fetch SSM parameter %s: %s", param_name, e)
+            return ""
 
     @classmethod
     def get_endpoint_url(cls) -> str:
@@ -79,16 +107,46 @@ class Config:
 
     @classmethod
     def get_telegram_config(cls) -> Dict[str, str]:
+        """Get Telegram config.
+
+        In production, reads secrets from SSM at runtime via path env vars.
+        Falls back to direct env vars for backward compatibility / local dev.
+        """
+        ssm_token_path = cls._env("SSM_TELEGRAM_BOT_TOKEN_PATH", "")
+        ssm_chat_path = cls._env("SSM_TELEGRAM_CHAT_ID_PATH", "")
+
+        bot_token = cls._env("TELEGRAM_BOT_TOKEN", "")
+        chat_id = cls._env("TELEGRAM_CHAT_ID", "")
+
+        # If SSM paths are configured, prefer SSM values (production)
+        if ssm_token_path and not bot_token:
+            bot_token = cls._get_ssm_value(ssm_token_path)
+        if ssm_chat_path and not chat_id:
+            chat_id = cls._get_ssm_value(ssm_chat_path)
+
         return {
-            "bot_token": cls._env("TELEGRAM_BOT_TOKEN", ""),
-            "chat_id": cls._env("TELEGRAM_CHAT_ID", ""),
+            "bot_token": bot_token,
+            "chat_id": chat_id,
         }
 
     @classmethod
     def get_discord_config(cls) -> Dict[str, str]:
+        """Get Discord config.
+
+        In production, reads secrets from SSM at runtime via path env vars.
+        Falls back to direct env vars for backward compatibility / local dev.
+        """
+        ssm_webhook_path = cls._env("SSM_DISCORD_WEBHOOK_URL_PATH", "")
+
+        webhook_url = cls._env("DISCORD_WEBHOOK_URL", "")
+        public_key = cls._env("DISCORD_PUBLIC_KEY", "")
+
+        if ssm_webhook_path and not webhook_url:
+            webhook_url = cls._get_ssm_value(ssm_webhook_path)
+
         return {
-            "webhook_url": cls._env("DISCORD_WEBHOOK_URL", ""),
-            "public_key": cls._env("DISCORD_PUBLIC_KEY", ""),
+            "webhook_url": webhook_url,
+            "public_key": public_key,
         }
 
     @classmethod
@@ -116,3 +174,5 @@ class Config:
         """
         cls._boto3_kwargs = None
         cls._is_localstack = None
+        cls._ssm_cache = {}
+

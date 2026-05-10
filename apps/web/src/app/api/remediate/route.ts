@@ -1,5 +1,4 @@
 import { getAuthSession } from '@/lib/auth-utils';
-import { requireAdmin } from '@/lib/auth-utils';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {

@@ -19,6 +19,31 @@ const MOCK_ANALYSIS = {
   ],
 };
 
+const MAX_EVENTS = 20;
+const MAX_EVENT_FIELD_LENGTH = 500;
+
+/**
+ * Sanitize event data to prevent prompt injection.
+ * Extracts only known safe fields and truncates values.
+ */
+function sanitizeEvents(events: unknown[]): Record<string, string>[] {
+  const allowedKeys = new Set([
+    'event_id', 'event_type', 'severity', 'timestamp',
+    'check_type', 'title', 'message', 'region',
+  ]);
+
+  return events.slice(0, MAX_EVENTS).map((evt) => {
+    if (typeof evt !== 'object' || evt === null) return {};
+    const sanitized: Record<string, string> = {};
+    for (const [key, value] of Object.entries(evt as Record<string, unknown>)) {
+      if (!allowedKeys.has(key)) continue;
+      const strVal = String(value ?? '').slice(0, MAX_EVENT_FIELD_LENGTH);
+      sanitized[key] = strVal;
+    }
+    return sanitized;
+  });
+}
+
 export async function POST(request: Request) {
   const session = await getAuthSession();
   if (!session) {
@@ -26,9 +51,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { events } = await request.json();
+    const body = await request.json();
+    const { events } = body;
 
-    if (!events || events.length === 0) {
+    if (!Array.isArray(events) || events.length === 0) {
       return NextResponse.json({ error: 'No events provided' }, { status: 400 });
     }
 
@@ -38,18 +64,17 @@ export async function POST(request: Request) {
       return NextResponse.json(MOCK_ANALYSIS);
     }
 
+    const sanitizedEvents = sanitizeEvents(events);
     const client = new GoogleGenerativeAI(apiKey);
     const model = client.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
-    const prompt = `Analyze these AWS security events and provide:
-1. Threat severity (Critical/High/Medium/Low)
-2. Root cause analysis
-3. Immediate remediation steps (as array)
-4. Prevention recommendations (as array)
+    const prompt = `You are an AWS security analyst. Analyze these security events and respond in valid JSON only.
 
-Events: ${JSON.stringify(events)}
+Events (structured data):
+${JSON.stringify(sanitizedEvents)}
 
-Respond in JSON format with keys: severity, rootCause, remediationSteps, preventionTips`;
+Respond with this exact JSON structure:
+{"severity": "Critical|High|Medium|Low", "rootCause": "string", "remediationSteps": ["string"], "preventionTips": ["string"]}`;
 
     const result = await model.generateContent(prompt);
     const text = result.response.text();
@@ -65,11 +90,12 @@ Respond in JSON format with keys: severity, rootCause, remediationSteps, prevent
     return NextResponse.json({
       severity: analysis.severity || 'Medium',
       rootCause: analysis.rootCause || 'Unknown threat detected',
-      remediationSteps: analysis.remediationSteps || [],
-      preventionTips: analysis.preventionTips || [],
+      remediationSteps: Array.isArray(analysis.remediationSteps) ? analysis.remediationSteps.slice(0, 10) : [],
+      preventionTips: Array.isArray(analysis.preventionTips) ? analysis.preventionTips.slice(0, 10) : [],
     });
   } catch (error) {
     console.error('AI analysis error:', error);
     return NextResponse.json(MOCK_ANALYSIS);
   }
 }
+

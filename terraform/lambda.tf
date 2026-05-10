@@ -9,10 +9,12 @@ resource "aws_lambda_function" "guardian" {
 
   environment {
     variables = {
-      TELEGRAM_BOT_TOKEN  = aws_ssm_parameter.telegram_bot_token.value
-      TELEGRAM_CHAT_ID    = aws_ssm_parameter.telegram_chat_id.value
-      DISCORD_WEBHOOK_URL = aws_ssm_parameter.discord_webhook_url.value
-
+      SSM_TELEGRAM_BOT_TOKEN_PATH = aws_ssm_parameter.telegram_bot_token.name
+      SSM_TELEGRAM_CHAT_ID_PATH   = aws_ssm_parameter.telegram_chat_id.name
+      SSM_DISCORD_WEBHOOK_URL_PATH = aws_ssm_parameter.discord_webhook_url.name
+      AWS_ENV           = var.environment
+      DYNAMODB_TABLE_NAME = aws_dynamodb_table.events.name
+      COST_THRESHOLD    = aws_ssm_parameter.cost_threshold.value
     }
   }
 

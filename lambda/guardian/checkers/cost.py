@@ -10,7 +10,7 @@ from guardian.aws_client_provider import AWSClientProvider
 from guardian.checkers.base import BaseChecker, CheckResult
 from guardian.config import Config
 
-SSM_COST_THRESHOLD_PATH = "/guardian/cost-threshold"
+SSM_COST_THRESHOLD_PATH = "/aws-guardian/cost-threshold"
 
 MOCK_DAILY_COST_DEFAULT = 5.50
 MOCK_MONTHLY_COST_DEFAULT = 150.50

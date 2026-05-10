@@ -32,6 +32,12 @@ function transformEvents(rawEvents: any[]): GuardianEvent[] {
   });
 }
 
+// Allowed filter values to prevent arbitrary DynamoDB GSI key injection
+const ALLOWED_EVENT_TYPES = new Set(['all', 'cost', 'ec2', 's3', 'cloudtrail', 'iam', 'guardduty', 'check_result', 'auto_response', 'summary']);
+const ALLOWED_SEVERITIES = new Set(['all', 'info', 'low', 'medium', 'high', 'critical', 'warning', 'INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
+const MAX_HOURS = 168; // 7 days max
+const MIN_HOURS = 1;
+
 export async function GET(request: Request) {
   const session = await getAuthSession();
   if (!session) {
@@ -40,9 +46,18 @@ export async function GET(request: Request) {
 
   try {
     const { searchParams } = new URL(request.url);
-    const hours = parseInt(searchParams.get('hours') || '24', 10);
+    const hoursRaw = parseInt(searchParams.get('hours') || '24', 10);
+    const hours = Number.isNaN(hoursRaw) ? 24 : Math.min(Math.max(hoursRaw, MIN_HOURS), MAX_HOURS);
     const typeFilter = searchParams.get('type') || 'all';
     const severityFilter = searchParams.get('severity') || 'all';
+
+    // Validate filter values against allow-list
+    if (!ALLOWED_EVENT_TYPES.has(typeFilter)) {
+      return NextResponse.json({ error: 'Invalid type filter' }, { status: 400 });
+    }
+    if (!ALLOWED_SEVERITIES.has(severityFilter)) {
+      return NextResponse.json({ error: 'Invalid severity filter' }, { status: 400 });
+    }
 
     // ============================================================================
     // Query Strategy: Use GSI for optimal performance
@@ -54,14 +69,12 @@ export async function GET(request: Request) {
 
     if (typeFilter !== 'all') {
       // ✅ Query TypeTimestampIndex GSI
-      // Most restrictive filter - use this if available
       rawEvents = await getEventsByType(typeFilter, hours);
     } else if (severityFilter !== 'all') {
       // ✅ Query SeverityTimestampIndex GSI
       rawEvents = await getEventsBySeverity(severityFilter, hours);
     } else {
       // ✅ Query AllEventsIndex GSI for all recent events
-      // Better than full Scan for dashboard
       rawEvents = await getEventsByGSI(hours);
     }
 

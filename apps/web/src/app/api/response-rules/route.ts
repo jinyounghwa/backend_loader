@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAuthSession } from '@/lib/auth-utils';
+import { getAuthSession, isAdmin } from '@/lib/auth-utils';
 
 interface ResponseRule {
   rule_id: string;
@@ -49,10 +49,6 @@ const mockRules: ResponseRule[] = [
     created_by: 'admin@example.com',
   },
 ];
-
-function isAdmin(session: any): boolean {
-  return session?.user?.email === 'timotolkie@gmail.com';
-}
 
 export async function GET(request: Request) {
   const session = await getAuthSession();

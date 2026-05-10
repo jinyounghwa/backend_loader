@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth-utils';
-import { getLatestCheckResult, getRecentEvents } from '@/lib/dynamodb';
+import { getLatestCheckResult, getRecentEvents, ddbItemToGuardianEvent } from '@/lib/dynamodb';
 import { mockCostData, mockEC2Data, mockS3Data, mockEvents } from '@/lib/mock-data';
 import { statusCache } from '@/lib/cache';
 import type { DashboardSummary, DynamoEventItem, GuardianEvent, MultiRegionSummary } from '@/types/guardian';
@@ -33,19 +33,7 @@ function buildFallbackSummary(region: string = 'ap-northeast-1'): DashboardSumma
   };
 }
 
-function ddbItemToGuardianEvent(item: DynamoEventItem, index: number): GuardianEvent {
-  const parsedDetails = typeof item.details === 'string' ? JSON.parse(item.details) : item.details;
-  return {
-    event_id: `evt-${item.timestamp}-${index}`,
-    event_type: (item.action_type ? 'auto_response' : item.event_type) as GuardianEvent['event_type'],
-    severity: item.severity as GuardianEvent['severity'],
-    timestamp: item.timestamp,
-    details: parsedDetails,
-    auto_response: item.action_type
-      ? { action: item.action_type, resource_id: item.resource_id || '', status: (item.status as 'success' | 'failed') || 'success' }
-      : undefined,
-  };
-}
+
 
 function extractCheckDetails(rawDetails: Record<string, any>) {
   const costRaw = rawDetails.cost;
@@ -225,7 +213,7 @@ export async function GET(request: Request) {
       const response = NextResponse.json(data || buildFallbackSummary(region));
 
       // Set cache-control header (5 minutes for browsers)
-      response.headers.set('cache-control', useCache ? 'public, max-age=300' : 'no-cache, no-store');
+      response.headers.set('cache-control', useCache ? 'private, max-age=300' : 'no-cache, no-store');
       return response;
     }
 
@@ -255,7 +243,7 @@ export async function GET(request: Request) {
     };
 
     const response = NextResponse.json(multiRegionSummary);
-    response.headers.set('cache-control', useCache ? 'public, max-age=300' : 'no-cache, no-store');
+    response.headers.set('cache-control', useCache ? 'private, max-age=300' : 'no-cache, no-store');
     return response;
   } catch {
     return NextResponse.json(buildFallbackSummary());
