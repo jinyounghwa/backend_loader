@@ -175,4 +175,3 @@ class Config:
         cls._boto3_kwargs = None
         cls._is_localstack = None
         cls._ssm_cache = {}
-

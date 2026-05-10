@@ -2,7 +2,6 @@
 
 import logging
 import os
-from typing import Optional
 
 from guardian.cache.base import CacheBackend
 from guardian.cache.memory import InMemoryCache
