@@ -1,10 +1,12 @@
 """GuardDuty checker for threat detection."""
 
+import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from botocore.exceptions import ClientError
+from guardian.aws_client_provider import AWSClientProvider
 from guardian.checkers.base import BaseChecker, CheckResult
 
 logger = logging.getLogger(__name__)
@@ -22,17 +24,15 @@ class GuardDutyChecker(BaseChecker):
         credentials: Optional[Dict[str, str]] = None,
     ):
         super().__init__(clients, config, account_id, credentials)
-        self.guardduty = clients.get("guardduty")
-        self.ec2 = clients.get("ec2")
         self.lookback_hours = config.get("guardduty_lookback_hours", 24)
 
-    def check(self) -> CheckResult:
-        """Check for GuardDuty threats."""
+    async def check_async(self) -> CheckResult:
+        """Check for GuardDuty threats with async I/O."""
         self._log_check_start("GuardDuty")
 
         try:
             # Get active GuardDuty findings
-            findings = self._get_active_findings()
+            findings = await self._get_active_findings_async()
 
             if not findings:
                 self._log_check_end("GuardDuty", "INFO")
@@ -63,63 +63,77 @@ class GuardDutyChecker(BaseChecker):
                 "GuardDuty Check Failed", f"Failed to check GuardDuty: {str(e)}"
             )
 
-    def _get_active_findings(self) -> List[Dict[str, Any]]:
-        """Get active GuardDuty findings."""
-        if not self.guardduty:
-            return []
+    def check(self) -> CheckResult:
+        """Backward compatibility wrapper - delegates to check_async()."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
 
+        if loop and loop.is_running():
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(asyncio.run, self.check_async())
+                return future.result()
+        else:
+            return asyncio.run(self.check_async())
+
+    async def _get_active_findings_async(self) -> List[Dict[str, Any]]:
+        """Get active GuardDuty findings using async I/O."""
         findings = []
 
         try:
-            # List detectors first
-            detectors = self.guardduty.list_detectors()
-            if not detectors.get("DetectorIds"):
-                return []
+            async with await AWSClientProvider.get_async_client("guardduty") as guardduty:
+                # List detectors first
+                detectors = await guardduty.list_detectors()
+                if not detectors.get("DetectorIds"):
+                    return []
 
-            detector_id = detectors["DetectorIds"][0]
+                detector_id = detectors["DetectorIds"][0]
 
-            # List findings
-            response = self.guardduty.list_findings(
-                DetectorId=detector_id,
-                FindingCriteria={
-                    "Criterion": {
-                        "updatedAt": {
-                            "Gte": int(
-                                (
-                                    datetime.now(timezone.utc)
-                                    - timedelta(hours=self.lookback_hours)
-                                ).timestamp()
-                                * 1000
-                            )
-                        },
-                        "severity": {"Gte": 4},  # Medium and above
-                    }
-                },
-            )
+                # List findings
+                response = await guardduty.list_findings(
+                    DetectorId=detector_id,
+                    FindingCriteria={
+                        "Criterion": {
+                            "updatedAt": {
+                                "Gte": int(
+                                    (
+                                        datetime.now(timezone.utc)
+                                        - timedelta(hours=self.lookback_hours)
+                                    ).timestamp()
+                                    * 1000
+                                )
+                            },
+                            "severity": {"Gte": 4},  # Medium and above
+                        }
+                    },
+                )
 
-            if response.get("FindingIds"):
-                all_finding_ids = response["FindingIds"]
-                for i in range(0, len(all_finding_ids), 50):
-                    batch = all_finding_ids[i : i + 50]
-                    findings_response = self.guardduty.get_findings(
-                        DetectorId=detector_id, FindingIds=batch
-                    )
-
-                    for finding in findings_response.get("Findings", []):
-                        findings.append(
-                            {
-                                "id": finding.get("Id"),
-                                "type": finding.get("Type"),
-                                "severity": float(finding.get("Severity", 0)),
-                                "title": finding.get("Title"),
-                                "description": finding.get("Description"),
-                                "resource_type": finding.get("Resource", {}).get("ResourceType"),
-                                "resource_id": finding.get("Resource", {})
-                                .get("InstanceDetails", {})
-                                .get("InstanceId"),
-                                "updated_at": finding.get("UpdatedAt"),
-                            }
+                if response.get("FindingIds"):
+                    all_finding_ids = response["FindingIds"]
+                    for i in range(0, len(all_finding_ids), 50):
+                        batch = all_finding_ids[i : i + 50]
+                        findings_response = await guardduty.get_findings(
+                            DetectorId=detector_id, FindingIds=batch
                         )
+
+                        for finding in findings_response.get("Findings", []):
+                            findings.append(
+                                {
+                                    "id": finding.get("Id"),
+                                    "type": finding.get("Type"),
+                                    "severity": float(finding.get("Severity", 0)),
+                                    "title": finding.get("Title"),
+                                    "description": finding.get("Description"),
+                                    "resource_type": finding.get("Resource", {}).get("ResourceType"),
+                                    "resource_id": finding.get("Resource", {})
+                                    .get("InstanceDetails", {})
+                                    .get("InstanceId"),
+                                    "updated_at": finding.get("UpdatedAt"),
+                                }
+                            )
 
         except ClientError as e:
             logger.warning("ClientError fetching GuardDuty findings: %s", e)

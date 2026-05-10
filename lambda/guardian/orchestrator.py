@@ -93,7 +93,7 @@ class GuardianOrchestrator:
         }
 
         accounts = (
-            self._get_accounts()
+            await self._get_accounts_async()
             if Config.is_organizations_enabled()
             else [{"account_id": "current", "account_name": "Current Account"}]
         )
@@ -108,11 +108,11 @@ class GuardianOrchestrator:
 
             account_checkers = self.checkers
             if Config.is_organizations_enabled() and account_id != "current":
-                assumed_role = self._assume_role_for_account(account_id)
+                assumed_role = await AWSClientProvider.assume_role_async(account_id)
                 if not assumed_role:
                     self.logger.warning("Skipping account %s - role assumption failed", account_id)
                     continue
-                account_checkers = self._create_account_checkers(
+                account_checkers = await self._create_account_checkers_async(
                     account_id, assumed_role.get("credentials", {})
                 )
 
@@ -260,9 +260,10 @@ class GuardianOrchestrator:
             return ["ec2", "s3", "cloudtrail", "iam", "guardduty"]
         return ["cost", "ec2", "s3", "cloudtrail", "iam", "guardduty"]
 
-    def _create_account_checkers(
+    async def _create_account_checkers_async(
         self, account_id: str, credentials: Dict[str, str]
     ) -> Dict[str, Any]:
+        """Create account-specific checkers with cross-account credentials (async)."""
         try:
             account_checkers = dict(self.checkers)
 
@@ -306,27 +307,62 @@ class GuardianOrchestrator:
             )
             return self.checkers
 
-    def _get_accounts(self) -> List[Dict[str, str]]:
+    def _create_account_checkers(
+        self, account_id: str, credentials: Dict[str, str]
+    ) -> Dict[str, Any]:
+        """Backward compatibility wrapper - delegates to async version."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(asyncio.run, self._create_account_checkers_async(account_id, credentials))
+                return future.result()
+        else:
+            return asyncio.run(self._create_account_checkers_async(account_id, credentials))
+
+    async def _get_accounts_async(self) -> List[Dict[str, str]]:
+        """Get list of AWS accounts from Organizations API (async)."""
         try:
             if not Config.is_organizations_enabled():
                 return []
-            orgs_client = AWSClientProvider.get_client("organizations")
             accounts = []
-            paginator = orgs_client.get_paginator("list_accounts")
-            for page in paginator.paginate():
-                for account in page.get("Accounts", []):
-                    accounts.append(
-                        {
-                            "account_id": account["Id"],
-                            "account_name": account["Name"],
-                            "status": account["Status"],
-                        }
-                    )
+            async with await AWSClientProvider.get_async_client("organizations") as orgs_client:
+                paginator = orgs_client.get_paginator("list_accounts")
+                async for page in paginator.paginate():
+                    for account in page.get("Accounts", []):
+                        accounts.append(
+                            {
+                                "account_id": account["Id"],
+                                "account_name": account["Name"],
+                                "status": account["Status"],
+                            }
+                        )
             self.logger.info("Retrieved %d accounts from Organizations", len(accounts))
             return accounts
         except Exception as e:
             self.logger.warning("Failed to get accounts from Organizations: %s", e)
             return []
+
+    def _get_accounts(self) -> List[Dict[str, str]]:
+        """Backward compatibility wrapper - delegates to async version."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(asyncio.run, self._get_accounts_async())
+                return future.result()
+        else:
+            return asyncio.run(self._get_accounts_async())
 
     def _assume_role_for_account(
         self, account_id: str, role_name: Optional[str] = None
