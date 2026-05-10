@@ -36,23 +36,18 @@ class CostChecker(BaseChecker):
         self.is_localstack = Config.is_localstack()
         self.ssm_client = AWSClientProvider.get_client("ssm")
 
-        if not self.is_localstack:
-            self.ce_client = AWSClientProvider.get_client("ce")
-        else:
-            self.ce_client = None
-
-    def check(self) -> CheckResult:
-        """Run cost anomaly check and return unified CheckResult."""
+    async def check_async(self) -> CheckResult:
+        """Run cost anomaly check with true async I/O."""
         self._log_check_start("Cost")
 
         try:
             today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-            daily_cost = self._get_daily_cost(today)
+            daily_cost = await self._get_daily_cost_async(today)
 
             yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
-            yesterday_cost = self._get_daily_cost(yesterday)
+            yesterday_cost = await self._get_daily_cost_async(yesterday)
 
-            monthly_cost = self._get_monthly_cost()
+            monthly_cost = await self._get_monthly_cost_async()
 
             is_anomaly = daily_cost > self.threshold
             increase_percent = round(
@@ -94,19 +89,39 @@ class CostChecker(BaseChecker):
                 f"Failed to check costs: {str(e)}",
             )
 
-    def _get_daily_cost(self, date: str) -> float:
+    def check(self) -> CheckResult:
+        """Backward compatibility wrapper - delegates to check_async()."""
+        import asyncio
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(asyncio.run, self.check_async())
+                return future.result()
+        else:
+            return asyncio.run(self.check_async())
+
+    async def _get_daily_cost_async(self, date: str) -> float:
+        """Get daily cost for a specific date using async I/O."""
         if self.is_localstack:
             return float(os.getenv("MOCK_DAILY_COST", str(MOCK_DAILY_COST_DEFAULT)))
 
         try:
-            response = self.ce_client.get_cost_and_usage(
-                TimePeriod={"Start": date, "End": date},
-                Granularity="DAILY",
-                Metrics=["UnblendedCost"],
-            )
-            if response["ResultsByTime"]:
-                return float(response["ResultsByTime"][0]["Total"]["UnblendedCost"]["Amount"])
-            return 0.0
+            async with await AWSClientProvider.get_async_client("ce") as ce_client:
+                response = await ce_client.get_cost_and_usage(
+                    TimePeriod={"Start": date, "End": date},
+                    Granularity="DAILY",
+                    Metrics=["UnblendedCost"],
+                )
+                if response["ResultsByTime"]:
+                    return float(response["ResultsByTime"][0]["Total"]["UnblendedCost"]["Amount"])
+                return 0.0
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "Unknown")
             logger.error("ClientError getting daily cost (%s): %s", error_code, e)
@@ -115,7 +130,10 @@ class CostChecker(BaseChecker):
             logger.error("Error getting daily cost: %s", e)
             return 0.0
 
-    def _get_monthly_cost(self, year: int = None, month: int = None) -> float:
+    async def _get_monthly_cost_async(
+        self, year: Optional[int] = None, month: Optional[int] = None
+    ) -> float:
+        """Get monthly cost using async I/O."""
         if not year:
             year = datetime.now(timezone.utc).year
         if not month:
@@ -128,14 +146,15 @@ class CostChecker(BaseChecker):
         end_date = f"{year + 1}-01-01" if month == 12 else f"{year}-{month + 1:02d}-01"
 
         try:
-            response = self.ce_client.get_cost_and_usage(
-                TimePeriod={"Start": start_date, "End": end_date},
-                Granularity="MONTHLY",
-                Metrics=["UnblendedCost"],
-            )
-            if response["ResultsByTime"]:
-                return float(response["ResultsByTime"][0]["Total"]["UnblendedCost"]["Amount"])
-            return 0.0
+            async with await AWSClientProvider.get_async_client("ce") as ce_client:
+                response = await ce_client.get_cost_and_usage(
+                    TimePeriod={"Start": start_date, "End": end_date},
+                    Granularity="MONTHLY",
+                    Metrics=["UnblendedCost"],
+                )
+                if response["ResultsByTime"]:
+                    return float(response["ResultsByTime"][0]["Total"]["UnblendedCost"]["Amount"])
+                return 0.0
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code", "Unknown")
             logger.error("ClientError getting monthly cost (%s): %s", error_code, e)

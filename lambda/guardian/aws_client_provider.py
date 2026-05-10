@@ -1,9 +1,15 @@
-"""Singleton AWS Client Provider for managing boto3 clients"""
+"""Singleton AWS Client Provider for managing boto3 and aioboto3 clients"""
 
 import logging
 from typing import Any, Dict, Optional
 
 import boto3
+
+try:
+    import aioboto3
+except ImportError:
+    aioboto3 = None
+
 from guardian.config import Config
 
 logger = logging.getLogger(__name__)
@@ -13,6 +19,7 @@ class AWSClientProvider:
     _clients: Dict[str, Any] = {}
     _session: Optional[boto3.Session] = None
     _account_sessions: Dict[str, boto3.Session] = {}
+    _aioboto3_session: Optional[Any] = None
 
     @classmethod
     def _get_clients_dict(cls) -> Dict[str, Any]:
@@ -122,3 +129,111 @@ class AWSClientProvider:
         cls._clients = {}
         cls._session = None
         cls._account_sessions = {}
+        cls._aioboto3_session = None
+
+    @classmethod
+    def get_aioboto3_session(cls) -> Optional[Any]:
+        """Get or create aioboto3 session for async operations."""
+        if aioboto3 is None:
+            logger.warning("aioboto3 not installed, async operations unavailable")
+            return None
+
+        if cls._aioboto3_session is None:
+            boto3_kwargs = Config.get_boto3_kwargs()
+            cls._aioboto3_session = aioboto3.Session(**boto3_kwargs)
+            logger.debug("Created new aioboto3 session")
+
+        return cls._aioboto3_session
+
+    @classmethod
+    async def get_async_client(cls, service_name: str, region: Optional[str] = None) -> Any:
+        """Get async client context manager for aioboto3.
+
+        Usage:
+            async with AWSClientProvider.get_async_client("ec2") as client:
+                response = await client.describe_instances()
+        """
+        session = cls.get_aioboto3_session()
+        if session is None:
+            raise RuntimeError("aioboto3 not available")
+
+        kwargs = {}
+        if region:
+            kwargs["region_name"] = region
+
+        boto3_kwargs = Config.get_boto3_kwargs()
+        if "endpoint_url" in boto3_kwargs:
+            kwargs["endpoint_url"] = boto3_kwargs["endpoint_url"]
+
+        return session.client(service_name, **kwargs)
+
+    @classmethod
+    async def assume_role_async(
+        cls,
+        account_id: str,
+        role_name: str = "GuardianCrossAccountRole",
+        session_duration: int = 3600,
+    ) -> Dict[str, str]:
+        """Assume role in target account and return temporary credentials.
+
+        Args:
+            account_id: Target AWS account ID
+            role_name: IAM role name in target account
+            session_duration: Duration of session in seconds
+
+        Returns:
+            Dictionary with temporary credentials (AccessKeyId, SecretAccessKey, SessionToken)
+        """
+        async with await cls.get_async_client("sts") as sts_client:
+            role_arn = f"arn:aws:iam::{account_id}:role/{role_name}"
+            response = await sts_client.assume_role(
+                RoleArn=role_arn,
+                RoleSessionName=f"guardian-{account_id}",
+                DurationSeconds=session_duration,
+            )
+
+            credentials = response["Credentials"]
+            logger.debug("Successfully assumed role in account %s", account_id)
+            return {
+                "aws_access_key_id": credentials["AccessKeyId"],
+                "aws_secret_access_key": credentials["SecretAccessKey"],
+                "aws_session_token": credentials["SessionToken"],
+            }
+
+    @classmethod
+    async def get_async_client_for_account(
+        cls,
+        service_name: str,
+        account_id: str,
+        region: Optional[str] = None,
+    ) -> Any:
+        """Get async client for cross-account access.
+
+        Args:
+            service_name: AWS service name (ec2, s3, etc.)
+            account_id: Target AWS account ID
+            region: Optional region name
+
+        Returns:
+            Async client context manager
+        """
+        credentials = await cls.assume_role_async(account_id)
+
+        if aioboto3 is None:
+            raise RuntimeError("aioboto3 not available")
+
+        session = aioboto3.Session(
+            aws_access_key_id=credentials["aws_access_key_id"],
+            aws_secret_access_key=credentials["aws_secret_access_key"],
+            aws_session_token=credentials["aws_session_token"],
+        )
+
+        kwargs = {}
+        if region:
+            kwargs["region_name"] = region
+
+        boto3_kwargs = Config.get_boto3_kwargs()
+        if "endpoint_url" in boto3_kwargs:
+            kwargs["endpoint_url"] = boto3_kwargs["endpoint_url"]
+
+        return session.client(service_name, **kwargs)
