@@ -1,11 +1,13 @@
 """IAM checker for permission changes detection."""
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from botocore.exceptions import ClientError
+from guardian.aws_client_provider import AWSClientProvider
 from guardian.checkers.base import BaseChecker, CheckResult
 
 logger = logging.getLogger(__name__)
@@ -21,24 +23,23 @@ class IAMChecker(BaseChecker):
         credentials: Optional[Dict[str, str]] = None,
     ):
         super().__init__(clients, config, account_id, credentials)
-        self.iam = clients.get("iam")
         self.dynamodb_resource = clients.get("dynamodb_resource")
         self.baseline_key = "iam-baseline"
         self.table_name = config.get("iam_baseline_table", "guardian-iam-baseline")
 
-    def check(self) -> CheckResult:
+    async def check_async(self) -> CheckResult:
         self._log_check_start("IAM")
 
         try:
-            current_users = self._get_iam_users()
-            current_keys = self._get_access_keys(current_users)
-            baseline = self._get_baseline()
+            current_users = await self._get_iam_users_async()
+            current_keys = await self._get_access_keys_async(current_users)
+            baseline = await self._get_baseline_async()
             changes = self._detect_changes(current_users, current_keys, baseline)
 
             if changes:
                 severity = self._determine_severity(changes)
                 self._log_check_end("IAM", severity)
-                self._save_baseline(current_users, current_keys)
+                await self._save_baseline_async(current_users, current_keys)
 
                 return CheckResult(
                     severity=severity,
@@ -57,20 +58,35 @@ class IAMChecker(BaseChecker):
             self._log_error("IAM", e)
             return CheckResult.error("IAM Check Failed", f"Failed to check IAM: {str(e)}")
 
-    def _get_iam_users(self) -> Dict[str, Dict[str, Any]]:
-        if not self.iam:
-            return {}
+    def check(self) -> CheckResult:
+        """Backward compatibility wrapper - delegates to check_async()."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
 
+        if loop and loop.is_running():
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(asyncio.run, self.check_async())
+                return future.result()
+        else:
+            return asyncio.run(self.check_async())
+
+    async def _get_iam_users_async(self) -> Dict[str, Dict[str, Any]]:
+        """Get IAM users using async I/O."""
         users = {}
         try:
-            paginator = self.iam.get_paginator("list_users")
-            for page in paginator.paginate():
-                for user in page.get("Users", []):
-                    users[user["UserName"]] = {
-                        "arn": user["Arn"],
-                        "create_date": user["CreateDate"].isoformat(),
-                        "path": user.get("Path", "/"),
-                    }
+            async with await AWSClientProvider.get_async_client("iam") as iam:
+                paginator = iam.get_paginator("list_users")
+                async for page in paginator.paginate():
+                    for user in page.get("Users", []):
+                        users[user["UserName"]] = {
+                            "arn": user["Arn"],
+                            "create_date": user["CreateDate"].isoformat(),
+                            "path": user.get("Path", "/"),
+                        }
         except ClientError as e:
             logger.warning("ClientError fetching IAM users: %s", e)
         except Exception as e:
@@ -78,25 +94,32 @@ class IAMChecker(BaseChecker):
 
         return users
 
-    def _get_access_keys(self, users: Dict[str, Dict[str, Any]]) -> Dict[str, List[Dict[str, str]]]:
-        if not self.iam:
-            return {}
-
+    async def _get_access_keys_async(self, users: Dict[str, Dict[str, Any]]) -> Dict[str, List[Dict[str, str]]]:
+        """Get access keys for all users with parallel async I/O."""
         keys = {}
         try:
-            for username in users.keys():
-                user_keys = []
-                paginator = self.iam.get_paginator("list_access_keys")
-                for page in paginator.paginate(UserName=username):
-                    for key in page.get("AccessKeyMetadata", []):
-                        user_keys.append(
-                            {
-                                "key_id": key["AccessKeyId"],
-                                "status": key["Status"],
-                                "create_date": key["CreateDate"].isoformat(),
-                            }
-                        )
-                keys[username] = user_keys
+            async with await AWSClientProvider.get_async_client("iam") as iam:
+                async def get_user_keys(username: str):
+                    user_keys = []
+                    try:
+                        paginator = iam.get_paginator("list_access_keys")
+                        async for page in paginator.paginate(UserName=username):
+                            for key in page.get("AccessKeyMetadata", []):
+                                user_keys.append(
+                                    {
+                                        "key_id": key["AccessKeyId"],
+                                        "status": key["Status"],
+                                        "create_date": key["CreateDate"].isoformat(),
+                                    }
+                                )
+                    except Exception as e:
+                        logger.warning("Error fetching keys for %s: %s", username, e)
+                    return (username, user_keys)
+
+                tasks = [get_user_keys(username) for username in users.keys()]
+                results = await asyncio.gather(*tasks, return_exceptions=False)
+                keys = {username: user_keys for username, user_keys in results}
+
         except ClientError as e:
             logger.warning("ClientError fetching IAM access keys: %s", e)
         except Exception as e:
@@ -104,7 +127,7 @@ class IAMChecker(BaseChecker):
 
         return keys
 
-    def _get_baseline(self) -> Dict[str, Any]:
+    async def _get_baseline_async(self) -> Dict[str, Any]:
         if not self.dynamodb_resource:
             return {"users": {}, "keys": {}}
 
@@ -171,9 +194,10 @@ class IAMChecker(BaseChecker):
         else:
             return "LOW"
 
-    def _save_baseline(
+    async def _save_baseline_async(
         self, users: Dict[str, Dict[str, Any]], keys: Dict[str, List[Dict[str, str]]]
     ):
+        """Save IAM baseline to DynamoDB - sync since DynamoDB resource is blocking."""
         if not self.dynamodb_resource:
             return
 
