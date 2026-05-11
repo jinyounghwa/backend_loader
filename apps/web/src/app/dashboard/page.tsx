@@ -5,6 +5,7 @@ import { RefreshCw } from 'lucide-react';
 import GuardianStatusCard from '@/components/Dashboard/GuardianStatusCard';
 import GuardianEventLog from '@/components/Dashboard/GuardianEventLog';
 import GuardianActionHistory from '@/components/Dashboard/GuardianActionHistory';
+import GuardianThreatAnalysis from '@/components/Dashboard/GuardianThreatAnalysis';
 
 interface DashboardStatus {
   version: string;
@@ -170,6 +171,9 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
+
+        {/* Threat Analysis */}
+        <GuardianThreatAnalysis />
 
         {/* Event Log and Action History */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
