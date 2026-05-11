@@ -8,9 +8,12 @@ interface GuardianStatusCardProps {
   title: string;
   status: Status;
   stats: {
-    total: number;
+    total?: number;
     running?: number;
     secure?: number;
+    daily?: number;
+    threshold?: number;
+    monthly?: number;
     issues: number;
     [key: string]: number | undefined;
   };
