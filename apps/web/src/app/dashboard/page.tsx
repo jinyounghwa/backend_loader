@@ -6,6 +6,7 @@ import GuardianStatusCard from '@/components/Dashboard/GuardianStatusCard';
 import GuardianEventLog from '@/components/Dashboard/GuardianEventLog';
 import GuardianActionHistory from '@/components/Dashboard/GuardianActionHistory';
 import GuardianThreatAnalysis from '@/components/Dashboard/GuardianThreatAnalysis';
+import GuardianReportDownload from '@/components/Dashboard/GuardianReportDownload';
 
 interface DashboardStatus {
   version: string;
@@ -180,6 +181,9 @@ export default function DashboardPage() {
           <GuardianEventLog limit={10} />
           <GuardianActionHistory limit={10} />
         </div>
+
+        {/* Report Download */}
+        <GuardianReportDownload />
       </div>
     </div>
   );
