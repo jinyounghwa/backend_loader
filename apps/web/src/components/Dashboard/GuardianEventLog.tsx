@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { AlertCircle, Info, AlertTriangle, Filter } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { AlertCircle, Info, AlertTriangle, Filter, Wifi, WifiOff } from 'lucide-react';
+import { useGuardianStream } from '@/lib/hooks/useGuardianStream';
 
 export interface GuardianEvent {
   id: string;
@@ -16,12 +17,28 @@ export interface GuardianEvent {
 interface GuardianEventLogProps {
   limit?: number;
   onFilter?: (severity?: string) => void;
+  enableRealtimeStream?: boolean;
 }
 
-export default function GuardianEventLog({ limit = 10, onFilter }: GuardianEventLogProps) {
+export default function GuardianEventLog({ limit = 10, onFilter, enableRealtimeStream = true }: GuardianEventLogProps) {
   const [events, setEvents] = useState<GuardianEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSeverity, setSelectedSeverity] = useState<string | undefined>();
+
+  const handleStreamEvent = useCallback((event: GuardianEvent) => {
+    if (selectedSeverity && event.severity !== selectedSeverity) {
+      return;
+    }
+    setEvents((prev) => {
+      const updated = [event, ...prev];
+      return updated.slice(0, limit);
+    });
+  }, [selectedSeverity, limit]);
+
+  const { isConnected } = useGuardianStream({
+    enabled: enableRealtimeStream,
+    onEvent: handleStreamEvent,
+  });
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -96,7 +113,24 @@ export default function GuardianEventLog({ limit = 10, onFilter }: GuardianEvent
   return (
     <div className="rounded-lg border border-slate-700/50 bg-slate-900/50 p-6">
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-100">Recent Events</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold text-slate-100">Recent Events</h2>
+          {enableRealtimeStream && (
+            <div className="flex items-center gap-1.5">
+              {isConnected ? (
+                <>
+                  <Wifi className="w-3.5 h-3.5 text-green-500" />
+                  <span className="text-xs text-green-500">Live</span>
+                </>
+              ) : (
+                <>
+                  <WifiOff className="w-3.5 h-3.5 text-slate-500" />
+                  <span className="text-xs text-slate-500">Offline</span>
+                </>
+              )}
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <Filter className="w-4 h-4 text-slate-400" />
           <select
