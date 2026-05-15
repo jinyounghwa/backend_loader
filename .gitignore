@@ -49,5 +49,23 @@ terraform/*.tfstate*
 # Aider
 .aider*
 
+# SAM CLI
+.aws-sam/
+
+# Logs
+*.log
+
+# PID files
+*.pid
+
+# pytest
+.pytest_cache/
+
+# Gemini
+gemini-config.json
+
+# Scratch/temp
+scratch/
+
 # Git
 .git/
