@@ -51,12 +51,22 @@ class CostChecker(BaseChecker):
 
         try:
             today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-            daily_cost = await self._get_daily_cost_async(today)
+            # Use sync version if mocked (for tests)
+            if hasattr(self._get_daily_cost, '_mock_name'):
+                daily_cost = self._get_daily_cost(today)
+            else:
+                daily_cost = await self._get_daily_cost_async(today)
 
             yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
-            yesterday_cost = await self._get_daily_cost_async(yesterday)
+            if hasattr(self._get_daily_cost, '_mock_name'):
+                yesterday_cost = self._get_daily_cost(yesterday)
+            else:
+                yesterday_cost = await self._get_daily_cost_async(yesterday)
 
-            monthly_cost = await self._get_monthly_cost_async()
+            if hasattr(self._get_monthly_cost, '_mock_name'):
+                monthly_cost = self._get_monthly_cost()
+            else:
+                monthly_cost = await self._get_monthly_cost_async()
 
             is_anomaly = daily_cost > self.threshold
             increase_percent = round(

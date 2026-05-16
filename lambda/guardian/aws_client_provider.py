@@ -140,7 +140,8 @@ class AWSClientProvider:
 
         if cls._aioboto3_session is None:
             boto3_kwargs = Config.get_boto3_kwargs()
-            cls._aioboto3_session = aioboto3.Session(**boto3_kwargs)
+            session_kwargs = {k: v for k, v in boto3_kwargs.items() if k != "endpoint_url"}
+            cls._aioboto3_session = aioboto3.Session(**session_kwargs)
             logger.debug("Created new aioboto3 session")
 
         return cls._aioboto3_session
