@@ -6,6 +6,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
+import boto3
 from botocore.exceptions import ClientError
 from guardian.aws_client_provider import AWSClientProvider
 from guardian.checkers.base import BaseChecker, CheckResult
@@ -26,6 +27,11 @@ class S3Checker(BaseChecker):
     ):
         super().__init__(clients or {}, config or {}, account_id, credentials)
         self.is_localstack = Config.is_localstack()
+        # Get from clients dict (tests) or create new (production)
+        self.s3_client = self.clients.get("s3")
+        if self.s3_client is None:
+            kwargs = Config.get_boto3_kwargs()
+            self.s3_client = boto3.client("s3", **kwargs)
 
     async def check_async(self) -> CheckResult:
         """Run all S3 security checks with async I/O."""
@@ -231,3 +237,20 @@ class S3Checker(BaseChecker):
                     }
                 )
         return new_buckets
+
+    def _is_bucket_public_acl(self, bucket_name: str) -> bool:
+        """Check if bucket is public via ACL (sync version for tests)."""
+        try:
+            acl = self.s3_client.get_bucket_acl(Bucket=bucket_name)
+            for grant in acl.get("Grants", []):
+                grantee = grant.get("Grantee", {})
+                if grantee.get("Type") == "Group":
+                    uri = grantee.get("URI", "")
+                    if "AuthenticatedUsers" in uri or "AllUsers" in uri:
+                        return True
+            return False
+        except ClientError:
+            return False
+        except Exception as e:
+            logger.error("Error checking ACL for %s: %s", bucket_name, e)
+            return False

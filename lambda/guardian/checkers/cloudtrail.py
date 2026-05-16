@@ -5,9 +5,11 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+import boto3
 from botocore.exceptions import ClientError
 from guardian.aws_client_provider import AWSClientProvider
 from guardian.checkers.base import BaseChecker, CheckResult
+from guardian.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +55,11 @@ class CloudTrailChecker(BaseChecker):
         self.authorized_regions = set(
             config.get("authorized_regions", ["us-east-1", "us-west-2", "eu-west-1"])
         )
+        # Get from clients dict (tests) or create new (production)
+        self.cloudtrail_client = clients.get("cloudtrail")
+        if self.cloudtrail_client is None:
+            kwargs = Config.get_boto3_kwargs()
+            self.cloudtrail_client = boto3.client("cloudtrail", **kwargs)
 
     async def check_async(self) -> CheckResult:
         """Check for suspicious CloudTrail events using async I/O."""

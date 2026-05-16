@@ -6,9 +6,11 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+import boto3
 from botocore.exceptions import ClientError
 from guardian.aws_client_provider import AWSClientProvider
 from guardian.checkers.base import BaseChecker, CheckResult
+from guardian.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +28,13 @@ class IAMChecker(BaseChecker):
         self.dynamodb_resource = clients.get("dynamodb_resource")
         self.baseline_key = "iam-baseline"
         self.table_name = config.get("iam_baseline_table", "guardian-iam-baseline")
+        # Get from clients dict (tests) or create new (production)
+        self.iam_client = clients.get("iam")
+        if self.iam_client is None:
+            kwargs = Config.get_boto3_kwargs()
+            self.iam_client = boto3.client("iam", **kwargs)
+        # Backward compatibility alias
+        self.iam = self.iam_client
 
     async def check_async(self) -> CheckResult:
         self._log_check_start("IAM")

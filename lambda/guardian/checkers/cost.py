@@ -5,6 +5,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
+import boto3
 from botocore.exceptions import ClientError
 from guardian.aws_client_provider import AWSClientProvider
 from guardian.checkers.base import BaseChecker, CheckResult
@@ -34,7 +35,15 @@ class CostChecker(BaseChecker):
 
         self.threshold = self.config["cost_threshold"]
         self.is_localstack = Config.is_localstack()
-        self.ssm_client = AWSClientProvider.get_client("ssm")
+        # Get from clients dict (tests) or create new (production)
+        self.ssm_client = self.clients.get("ssm")
+        if self.ssm_client is None:
+            kwargs = Config.get_boto3_kwargs()
+            self.ssm_client = boto3.client("ssm", **kwargs)
+        self.ce_client = self.clients.get("ce")
+        if self.ce_client is None:
+            kwargs = Config.get_boto3_kwargs()
+            self.ce_client = boto3.client("ce", **kwargs)
 
     async def check_async(self) -> CheckResult:
         """Run cost anomaly check with true async I/O."""
@@ -182,3 +191,55 @@ class CostChecker(BaseChecker):
         except Exception as e:
             logger.warning("Error getting threshold from SSM: %s", e)
             return self.threshold
+
+    def _get_daily_cost(self, date: str) -> float:
+        """Get daily cost for a specific date (sync version for tests)."""
+        if self.is_localstack:
+            return float(os.getenv("MOCK_DAILY_COST", str(MOCK_DAILY_COST_DEFAULT)))
+
+        try:
+            response = self.ce_client.get_cost_and_usage(
+                TimePeriod={"Start": date, "End": date},
+                Granularity="DAILY",
+                Metrics=["UnblendedCost"],
+            )
+            if response["ResultsByTime"]:
+                return float(response["ResultsByTime"][0]["Total"]["UnblendedCost"]["Amount"])
+            return 0.0
+        except ClientError as e:
+            logger.error("ClientError getting daily cost: %s", e)
+            return 0.0
+        except Exception as e:
+            logger.error("Error getting daily cost: %s", e)
+            return 0.0
+
+    def _get_monthly_cost(
+        self, year: Optional[int] = None, month: Optional[int] = None
+    ) -> float:
+        """Get monthly cost (sync version for tests)."""
+        if not year:
+            year = datetime.now(timezone.utc).year
+        if not month:
+            month = datetime.now(timezone.utc).month
+
+        if self.is_localstack:
+            return float(os.getenv("MOCK_MONTHLY_COST", str(MOCK_MONTHLY_COST_DEFAULT)))
+
+        start_date = f"{year}-{month:02d}-01"
+        end_date = f"{year + 1}-01-01" if month == 12 else f"{year}-{month + 1:02d}-01"
+
+        try:
+            response = self.ce_client.get_cost_and_usage(
+                TimePeriod={"Start": start_date, "End": end_date},
+                Granularity="MONTHLY",
+                Metrics=["UnblendedCost"],
+            )
+            if response["ResultsByTime"]:
+                return float(response["ResultsByTime"][0]["Total"]["UnblendedCost"]["Amount"])
+            return 0.0
+        except ClientError as e:
+            logger.error("ClientError getting monthly cost: %s", e)
+            return 0.0
+        except Exception as e:
+            logger.error("Error getting monthly cost: %s", e)
+            return 0.0

@@ -5,9 +5,11 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+import boto3
 from botocore.exceptions import ClientError
 from guardian.aws_client_provider import AWSClientProvider
 from guardian.checkers.base import BaseChecker, CheckResult
+from guardian.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,11 @@ class GuardDutyChecker(BaseChecker):
     ):
         super().__init__(clients, config, account_id, credentials)
         self.lookback_hours = config.get("guardduty_lookback_hours", 24)
+        # Get from clients dict (tests) or create new (production)
+        self.guardduty_client = clients.get("guardduty")
+        if self.guardduty_client is None:
+            kwargs = Config.get_boto3_kwargs()
+            self.guardduty_client = boto3.client("guardduty", **kwargs)
 
     async def check_async(self) -> CheckResult:
         """Check for GuardDuty threats with async I/O."""

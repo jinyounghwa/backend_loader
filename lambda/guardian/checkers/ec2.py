@@ -5,6 +5,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+import boto3
 from botocore.exceptions import ClientError
 from guardian.aws_client_provider import AWSClientProvider
 from guardian.checkers.base import BaseChecker, CheckResult
@@ -28,6 +29,11 @@ class EC2Checker(BaseChecker):
         if authorized_regions:
             effective_config.setdefault("authorized_regions", authorized_regions)
         super().__init__(clients or {}, effective_config, account_id, credentials)
+        # Get from clients dict (tests) or create new (production)
+        self.ec2_client = self.clients.get("ec2")
+        if self.ec2_client is None:
+            kwargs = Config.get_boto3_kwargs()
+            self.ec2_client = boto3.client("ec2", **kwargs)
 
         self.authorized_regions = self.config.get("authorized_regions", [])
         self.is_localstack = Config.is_localstack()
