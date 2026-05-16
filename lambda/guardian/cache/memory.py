@@ -12,9 +12,14 @@ logger = logging.getLogger(__name__)
 class InMemoryCache(CacheBackend):
     """In-memory cache with TTL support."""
 
-    def __init__(self):
-        """Initialize in-memory cache."""
+    def __init__(self, ttl_seconds: int = 300):
+        """Initialize in-memory cache.
+
+        Args:
+            ttl_seconds: Default time-to-live in seconds for cached items
+        """
         self._cache: Dict[str, tuple[Any, float]] = {}
+        self.ttl_seconds = ttl_seconds
 
     def get(self, key: str) -> Optional[Any]:
         """Get value from cache if not expired.
@@ -35,15 +40,16 @@ class InMemoryCache(CacheBackend):
 
         return value
 
-    def set(self, key: str, value: Any, ttl: int = 300) -> None:
+    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
         """Set value with TTL.
 
         Args:
             key: Cache key
             value: Value to cache
-            ttl: Time-to-live in seconds (default: 300)
+            ttl: Time-to-live in seconds (default: instance ttl_seconds)
         """
-        expiry = time.time() + ttl
+        effective_ttl = ttl if ttl is not None else self.ttl_seconds
+        expiry = time.time() + effective_ttl
         self._cache[key] = (value, expiry)
 
     def delete(self, key: str) -> None:
