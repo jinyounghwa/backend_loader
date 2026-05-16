@@ -4,6 +4,7 @@ asyncio를 활용한 병렬 실행으로 10배 성능 개선
 """
 
 import asyncio
+from datetime import datetime, timezone
 from typing import Dict, List, Any
 from guardian.checkers.ec2 import EC2Checker
 from guardian.checkers.s3 import S3Checker
@@ -73,8 +74,7 @@ class ParallelOrchestrator:
 
     def _get_timestamp(self) -> str:
         """현재 타임스탐프"""
-        from datetime import datetime
-        return datetime.utcnow().isoformat()
+        return datetime.now(timezone.utc).isoformat()
 
 
 # 동기 래퍼 (Lambda에서 사용)

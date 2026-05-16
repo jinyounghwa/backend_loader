@@ -4,6 +4,7 @@ IsolationForest + 시계열 분석으로 정확도 92% 달성
 """
 
 import numpy as np
+from datetime import datetime, timezone
 from typing import Dict, List, Any
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
@@ -143,8 +144,7 @@ class AdvancedAnomalyDetector:
 
     def _get_timestamp(self) -> str:
         """현재 타임스탐프"""
-        from datetime import datetime
-        return datetime.utcnow().isoformat()
+        return datetime.now(timezone.utc).isoformat()
 
 
 # 전역 탐지기 인스턴스
