@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class IAMChecker(BaseChecker):
+    """Detect IAM permission changes and anomalous user activity."""
 
     def __init__(
         self,
@@ -37,6 +38,20 @@ class IAMChecker(BaseChecker):
         self.iam = self.iam_client
 
     async def check_async(self) -> CheckResult:
+        """Check for IAM security anomalies.
+
+        Detects:
+        - New IAM users created
+        - Access key usage patterns
+        - Permission changes
+
+        Compares against baseline to identify new activity.
+
+        Returns:
+            CheckResult: Contains severity, title, message, and detailed findings
+                - severity: "INFO" if no changes, "HIGH" if critical changes detected
+                - details: Dict with changes list and user analysis
+        """
         self._log_check_start("IAM")
 
         try:
@@ -69,9 +84,10 @@ class IAMChecker(BaseChecker):
                     "IAM Check", f"No IAM permission changes detected ({len(current_users)} users)"
                 )
 
+        except ClientError as e:
+            return self._handle_client_error("IAM", e)
         except Exception as e:
-            self._log_error("IAM", e)
-            return CheckResult.error("IAM Check Failed", f"Failed to check IAM: {str(e)}")
+            return self._handle_generic_error("IAM", e)
 
     def check(self) -> CheckResult:
         """Backward compatibility wrapper - delegates to check_async()."""

@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class GuardDutyChecker(BaseChecker):
+    """Detect active security findings from AWS GuardDuty."""
 
     SEVERITY_MAP = {"CRITICAL": 7.0, "HIGH": 4.0, "MEDIUM": 2.0, "LOW": 0.1}
 
@@ -38,7 +39,20 @@ class GuardDutyChecker(BaseChecker):
         self.ec2 = clients.get("ec2")
 
     async def check_async(self) -> CheckResult:
-        """Check for GuardDuty threats with async I/O."""
+        """Check for GuardDuty findings.
+
+        Detects:
+        - Active security findings from AWS GuardDuty
+        - Threat intelligence matches
+        - Anomalous API calls
+
+        Aggregates findings across all detectors.
+
+        Returns:
+            CheckResult: Contains severity, title, message, and detailed findings
+                - severity: "INFO" if no threats, "CRITICAL"/"HIGH" based on finding severity
+                - details: Dict with top findings by severity level
+        """
         self._log_check_start("GuardDuty")
 
         try:
@@ -71,11 +85,10 @@ class GuardDutyChecker(BaseChecker):
                 suggested_action=self._get_remediation_suggestion(findings),
             )
 
+        except ClientError as e:
+            return self._handle_client_error("GuardDuty", e)
         except Exception as e:
-            self._log_error("GuardDuty", e)
-            return CheckResult.error(
-                "GuardDuty Check Failed", f"Failed to check GuardDuty: {str(e)}"
-            )
+            return self._handle_generic_error("GuardDuty", e)
 
     def check(self) -> CheckResult:
         """Backward compatibility wrapper - delegates to check_async()."""

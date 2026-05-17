@@ -46,7 +46,20 @@ class CostChecker(BaseChecker):
             self.ce_client = boto3.client("ce", **kwargs)
 
     async def check_async(self) -> CheckResult:
-        """Run cost anomaly check with true async I/O."""
+        """Check for cost anomalies.
+
+        Detects:
+        - Daily cost exceeding threshold
+        - Cost trending upward
+        - Unusual service usage spikes
+
+        Compares current vs previous day and monthly trends.
+
+        Returns:
+            CheckResult: Contains severity, title, message, and detailed findings
+                - severity: "INFO" if normal, "HIGH" if exceeds threshold
+                - details: Dict with daily, yesterday, and monthly costs
+        """
         self._log_check_start("Cost")
 
         try:
@@ -101,12 +114,10 @@ class CostChecker(BaseChecker):
                 details=details,
             )
 
+        except ClientError as e:
+            return self._handle_client_error("Cost", e)
         except Exception as e:
-            self._log_error("Cost", e)
-            return CheckResult.error(
-                "Cost Check Failed",
-                f"Failed to check costs: {str(e)}",
-            )
+            return self._handle_generic_error("Cost", e)
 
     def check(self) -> CheckResult:
         """Backward compatibility wrapper - delegates to check_async()."""

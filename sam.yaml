@@ -1,0 +1,90 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2010-05-13
+Description: 'AWS Guardian - Serverless Security Monitoring'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - test
+      - prod
+
+Globals:
+  Function:
+    Timeout: 300
+    MemorySize: 512
+    Runtime: python3.12
+    Environment:
+      Variables:
+        AWS_ENV: localstack
+
+Resources:
+  GuardianCheckerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GuardianChecker
+      CodeUri: lambda/
+      Handler: guardian/handler.lambda_handler
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ec2:*
+                - s3:*
+                - cloudtrail:*
+                - iam:*
+                - guardduty:*
+                - ce:*
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - dynamodb:*
+              Resource: '*'
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+                - ssm:PutParameter
+              Resource: '*'
+      Environment:
+        Variables:
+          PYTHONPATH: /var/task/lambda
+
+  GuardianEventBridgeRule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: 'rate(1 hour)'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt GuardianCheckerFunction.Arn
+          RoleArn: !GetAtt EventBridgeRole.Arn
+
+  EventBridgeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: InvokeLambda
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: 'lambda:InvokeFunction'
+                Resource: !GetAtt GuardianCheckerFunction.Arn
+
+Outputs:
+  GuardianCheckerFunctionArn:
+    Value: !GetAtt GuardianCheckerFunction.Arn
+    Description: ARN of Guardian Checker Lambda Function
+
+  GuardianCheckerFunctionName:
+    Value: !Ref GuardianCheckerFunction
+    Description: Name of Guardian Checker Lambda Function

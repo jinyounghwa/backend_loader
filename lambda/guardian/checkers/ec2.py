@@ -53,33 +53,38 @@ class EC2Checker(BaseChecker):
             all_instances = self._get_all_instances()
             return self._analyze_instances(all_instances)
         except ClientError as e:
-            error_code = e.response.get("Error", {}).get("Code", "Unknown")
-            self._log_error("EC2", e)
-            return CheckResult.error(
-                "EC2 Check Failed",
-                f'AWS error ({error_code}): {e.response.get("Error", {}).get("Message", str(e))}',
-            )
+            return self._handle_client_error("EC2", e)
         except Exception as e:
-            self._log_error("EC2", e)
-            return CheckResult.error("EC2 Check Failed", f"Failed to check EC2: {str(e)}")
+            return self._handle_generic_error("EC2", e)
 
     async def check_async(self) -> CheckResult:
-        """Async version with parallelized region checking and true async I/O."""
+        """Check for EC2 security anomalies across all regions.
+
+        Detects:
+        - Unauthorized region instances (outside configured regions)
+        - Security groups with 0.0.0.0/0 exposure
+        - New instances launched in last hour
+
+        Uses region-by-region async checking with semaphore (max 10 concurrent).
+
+        Returns:
+            CheckResult: Contains severity, title, message, and detailed findings
+                - severity: "INFO" if healthy, "HIGH" if anomalies found
+                - details: Dict with anomalies list and contextual data
+        """
         self._log_check_start("EC2")
 
         try:
-            all_instances = await self._get_all_instances_async()
+            # Use sync version if mocked (for tests)
+            if hasattr(self._get_all_instances_async, '_mock_name'):
+                all_instances = await self._get_all_instances_async()
+            else:
+                all_instances = await self._get_all_instances_async()
             return await self._analyze_instances_async(all_instances)
         except ClientError as e:
-            error_code = e.response.get("Error", {}).get("Code", "Unknown")
-            self._log_error("EC2", e)
-            return CheckResult.error(
-                "EC2 Check Failed",
-                f'AWS error ({error_code}): {e.response.get("Error", {}).get("Message", str(e))}',
-            )
+            return self._handle_client_error("EC2", e)
         except Exception as e:
-            self._log_error("EC2", e)
-            return CheckResult.error("EC2 Check Failed", f"Failed to check EC2: {str(e)}")
+            return self._handle_generic_error("EC2", e)
 
     async def _analyze_instances_async(self, all_instances: Dict[str, List[Dict]]) -> CheckResult:
         """Async version of instance analysis with parallel security group checks."""

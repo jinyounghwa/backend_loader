@@ -66,7 +66,20 @@ class CloudTrailChecker(BaseChecker):
         self.sts = clients.get("sts")
 
     async def check_async(self) -> CheckResult:
-        """Check for suspicious CloudTrail events using async I/O."""
+        """Check for suspicious CloudTrail events.
+
+        Detects:
+        - Failed authentication attempts
+        - Root account usage
+        - Unusual API activity patterns (CreateAccessKey, CreateUser, etc.)
+
+        Uses async event pagination with in-memory caching.
+
+        Returns:
+            CheckResult: Contains severity, title, message, and detailed findings
+                - severity: "INFO" if normal, "CRITICAL"/"HIGH" if suspicious events found
+                - details: Dict with anomalies list and event analysis
+        """
         self._log_check_start("CloudTrail")
 
         try:
@@ -100,17 +113,9 @@ class CloudTrailChecker(BaseChecker):
                 )
 
         except ClientError as e:
-            error_code = e.response.get("Error", {}).get("Code", "Unknown")
-            self._log_error("CloudTrail", e)
-            return CheckResult.error(
-                "CloudTrail Check Failed",
-                f'AWS error ({error_code}): {e.response.get("Error", {}).get("Message", str(e))}',
-            )
+            return self._handle_client_error("CloudTrail", e)
         except Exception as e:
-            self._log_error("CloudTrail", e)
-            return CheckResult.error(
-                "CloudTrail Check Failed", f"Failed to check CloudTrail: {str(e)}"
-            )
+            return self._handle_generic_error("CloudTrail", e)
 
     def check(self) -> CheckResult:
         """Backward compatibility wrapper - delegates to check_async()."""

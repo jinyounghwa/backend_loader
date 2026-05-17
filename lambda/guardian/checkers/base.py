@@ -4,6 +4,7 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
+from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
 
@@ -107,11 +108,27 @@ class BaseChecker(ABC):
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.check)
 
-    def _log_check_start(self, check_name: str):
+    def _log_check_start(self, check_name: str) -> None:
         logger.info("Starting %s check", check_name)
 
-    def _log_check_end(self, check_name: str, severity: str):
+    def _log_check_end(self, check_name: str, severity: str) -> None:
         logger.info("Completed %s check: %s", check_name, severity)
 
-    def _log_error(self, check_name: str, error: Exception):
+    def _log_error(self, check_name: str, error: Exception) -> None:
         logger.error("Error in %s: %s", check_name, str(error))
+
+    def _handle_client_error(self, check_name: str, error: ClientError) -> CheckResult:
+        error_code = error.response.get("Error", {}).get("Code", "Unknown")
+        error_message = error.response.get("Error", {}).get("Message", str(error))
+        self._log_error(check_name, error)
+        return CheckResult.error(
+            f"{check_name} Check Failed",
+            f"AWS error ({error_code}): {error_message}",
+        )
+
+    def _handle_generic_error(self, check_name: str, error: Exception) -> CheckResult:
+        self._log_error(check_name, error)
+        return CheckResult.error(
+            f"{check_name} Check Failed",
+            f"Failed to check {check_name}: {str(error)}",
+        )
