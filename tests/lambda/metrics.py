@@ -6,7 +6,7 @@ Utilities for collecting, analyzing, and reporting Lambda performance metrics.
 import json
 import statistics
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List
 
@@ -44,7 +44,7 @@ class PerformanceMetrics:
             "checker": checker,
             "region": region,
             "status": status,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "details": details or {},
         }
         self.metrics.append(metric)
@@ -154,18 +154,21 @@ class PerformanceMetrics:
         warm_stats = self.get_statistics("warm_invocation")
         multi_stats = self.get_statistics("multi_region")
 
+        cold_start_val = f"{cold_starts[0]:.1f}ms (first invocation with SAM container startup)" if cold_starts else "Not measured"
+        cold_start_target = "N/A"
+        cold_start_status = "N/A"
+        if cold_starts:
+            cold_start_target = f"{cold_starts[0]:.0f}ms"
+            cold_start_status = "✅ PASS" if cold_starts[0] < 2500 else "❌ FAIL"
+
         lines = [
             "# Lambda Performance Baseline (v1.1)\n",
-            "**Generated**: " + datetime.utcnow().isoformat() + "\n",
+            "**Generated**: " + datetime.now(timezone.utc).isoformat() + "\n",
             "**Total Measurements**: " + str(len(self.metrics)) + "\n",
             "\n## Cold Start\n",
-            (
-                f"- **Time**: {cold_starts[0]:.1f}ms (first invocation with SAM container startup)"
-                if cold_starts
-                else "- **Time**: Not measured"
-            ),
+            f"- **Time**: {cold_start_val}",
             "\n- **Target (v1.1)**: < 2500ms (includes SAM startup)",
-            "\n- **Status**: ✅ PASS\n",
+            f"\n- **Status**: {cold_start_status}\n",
             "\n## Warm Invocation (Subsequent Calls)\n",
             (
                 f"- **Average**: {warm_stats['mean']:.1f}ms"
@@ -178,7 +181,7 @@ class PerformanceMetrics:
                 else ""
             ),
             "\n- **Target (v1.1)**: < 500ms",
-            "\n- **Status**: ✅ PASS\n",
+            f"\n- **Status**: {'✅ PASS' if warm_stats and warm_stats['mean'] < 500 else 'N/A'}\n",
             "\n## Multi-Region (4 Regions Sequential)\n",
             (
                 f"- **Average**: {multi_stats['mean']:.1f}ms"
@@ -186,7 +189,7 @@ class PerformanceMetrics:
                 else "- **Average**: Not measured"
             ),
             "\n- **Target (v1.1)**: < 15000ms",
-            "\n- **Status**: ✅ PASS\n",
+            f"\n- **Status**: {'✅ PASS' if multi_stats and multi_stats['mean'] < 15000 else 'N/A'}\n",
             "\n## Per-Checker Performance\n",
             "| Checker | Avg (ms) | Min (ms) | Max (ms) | Count |\n",
             "|---------|----------|----------|----------|-------|\n",
@@ -211,8 +214,8 @@ class PerformanceMetrics:
                 "\n## Performance Targets (v1.1)\n",
                 "| Metric | Target | Current | Status |\n",
                 "|--------|--------|---------|--------|\n",
-                f"| Cold Start | < 2500ms | {cold_starts[0]:.0f}ms | "
-                f"{'✅' if cold_starts[0] < 2500 else '❌'} |\n",
+                f"| Cold Start | < 2500ms | {cold_start_target} | "
+                f"{'✅' if cold_starts and cold_starts[0] < 2500 else 'N/A'} |\n",
                 (
                     f"| Warm Invocation | < 500ms | {warm_stats['mean']:.0f}ms | "
                     f"{'✅' if warm_stats['mean'] < 500 else '❌'} |\n"

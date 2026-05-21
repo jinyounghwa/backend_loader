@@ -1,4 +1,4 @@
-"""Main Lambda handler for AWS Guardian - lazy initialization for optimal cold start."""
+"""Main Lambda handler for AWS Guardian — lazy initialization for optimal cold start."""
 
 import json
 import threading

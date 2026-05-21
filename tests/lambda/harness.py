@@ -29,6 +29,26 @@ class LambdaHarness:
         self.sam_template = sam_template
         self.project_root = Path(__file__).parent.parent.parent
         self.performance_metrics = {}
+        self._check_environment()
+
+    def _check_environment(self):
+        """Verify SAM template exists and Docker is running, otherwise skip test."""
+        import pytest
+        import subprocess
+
+        # 1. Check if SAM template exists
+        sam_path = self.project_root / self.sam_template
+        if not sam_path.exists():
+            pytest.skip(f"SAM template not found at {sam_path} - skipping Lambda harness tests")
+
+        # 2. Check if Docker daemon is running
+        try:
+            result = subprocess.run(["docker", "info"], capture_output=True, text=True, timeout=2)
+            if result.returncode != 0:
+                pytest.skip("Docker daemon is not running - skipping Lambda harness tests")
+        except Exception:
+            pytest.skip("Docker CLI is not available - skipping Lambda harness tests")
+
 
     def invoke_local(
         self, event: Dict[str, Any], env: Optional[Dict[str, str]] = None

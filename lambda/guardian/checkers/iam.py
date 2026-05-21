@@ -1,6 +1,5 @@
 """IAM checker for permission changes detection."""
 
-import asyncio
 import json
 import logging
 from datetime import datetime, timezone
@@ -8,6 +7,7 @@ from typing import Any, Dict, List, Optional
 
 import boto3
 from botocore.exceptions import ClientError
+
 from guardian.aws_client_provider import AWSClientProvider
 from guardian.checkers.base import BaseChecker, CheckResult
 from guardian.config import Config
@@ -20,24 +20,29 @@ class IAMChecker(BaseChecker):
 
     def __init__(
         self,
-        clients: Dict[str, Any],
-        config: Dict[str, Any],
+        clients: Optional[Dict[str, Any]] = None,
+        config: Optional[Dict[str, Any]] = None,
         account_id: Optional[str] = None,
         credentials: Optional[Dict[str, str]] = None,
     ):
-        super().__init__(clients, config, account_id, credentials)
-        self.dynamodb_resource = clients.get("dynamodb_resource")
+        effective_config = config or {}
+        super().__init__(clients or {}, effective_config, account_id, credentials)
+
+        self.dynamodb_resource = (clients or {}).get("dynamodb_resource")
         self.baseline_key = "iam-baseline"
-        self.table_name = config.get("iam_baseline_table", "guardian-iam-baseline")
-        # Get from clients dict (tests) or create new (production)
-        self.iam_client = clients.get("iam")
+        self.table_name = effective_config.get("iam_baseline_table", "guardian-iam-baseline")
+
+        self.iam_client = (clients or {}).get("iam")
         if self.iam_client is None:
-            kwargs = Config.get_boto3_kwargs()
-            self.iam_client = boto3.client("iam", **kwargs)
+            self.iam_client = boto3.client("iam", **Config.get_boto3_kwargs())
         # Backward compatibility alias
         self.iam = self.iam_client
 
-    async def check_async(self) -> CheckResult:
+    # ------------------------------------------------------------------
+    # Main check entry (sync-first)
+    # ------------------------------------------------------------------
+
+    def check(self) -> CheckResult:
         """Check for IAM security anomalies.
 
         Detects:
@@ -46,30 +51,18 @@ class IAMChecker(BaseChecker):
         - Permission changes
 
         Compares against baseline to identify new activity.
-
-        Returns:
-            CheckResult: Contains severity, title, message, and detailed findings
-                - severity: "INFO" if no changes, "HIGH" if critical changes detected
-                - details: Dict with changes list and user analysis
         """
         self._log_check_start("IAM")
-
         try:
-            # Use sync versions if mocked (for tests)
-            if hasattr(self._get_iam_users, '_mock_name'):
-                current_users = self._get_iam_users()
-                current_keys = self._get_access_keys(current_users)
-                baseline = self._get_baseline()
-            else:
-                current_users = await self._get_iam_users_async()
-                current_keys = await self._get_access_keys_async(current_users)
-                baseline = await self._get_baseline_async()
+            current_users = self._get_iam_users()
+            current_keys = self._get_access_keys(current_users)
+            baseline = self._get_baseline()
             changes = self._detect_changes(current_users, current_keys, baseline)
 
             if changes:
                 severity = self._determine_severity(changes)
                 self._log_check_end("IAM", severity)
-                await self._save_baseline_async(current_users, current_keys)
+                self._save_baseline(current_users, current_keys)
 
                 return CheckResult(
                     severity=severity,
@@ -89,76 +82,60 @@ class IAMChecker(BaseChecker):
         except Exception as e:
             return self._handle_generic_error("IAM", e)
 
-    def check(self) -> CheckResult:
-        """Backward compatibility wrapper - delegates to check_async()."""
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
+    # ------------------------------------------------------------------
+    # IAM data retrieval (sync)
+    # ------------------------------------------------------------------
 
-        if loop and loop.is_running():
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(asyncio.run, self.check_async())
-                return future.result()
-        else:
-            return asyncio.run(self.check_async())
-
-    async def _get_iam_users_async(self) -> Dict[str, Dict[str, Any]]:
-        """Get IAM users using async I/O."""
+    def _get_iam_users(self) -> Dict[str, Dict[str, Any]]:
+        """Get IAM users."""
         users = {}
         try:
-            async with await AWSClientProvider.get_async_client("iam") as iam:
-                paginator = iam.get_paginator("list_users")
-                async for page in paginator.paginate():
-                    for user in page.get("Users", []):
-                        users[user["UserName"]] = {
-                            "arn": user["Arn"],
-                            "create_date": user["CreateDate"].isoformat(),
-                            "path": user.get("Path", "/"),
-                        }
+            paginator = self.iam_client.get_paginator("list_users")
+            for page in paginator.paginate():
+                for user in page.get("Users", []):
+                    users[user["UserName"]] = {
+                        "arn": user["Arn"],
+                        "create_date": user["CreateDate"].isoformat(),
+                        "path": user.get("Path", "/"),
+                    }
         except ClientError as e:
             logger.warning("ClientError fetching IAM users: %s", e)
         except Exception as e:
             logger.warning("Error fetching IAM users: %s", e)
-
         return users
 
-    async def _get_access_keys_async(self, users: Dict[str, Dict[str, Any]]) -> Dict[str, List[Dict[str, str]]]:
-        """Get access keys for all users with parallel async I/O."""
+    def _get_access_keys(self, users: Dict[str, Dict[str, Any]]) -> Dict[str, List[Dict[str, str]]]:
+        """Get access keys for all users."""
         keys = {}
         try:
-            async with await AWSClientProvider.get_async_client("iam") as iam:
-                async def get_user_keys(username: str):
-                    user_keys = []
-                    try:
-                        paginator = iam.get_paginator("list_access_keys")
-                        async for page in paginator.paginate(UserName=username):
-                            for key in page.get("AccessKeyMetadata", []):
-                                user_keys.append(
-                                    {
-                                        "key_id": key["AccessKeyId"],
-                                        "status": key["Status"],
-                                        "create_date": key["CreateDate"].isoformat(),
-                                    }
-                                )
-                    except Exception as e:
-                        logger.warning("Error fetching keys for %s: %s", username, e)
-                    return (username, user_keys)
-
-                tasks = [get_user_keys(username) for username in users.keys()]
-                results = await asyncio.gather(*tasks, return_exceptions=False)
-                keys = {username: user_keys for username, user_keys in results}
-
+            for username in users.keys():
+                user_keys = []
+                try:
+                    paginator = self.iam_client.get_paginator("list_access_keys")
+                    for page in paginator.paginate(UserName=username):
+                        for key in page.get("AccessKeyMetadata", []):
+                            user_keys.append(
+                                {
+                                    "key_id": key["AccessKeyId"],
+                                    "status": key["Status"],
+                                    "create_date": key["CreateDate"].isoformat(),
+                                }
+                            )
+                except Exception as e:
+                    logger.warning("Error fetching keys for %s: %s", username, e)
+                keys[username] = user_keys
         except ClientError as e:
             logger.warning("ClientError fetching IAM access keys: %s", e)
         except Exception as e:
             logger.warning("Error fetching IAM access keys: %s", e)
-
         return keys
 
-    async def _get_baseline_async(self) -> Dict[str, Any]:
+    # ------------------------------------------------------------------
+    # Baseline management
+    # ------------------------------------------------------------------
+
+    def _get_baseline(self) -> Dict[str, Any]:
+        """Get IAM baseline from DynamoDB."""
         if not self.dynamodb_resource:
             return {"users": {}, "keys": {}}
 
@@ -175,8 +152,32 @@ class IAMChecker(BaseChecker):
             logger.warning("ClientError fetching IAM baseline: %s", e)
         except Exception as e:
             logger.warning("Error fetching IAM baseline: %s", e)
-
         return {"users": {}, "keys": {}}
+
+    def _save_baseline(
+        self, users: Dict[str, Dict[str, Any]], keys: Dict[str, List[Dict[str, str]]]
+    ) -> None:
+        """Save IAM baseline to DynamoDB."""
+        if not self.dynamodb_resource:
+            return
+        try:
+            table = self.dynamodb_resource.Table(self.table_name)
+            table.put_item(
+                Item={
+                    "baseline_id": self.baseline_key,
+                    "users": json.dumps(users),
+                    "keys": json.dumps(keys),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+        except ClientError as e:
+            logger.warning("ClientError saving IAM baseline: %s", e)
+        except Exception as e:
+            logger.warning("Error saving IAM baseline: %s", e)
+
+    # ------------------------------------------------------------------
+    # Change detection
+    # ------------------------------------------------------------------
 
     def _detect_changes(
         self,
@@ -184,6 +185,16 @@ class IAMChecker(BaseChecker):
         current_keys: Dict[str, List[Dict[str, str]]],
         baseline: Dict[str, Any],
     ) -> List[Dict[str, str]]:
+        """Compare current IAM users and access keys against baseline.
+
+        Args:
+            current_users: The current dict of IAM users.
+            current_keys: The current dict of access keys for the users.
+            baseline: The baseline dict loaded from DynamoDB.
+
+        Returns:
+            A list of detected IAM changes with their type, details, and severity.
+        """
         changes = []
 
         baseline_users = set(baseline.get("users", {}).keys())
@@ -216,6 +227,14 @@ class IAMChecker(BaseChecker):
         return changes
 
     def _determine_severity(self, changes: List[Dict[str, str]]) -> str:
+        """Determine overall severity based on the number and severity of IAM changes.
+
+        Args:
+            changes: A list of detected IAM changes.
+
+        Returns:
+            The overall severity level string ("HIGH", "MEDIUM", "LOW").
+        """
         high_severity_count = sum(1 for c in changes if c["severity"] == "HIGH")
 
         if high_severity_count >= 2:
@@ -225,113 +244,3 @@ class IAMChecker(BaseChecker):
         else:
             return "LOW"
 
-    async def _save_baseline_async(
-        self, users: Dict[str, Dict[str, Any]], keys: Dict[str, List[Dict[str, str]]]
-    ):
-        """Save IAM baseline to DynamoDB - sync since DynamoDB resource is blocking."""
-        if not self.dynamodb_resource:
-            return
-
-        try:
-            table = self.dynamodb_resource.Table(self.table_name)
-            table.put_item(
-                Item={
-                    "baseline_id": self.baseline_key,
-                    "users": json.dumps(users),
-                    "keys": json.dumps(keys),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
-            )
-        except ClientError as e:
-            logger.warning("ClientError saving IAM baseline: %s", e)
-        except Exception as e:
-            logger.warning("Error saving IAM baseline: %s", e)
-
-    def _get_iam_users(self) -> Dict[str, Dict[str, Any]]:
-        """Get IAM users (sync version for tests)."""
-        users = {}
-        try:
-            paginator = self.iam_client.get_paginator("list_users")
-            for page in paginator.paginate():
-                for user in page.get("Users", []):
-                    users[user["UserName"]] = {
-                        "arn": user["Arn"],
-                        "create_date": user["CreateDate"].isoformat(),
-                        "path": user.get("Path", "/"),
-                    }
-        except ClientError as e:
-            logger.warning("ClientError fetching IAM users: %s", e)
-        except Exception as e:
-            logger.warning("Error fetching IAM users: %s", e)
-
-        return users
-
-    def _get_access_keys(self, users: Dict[str, Dict[str, Any]]) -> Dict[str, List[Dict[str, str]]]:
-        """Get access keys for all users (sync version for tests)."""
-        keys = {}
-        try:
-            for username in users.keys():
-                user_keys = []
-                try:
-                    paginator = self.iam_client.get_paginator("list_access_keys")
-                    for page in paginator.paginate(UserName=username):
-                        for key in page.get("AccessKeyMetadata", []):
-                            user_keys.append(
-                                {
-                                    "key_id": key["AccessKeyId"],
-                                    "status": key["Status"],
-                                    "create_date": key["CreateDate"].isoformat(),
-                                }
-                            )
-                except Exception as e:
-                    logger.warning("Error fetching keys for %s: %s", username, e)
-                keys[username] = user_keys
-        except ClientError as e:
-            logger.warning("ClientError fetching IAM access keys: %s", e)
-        except Exception as e:
-            logger.warning("Error fetching IAM access keys: %s", e)
-
-        return keys
-
-    def _get_baseline(self) -> Dict[str, Any]:
-        """Get IAM baseline from DynamoDB (sync version for tests)."""
-        if not self.dynamodb_resource:
-            return {"users": {}, "keys": {}}
-
-        try:
-            table = self.dynamodb_resource.Table(self.table_name)
-            response = table.get_item(Key={"baseline_id": self.baseline_key})
-            if "Item" in response:
-                item = response["Item"]
-                return {
-                    "users": json.loads(item.get("users", "{}")),
-                    "keys": json.loads(item.get("keys", "{}")),
-                }
-        except ClientError as e:
-            logger.warning("ClientError fetching IAM baseline: %s", e)
-        except Exception as e:
-            logger.warning("Error fetching IAM baseline: %s", e)
-
-        return {"users": {}, "keys": {}}
-
-    def _save_baseline(
-        self, users: Dict[str, Dict[str, Any]], keys: Dict[str, List[Dict[str, str]]]
-    ):
-        """Save IAM baseline to DynamoDB (sync version for tests)."""
-        if not self.dynamodb_resource:
-            return
-
-        try:
-            table = self.dynamodb_resource.Table(self.table_name)
-            table.put_item(
-                Item={
-                    "baseline_id": self.baseline_key,
-                    "users": json.dumps(users),
-                    "keys": json.dumps(keys),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
-            )
-        except ClientError as e:
-            logger.warning("ClientError saving IAM baseline: %s", e)
-        except Exception as e:
-            logger.warning("Error saving IAM baseline: %s", e)

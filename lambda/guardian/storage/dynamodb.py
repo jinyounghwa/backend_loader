@@ -23,7 +23,7 @@ def _convert_floats(obj: Any) -> Any:
 
 
 class DynamoDBStorage:
-    def __init__(self, table_name: str = None):
+    def __init__(self, table_name: Optional[str] = None):
         self.table_name = table_name or Config.get_dynamodb_table_name()
         self.is_localstack = Config.is_localstack()
 
@@ -80,7 +80,7 @@ class DynamoDBStorage:
         }
         return self._put_item(item)
 
-    def get_recent_events(self, hours: int = 24, event_type: str = None) -> List[Dict]:
+    def get_recent_events(self, hours: int = 24, event_type: Optional[str] = None) -> List[Dict]:  # type: ignore
         try:
             from boto3.dynamodb.conditions import Key
 
@@ -156,7 +156,7 @@ class DynamoDBStorage:
             logger.error("Error getting events by account %s: %s", account_id, e)
             return []
 
-    def get_event_summary(self, hours: int = 24, account_id: str = None) -> Dict[str, Any]:
+    def get_event_summary(self, hours: int = 24, account_id: Optional[str] = None) -> Dict[str, Any]:
         try:
             if account_id:
                 events = self.get_events_by_account(account_id, hours)

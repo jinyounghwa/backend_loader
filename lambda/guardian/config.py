@@ -44,7 +44,7 @@ class Config:
         try:
             import boto3
 
-            ssm = boto3.client("ssm", region_name=cls._env("AWS_REGION", _DEFAULTS["AWS_REGION"]))
+            ssm = boto3.client("ssm", region_name=cls._env("AWS_REGION", _DEFAULTS["AWS_REGION"]))  # type: ignore
             response = ssm.get_parameter(Name=param_name, WithDecryption=True)
             value = response["Parameter"]["Value"]
             cls._ssm_cache[param_name] = value
@@ -55,7 +55,7 @@ class Config:
 
     @classmethod
     def get_endpoint_url(cls) -> str:
-        return cls._env("LOCALSTACK_ENDPOINT", _DEFAULTS["LOCALSTACK_ENDPOINT"])
+        return cls._env("LOCALSTACK_ENDPOINT", _DEFAULTS["LOCALSTACK_ENDPOINT"])  # type: ignore
 
     @classmethod
     def get_boto3_kwargs(cls) -> Dict:

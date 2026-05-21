@@ -1,12 +1,13 @@
-"""AWS Cost Explorer checker for AWS Guardian"""
+"""AWS Cost Explorer checker for AWS Guardian."""
 
 import logging
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import boto3
 from botocore.exceptions import ClientError
+
 from guardian.aws_client_provider import AWSClientProvider
 from guardian.checkers.base import BaseChecker, CheckResult
 from guardian.config import Config
@@ -35,55 +36,46 @@ class CostChecker(BaseChecker):
 
         self.threshold = self.config["cost_threshold"]
         self.is_localstack = Config.is_localstack()
+
         # Get from clients dict (tests) or create new (production)
         self.ssm_client = self.clients.get("ssm")
         if self.ssm_client is None:
-            kwargs = Config.get_boto3_kwargs()
-            self.ssm_client = boto3.client("ssm", **kwargs)
-        self.ce_client = self.clients.get("ce")
-        if self.ce_client is None:
-            kwargs = Config.get_boto3_kwargs()
-            self.ce_client = boto3.client("ce", **kwargs)
+            self.ssm_client = boto3.client("ssm", **Config.get_boto3_kwargs())
 
-    async def check_async(self) -> CheckResult:
+        self._ce_client = self.clients.get("ce")
+
+    @property
+    def ce_client(self):
+        """Lazy Cost Explorer client (only created when needed)."""
+        if self._ce_client is None:
+            self._ce_client = boto3.client("ce", **Config.get_boto3_kwargs())
+        return self._ce_client
+
+    # ------------------------------------------------------------------
+    # Main check entry (sync-first, test-friendly)
+    # ------------------------------------------------------------------
+
+    def check(self) -> CheckResult:
         """Check for cost anomalies.
 
         Detects:
         - Daily cost exceeding threshold
         - Cost trending upward
         - Unusual service usage spikes
-
-        Compares current vs previous day and monthly trends.
-
-        Returns:
-            CheckResult: Contains severity, title, message, and detailed findings
-                - severity: "INFO" if normal, "HIGH" if exceeds threshold
-                - details: Dict with daily, yesterday, and monthly costs
         """
         self._log_check_start("Cost")
-
         try:
             today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-            # Use sync version if mocked (for tests)
-            if hasattr(self._get_daily_cost, '_mock_name'):
-                daily_cost = self._get_daily_cost(today)
-            else:
-                daily_cost = await self._get_daily_cost_async(today)
-
             yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
-            if hasattr(self._get_daily_cost, '_mock_name'):
-                yesterday_cost = self._get_daily_cost(yesterday)
-            else:
-                yesterday_cost = await self._get_daily_cost_async(yesterday)
 
-            if hasattr(self._get_monthly_cost, '_mock_name'):
-                monthly_cost = self._get_monthly_cost()
-            else:
-                monthly_cost = await self._get_monthly_cost_async()
+            daily_cost = self._get_daily_cost(today)
+            yesterday_cost = self._get_daily_cost(yesterday)
+            monthly_cost = self._get_monthly_cost()
 
             is_anomaly = daily_cost > self.threshold
             increase_percent = round(
-                ((daily_cost - yesterday_cost) / yesterday_cost) * 100 if yesterday_cost > 0 else 0, 2
+                ((daily_cost - yesterday_cost) / yesterday_cost) * 100 if yesterday_cost > 0 else 0,
+                2,
             )
 
             details = {
@@ -113,111 +105,19 @@ class CostChecker(BaseChecker):
                 message=f"Daily cost ${daily_cost:.2f} is within threshold ${self.threshold:.2f}",
                 details=details,
             )
-
         except ClientError as e:
             return self._handle_client_error("Cost", e)
         except Exception as e:
             return self._handle_generic_error("Cost", e)
 
-    def check(self) -> CheckResult:
-        """Backward compatibility wrapper - delegates to check_async()."""
-        import asyncio
-
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        if loop and loop.is_running():
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(asyncio.run, self.check_async())
-                return future.result()
-        else:
-            return asyncio.run(self.check_async())
-
-    async def _get_daily_cost_async(self, date: str) -> float:
-        """Get daily cost for a specific date using async I/O."""
-        if self.is_localstack:
-            return float(os.getenv("MOCK_DAILY_COST", str(MOCK_DAILY_COST_DEFAULT)))
-
-        try:
-            async with await AWSClientProvider.get_async_client("ce") as ce_client:
-                response = await ce_client.get_cost_and_usage(
-                    TimePeriod={"Start": date, "End": date},
-                    Granularity="DAILY",
-                    Metrics=["UnblendedCost"],
-                )
-                if response["ResultsByTime"]:
-                    return float(response["ResultsByTime"][0]["Total"]["UnblendedCost"]["Amount"])
-                return 0.0
-        except ClientError as e:
-            error_code = e.response.get("Error", {}).get("Code", "Unknown")
-            logger.error("ClientError getting daily cost (%s): %s", error_code, e)
-            return 0.0
-        except Exception as e:
-            logger.error("Error getting daily cost: %s", e)
-            return 0.0
-
-    async def _get_monthly_cost_async(
-        self, year: Optional[int] = None, month: Optional[int] = None
-    ) -> float:
-        """Get monthly cost using async I/O."""
-        if not year:
-            year = datetime.now(timezone.utc).year
-        if not month:
-            month = datetime.now(timezone.utc).month
-
-        if self.is_localstack:
-            return float(os.getenv("MOCK_MONTHLY_COST", str(MOCK_MONTHLY_COST_DEFAULT)))
-
-        start_date = f"{year}-{month:02d}-01"
-        end_date = f"{year + 1}-01-01" if month == 12 else f"{year}-{month + 1:02d}-01"
-
-        try:
-            async with await AWSClientProvider.get_async_client("ce") as ce_client:
-                response = await ce_client.get_cost_and_usage(
-                    TimePeriod={"Start": start_date, "End": end_date},
-                    Granularity="MONTHLY",
-                    Metrics=["UnblendedCost"],
-                )
-                if response["ResultsByTime"]:
-                    return float(response["ResultsByTime"][0]["Total"]["UnblendedCost"]["Amount"])
-                return 0.0
-        except ClientError as e:
-            error_code = e.response.get("Error", {}).get("Code", "Unknown")
-            logger.error("ClientError getting monthly cost (%s): %s", error_code, e)
-            return 0.0
-        except Exception as e:
-            logger.error("Error getting monthly cost: %s", e)
-            return 0.0
-
-    def set_threshold(self, amount: float) -> None:
-        try:
-            self.ssm_client.put_parameter(
-                Name=SSM_COST_THRESHOLD_PATH, Value=str(amount), Type="String", Overwrite=True
-            )
-            self.threshold = amount
-        except Exception as e:
-            logger.error("Error setting threshold: %s", e)
-
-    def get_threshold(self) -> float:
-        try:
-            response = self.ssm_client.get_parameter(Name=SSM_COST_THRESHOLD_PATH)
-            self.threshold = float(response["Parameter"]["Value"])
-            return self.threshold
-        except self.ssm_client.exceptions.ParameterNotFound:
-            return self.threshold
-        except Exception as e:
-            logger.warning("Error getting threshold from SSM: %s", e)
-            return self.threshold
+    # ------------------------------------------------------------------
+    # Cost data retrieval (sync boto3 – also used by async via executor)
+    # ------------------------------------------------------------------
 
     def _get_daily_cost(self, date: str) -> float:
-        """Get daily cost for a specific date (sync version for tests)."""
+        """Get daily cost for a specific date."""
         if self.is_localstack:
             return float(os.getenv("MOCK_DAILY_COST", str(MOCK_DAILY_COST_DEFAULT)))
-
         try:
             response = self.ce_client.get_cost_and_usage(
                 TimePeriod={"Start": date, "End": date},
@@ -234,10 +134,8 @@ class CostChecker(BaseChecker):
             logger.error("Error getting daily cost: %s", e)
             return 0.0
 
-    def _get_monthly_cost(
-        self, year: Optional[int] = None, month: Optional[int] = None
-    ) -> float:
-        """Get monthly cost (sync version for tests)."""
+    def _get_monthly_cost(self, year: Optional[int] = None, month: Optional[int] = None) -> float:
+        """Get monthly cost."""
         if not year:
             year = datetime.now(timezone.utc).year
         if not month:
@@ -264,3 +162,38 @@ class CostChecker(BaseChecker):
         except Exception as e:
             logger.error("Error getting monthly cost: %s", e)
             return 0.0
+
+    # ------------------------------------------------------------------
+    # Threshold management via SSM
+    # ------------------------------------------------------------------
+
+    def set_threshold(self, amount: float) -> None:
+        """Set the daily cost threshold in AWS SSM Parameter Store.
+
+        Args:
+            amount: The new daily cost threshold threshold value (USD).
+        """
+        try:
+            self.ssm_client.put_parameter(
+                Name=SSM_COST_THRESHOLD_PATH, Value=str(amount), Type="String", Overwrite=True
+            )
+            self.threshold = amount
+        except Exception as e:
+            logger.error("Error setting threshold: %s", e)
+
+    def get_threshold(self) -> float:
+        """Get the daily cost threshold from AWS SSM Parameter Store.
+
+        Returns:
+            The daily cost threshold (USD) retrieved from SSM, or the default value.
+        """
+        try:
+            response = self.ssm_client.get_parameter(Name=SSM_COST_THRESHOLD_PATH)
+            self.threshold = float(response["Parameter"]["Value"])
+            return self.threshold
+        except self.ssm_client.exceptions.ParameterNotFound:
+            return self.threshold
+        except Exception as e:
+            logger.warning("Error getting threshold from SSM: %s", e)
+            return self.threshold
+

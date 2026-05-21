@@ -1,12 +1,12 @@
 """CloudTrail checker for suspicious API activity detection."""
 
-import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import boto3
 from botocore.exceptions import ClientError
+
 from guardian.aws_client_provider import AWSClientProvider
 from guardian.checkers.base import BaseChecker, CheckResult
 from guardian.config import Config
@@ -45,60 +45,49 @@ class CloudTrailChecker(BaseChecker):
 
     def __init__(
         self,
-        clients: Dict[str, Any],
-        config: Dict[str, Any],
+        clients: Optional[Dict[str, Any]] = None,
+        config: Optional[Dict[str, Any]] = None,
         account_id: Optional[str] = None,
         credentials: Optional[Dict[str, str]] = None,
     ):
-        super().__init__(clients, config, account_id, credentials)
-        self.hours_lookback = config.get("cloudtrail_hours", 1)
+        effective_config = config or {}
+        super().__init__(clients or {}, effective_config, account_id, credentials)
+
+        self.hours_lookback = effective_config.get("cloudtrail_hours", 1)
         self.authorized_regions = set(
-            config.get("authorized_regions", ["us-east-1", "us-west-2", "eu-west-1"])
+            effective_config.get("authorized_regions", ["us-east-1", "us-west-2", "eu-west-1"])
         )
-        # Get from clients dict (tests) or create new (production)
-        self.cloudtrail_client = clients.get("cloudtrail")
+
+        self.cloudtrail_client = (clients or {}).get("cloudtrail")
         if self.cloudtrail_client is None:
-            kwargs = Config.get_boto3_kwargs()
-            self.cloudtrail_client = boto3.client("cloudtrail", **kwargs)
+            self.cloudtrail_client = boto3.client("cloudtrail", **Config.get_boto3_kwargs())
         # Backward compatibility alias
         self.cloudtrail = self.cloudtrail_client
-        # Store additional clients from clients dict (tests)
-        self.sts = clients.get("sts")
+        self.sts = (clients or {}).get("sts")
 
-    async def check_async(self) -> CheckResult:
+    # ------------------------------------------------------------------
+    # Main check entry (sync-first)
+    # ------------------------------------------------------------------
+
+    def check(self) -> CheckResult:
         """Check for suspicious CloudTrail events.
 
         Detects:
         - Failed authentication attempts
         - Root account usage
         - Unusual API activity patterns (CreateAccessKey, CreateUser, etc.)
-
-        Uses async event pagination with in-memory caching.
-
-        Returns:
-            CheckResult: Contains severity, title, message, and detailed findings
-                - severity: "INFO" if normal, "CRITICAL"/"HIGH" if suspicious events found
-                - details: Dict with anomalies list and event analysis
         """
         self._log_check_start("CloudTrail")
-
         try:
-            # Use sync version if mocked (for tests)
-            if hasattr(self._get_recent_events, '_mock_name'):
-                events = self._get_recent_events()
-            else:
-                events = await self._get_recent_events_async()
-
+            events = self._get_recent_events()
             if not events:
                 self._log_check_end("CloudTrail", "INFO")
                 return CheckResult.info("CloudTrail Check", "No suspicious API calls detected")
 
             anomalies = self._analyze_events(events)
-
             if anomalies:
                 severity = self._determine_severity(anomalies)
                 self._log_check_end("CloudTrail", severity)
-
                 return CheckResult(
                     severity=severity,
                     title="Suspicious API Calls Detected",
@@ -117,60 +106,47 @@ class CloudTrailChecker(BaseChecker):
         except Exception as e:
             return self._handle_generic_error("CloudTrail", e)
 
-    def check(self) -> CheckResult:
-        """Backward compatibility wrapper - delegates to check_async()."""
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
+    # ------------------------------------------------------------------
+    # Event retrieval (sync)
+    # ------------------------------------------------------------------
 
-        if loop and loop.is_running():
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(asyncio.run, self.check_async())
-                return future.result()
-        else:
-            return asyncio.run(self.check_async())
-
-    async def _get_recent_events_async(self) -> List[Dict[str, Any]]:
-        """Get CloudTrail events from last N hours using async I/O with pagination."""
+    def _get_recent_events(self) -> List[Dict[str, Any]]:
+        """Get CloudTrail events from last N hours."""
         start_time = datetime.now(timezone.utc) - timedelta(hours=self.hours_lookback)
         all_events = []
 
-        async with await AWSClientProvider.get_async_client("cloudtrail") as cloudtrail:
-            for source in self.RELEVANT_EVENT_SOURCES:
-                try:
-                    paginator = cloudtrail.get_paginator("lookup_events")
-                    page_iterator = paginator.paginate(
-                        LookupAttributes=[{"AttributeKey": "EventSource", "AttributeValue": source}],
-                        StartTime=start_time,
-                    )
-
-                    async for page in page_iterator:
-                        for event in page.get("Events", []):
-                            all_events.append(
-                                {
-                                    "EventName": event.get("EventName"),
-                                    "Username": event.get("Username"),
-                                    "EventTime": event.get("EventTime"),
-                                    "SourceIPAddress": event.get("SourceIPAddress"),
-                                    "CloudTrailEvent": event.get("CloudTrailEvent"),
-                                    "EventSource": source,
-                                }
-                            )
-
-                except ClientError as e:
-                    logger.warning("ClientError fetching CloudTrail events for %s: %s", source, e)
-                except Exception as e:
-                    logger.warning("Error fetching CloudTrail events for %s: %s", source, e)
+        for source in self.RELEVANT_EVENT_SOURCES:
+            try:
+                paginator = self.cloudtrail_client.get_paginator("lookup_events")
+                for page in paginator.paginate(
+                    LookupAttributes=[{"AttributeKey": "EventSource", "AttributeValue": source}],
+                    StartTime=start_time,
+                ):
+                    for event in page.get("Events", []):
+                        all_events.append(
+                            {
+                                "EventName": event.get("EventName"),
+                                "Username": event.get("Username"),
+                                "EventTime": event.get("EventTime"),
+                                "SourceIPAddress": event.get("SourceIPAddress"),
+                                "CloudTrailEvent": event.get("CloudTrailEvent"),
+                                "EventSource": source,
+                            }
+                        )
+            except ClientError as e:
+                logger.warning("ClientError fetching CloudTrail events for %s: %s", source, e)
+            except Exception as e:
+                logger.warning("Error fetching CloudTrail events for %s: %s", source, e)
 
         return all_events
+
+    # ------------------------------------------------------------------
+    # Event analysis
+    # ------------------------------------------------------------------
 
     def _analyze_events(self, events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Analyze events for suspicious activity."""
         anomalies = []
-
         for event in events:
             severity = self._analyze_event(event)
             if severity:
@@ -190,7 +166,6 @@ class CloudTrailChecker(BaseChecker):
                         "severity": severity,
                     }
                 )
-
         return anomalies
 
     def _analyze_event(self, event: Dict[str, Any]) -> Optional[str]:
@@ -198,14 +173,10 @@ class CloudTrailChecker(BaseChecker):
         username = event.get("Username", "")
         event_name = event.get("EventName", "")
 
-        # Root account activity
         if username == "root" or username.endswith(":root"):
             return "CRITICAL"
-
-        # Suspicious API events
         if event_name in self.SUSPICIOUS_EVENTS:
             return "HIGH"
-
         return None
 
     def _determine_severity(self, anomalies: List[Dict[str, Any]]) -> str:
@@ -236,34 +207,3 @@ class CloudTrailChecker(BaseChecker):
             return "Alert: Critical resource deletion detected. Review deletion logs immediately."
         else:
             return "Review CloudTrail findings and take appropriate action"
-
-    def _get_recent_events(self) -> List[Dict[str, Any]]:
-        """Get CloudTrail events from last N hours (sync version for tests)."""
-        start_time = datetime.now(timezone.utc) - timedelta(hours=self.hours_lookback)
-        all_events = []
-
-        for source in self.RELEVANT_EVENT_SOURCES:
-            try:
-                paginator = self.cloudtrail_client.get_paginator("lookup_events")
-                for page in paginator.paginate(
-                    LookupAttributes=[{"AttributeKey": "EventSource", "AttributeValue": source}],
-                    StartTime=start_time,
-                ):
-                    for event in page.get("Events", []):
-                        all_events.append(
-                            {
-                                "EventName": event.get("EventName"),
-                                "Username": event.get("Username"),
-                                "EventTime": event.get("EventTime"),
-                                "SourceIPAddress": event.get("SourceIPAddress"),
-                                "CloudTrailEvent": event.get("CloudTrailEvent"),
-                                "EventSource": source,
-                            }
-                        )
-
-            except ClientError as e:
-                logger.warning("ClientError fetching CloudTrail events for %s: %s", source, e)
-            except Exception as e:
-                logger.warning("Error fetching CloudTrail events for %s: %s", source, e)
-
-        return all_events

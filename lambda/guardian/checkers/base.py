@@ -1,9 +1,18 @@
-"""Base class for all AWS Guardian checkers."""
+"""Base class for all AWS Guardian checkers.
+
+Provides a unified sync/async execution model:
+- Subclasses implement ``check()`` (sync) with boto3 calls.
+- ``check_async()`` automatically wraps it via ``run_in_executor``.
+- For native async, override ``check_async()`` and use ``_run_sync``
+  for any sync helpers.
+"""
 
 import asyncio
+import concurrent.futures
 import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
+
 from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
@@ -64,8 +73,37 @@ class CheckResult:
         )
 
 
+def _run_sync(coro: Any) -> Any:
+    """Run an async coroutine from sync context, handling the
+    'already running loop' case (e.g. inside Lambda runtime).
+
+    This replaces the identical boilerplate previously copy-pasted
+    in every checker's ``check()`` method.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+
+    # Already inside an async context – offload to a worker thread.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+
+
 class BaseChecker(ABC):
-    """Abstract base class for all checkers."""
+    """Abstract base class for all checkers.
+
+    Execution model
+    ---------------
+    1. Default: subclasses override ``check()`` (sync).
+       ``check_async()`` wraps it via ``run_in_executor``.
+    2. Native-async: subclasses override ``check_async()``.
+       ``check()`` is auto-generated using ``_run_sync``.
+
+    Subclasses should pick **one** of the two patterns and
+    implement only that method.  The other direction is handled
+    automatically by this base class.
+    """
 
     def __init__(
         self,
@@ -74,39 +112,38 @@ class BaseChecker(ABC):
         account_id: Optional[str] = None,
         credentials: Optional[Dict[str, str]] = None,
     ):
-        """
-        Initialize checker with AWS clients and configuration.
-
-        Args:
-            clients: Dict of boto3 clients (ec2, s3, cloudtrail, etc.)
-            config: Configuration dict with settings like regions, thresholds
-            account_id: Optional account ID for cross-account checks
-            credentials: Optional temporary credentials for cross-account access
-        """
         self.clients = clients
         self.config = config
         self.account_id = account_id
         self.credentials = credentials
 
+    # ------------------------------------------------------------------
+    # Execution contract: subclasses implement EITHER check() OR check_async()
+    # ------------------------------------------------------------------
+
     @abstractmethod
     def check(self) -> CheckResult:
-        """
-        Run the check and return result.
+        """Run the check synchronously and return result.
 
-        Must be implemented by subclasses.
-
-        Returns:
-            CheckResult with severity, title, message, details, suggested_action
+        Subclasses that prefer async-first should NOT override this;
+        they should override ``check_async()`` instead and this method
+        will be auto-provided.
         """
-        pass
+        # Default: delegate to async implementation
+        return _run_sync(self.check_async())
 
     async def check_async(self) -> CheckResult:
-        """Async version of check() - can be overridden for parallel execution.
+        """Run the check asynchronously.
 
-        Default implementation runs check() in thread pool for non-blocking I/O.
+        Default implementation wraps ``check()`` in a thread executor
+        so callers get non-blocking I/O for free.
         """
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.check)
+
+    # ------------------------------------------------------------------
+    # Shared helpers
+    # ------------------------------------------------------------------
 
     def _log_check_start(self, check_name: str) -> None:
         logger.info("Starting %s check", check_name)

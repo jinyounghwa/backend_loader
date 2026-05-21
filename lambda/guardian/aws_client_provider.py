@@ -70,7 +70,7 @@ class AWSClientProvider:
             if "endpoint_url" in boto3_kwargs:
                 client_kwargs["endpoint_url"] = boto3_kwargs["endpoint_url"]
 
-            cls._clients[cache_key] = session.client(service_name, **client_kwargs)
+            cls._clients[cache_key] = session.client(service_name, **client_kwargs)  # type: ignore
             logger.debug(
                 "Created cross-account boto3 client for %s (account=%s, region=%s)",
                 service_name,
@@ -95,7 +95,7 @@ class AWSClientProvider:
             if "endpoint_url" in boto3_kwargs:
                 client_kwargs["endpoint_url"] = boto3_kwargs["endpoint_url"]
 
-            clients[cache_key] = session.client(service_name, **client_kwargs)
+            clients[cache_key] = session.client(service_name, **client_kwargs)  # type: ignore
             logger.debug(
                 "Created new boto3 client for %s (region=%s)", service_name, region or "default"
             )
@@ -117,7 +117,7 @@ class AWSClientProvider:
             if "endpoint_url" in boto3_kwargs:
                 resource_kwargs["endpoint_url"] = boto3_kwargs["endpoint_url"]
 
-            clients[cache_key] = session.resource(service_name, **resource_kwargs)
+            clients[cache_key] = session.resource(service_name, **resource_kwargs)  # type: ignore
             logger.debug(
                 "Created new boto3 resource for %s (region=%s)", service_name, region or "default"
             )

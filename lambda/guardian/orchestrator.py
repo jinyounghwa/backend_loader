@@ -1,6 +1,13 @@
-"""Guardian Orchestrator - Coordinates check execution and remediation flow"""
+"""Guardian Orchestrator - Coordinates check execution and remediation flow.
+
+All checkers are now sync-first. The orchestrator runs checks
+sequentially (simple, reliable) and dispatches notifications/remediation.
+Async parallel execution can be achieved via the base class's
+``check_async()`` wrapper (which uses ``run_in_executor``).
+"""
 
 import asyncio
+import concurrent.futures
 import json
 import time
 from datetime import datetime, timezone
@@ -8,7 +15,7 @@ from logging import Logger
 from typing import Any, Dict, List, Optional
 
 from guardian.aws_client_provider import AWSClientProvider
-from guardian.checkers.base import BaseChecker, CheckResult
+from guardian.checkers.base import BaseChecker, CheckResult, _run_sync
 from guardian.checkers.cloudtrail import CloudTrailChecker
 from guardian.checkers.cost import CostChecker
 from guardian.checkers.ec2 import EC2Checker
@@ -25,11 +32,7 @@ from guardian.storage.dynamodb import DynamoDBStorage
 
 
 class GuardianOrchestrator:
-    """Orchestrate all AWS Guardian checks through a unified CheckResult pipeline.
-
-    All checkers now inherit from BaseChecker and return CheckResult,
-    eliminating the legacy/new branch split.
-    """
+    """Orchestrate all AWS Guardian checks through a unified CheckResult pipeline."""
 
     def __init__(
         self,
@@ -61,25 +64,15 @@ class GuardianOrchestrator:
             "guardduty": guardduty_checker,
         }
 
+    # ------------------------------------------------------------------
+    # Entry points
+    # ------------------------------------------------------------------
+
     def run_all_checks(self, event: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute checks based on event['check_type'] and return aggregated results."""
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
+        """Execute checks based on event['check_type'] and return aggregated results.
 
-        if loop and loop.is_running():
-            # Already inside an async context (e.g. Lambda runtime)
-            import concurrent.futures
-
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(asyncio.run, self._async_run_all_checks(event))
-                return future.result()
-        else:
-            return asyncio.run(self._async_run_all_checks(event))
-
-    async def _async_run_all_checks(self, event: Dict[str, Any]) -> Dict[str, Any]:
-        """Async implementation of run_all_checks with parallel check execution."""
+        Runs synchronously — checkers are all sync-first.
+        """
         start_time = time.time()
         check_type = event.get("check_type", "all").lower()
         self.logger.info("AWS Guardian orchestration started (check_type=%s)", check_type)
@@ -92,12 +85,7 @@ class GuardianOrchestrator:
             "accounts": [],
         }
 
-        accounts = (
-            await self._get_accounts_async()
-            if Config.is_organizations_enabled()
-            else [{"account_id": "current", "account_name": "Current Account"}]
-        )
-
+        accounts = self._get_accounts()
         checks_to_run = self._get_checks_for_type(check_type)
 
         all_check_data: Dict[str, Any] = {}
@@ -108,35 +96,46 @@ class GuardianOrchestrator:
 
             account_checkers = self.checkers
             if Config.is_organizations_enabled() and account_id != "current":
-                assumed_role = await AWSClientProvider.assume_role_async(account_id)
+                assumed_role = self._assume_role_for_account(account_id)
                 if not assumed_role:
                     self.logger.warning("Skipping account %s - role assumption failed", account_id)
                     continue
-                account_checkers = await self._create_account_checkers_async(
+                account_checkers = self._create_account_checkers(
                     account_id, assumed_role.get("credentials", {})
                 )
 
             account_check_data: Dict[str, Any] = {}
-            check_tasks = []
             for check_name in checks_to_run:
                 checker = account_checkers.get(check_name)
                 if not checker:
                     continue
-                check_tasks.append(
-                    self._run_single_check_async(check_name, checker, account_id, account_name)
-                )
+                try:
+                    check_result = checker.check()
+                    result_dict = check_result.to_dict()
 
-            if check_tasks:
-                check_results = await asyncio.gather(*check_tasks, return_exceptions=True)
-                for check_name, result in zip(checks_to_run, check_results):
-                    if isinstance(result, Exception):
-                        self.logger.error("Error in check %s: %s", check_name, result)
-                        results["checks"][f"{check_name}_{account_id}"] = {
-                            "error": f"{check_name}_check_failed"
-                        }
-                    elif result is not None:
-                        account_check_data[check_name] = result.to_dict()
-                        results["checks"][f"{check_name}_{account_id}"] = result.to_dict()
+                    if check_result.severity != "INFO":
+                        log_check_result(
+                            self.logger, check_name, check_result.severity, check_result.message
+                        )
+                        self.storage.save_event(
+                            check_name, check_result.severity, result_dict, account_id=account_id
+                        )
+                        self._notify_alert(
+                            check_name, result_dict,
+                            account_id=account_id, account_name=account_name,
+                        )
+                        if self.remediation:
+                            self.remediation.handle_check_result(check_name, check_result)
+                    else:
+                        log_check_result(self.logger, check_name, "ok", check_result.message)
+
+                    account_check_data[check_name] = result_dict
+                    results["checks"][f"{check_name}_{account_id}"] = result_dict
+                except Exception as exc:
+                    self.logger.error("Error in check %s: %s", check_name, exc)
+                    results["checks"][f"{check_name}_{account_id}"] = {
+                        "error": f"{check_name}_check_failed"
+                    }
 
             all_check_data[account_id] = {
                 "account_id": account_id,
@@ -176,94 +175,73 @@ class GuardianOrchestrator:
         )
         return {"statusCode": 200, "body": json.dumps(results)}
 
-    def _run_single_check(
-        self,
-        check_name: str,
-        checker: BaseChecker,
-        account_id: str = "current",
-        account_name: Optional[str] = None,
-    ) -> CheckResult:
-        """Execute a single checker (sync) and process result."""
-        self.logger.info("Checking %s...", check_name.upper())
-        check_result = checker.check()
-        return self._process_check_result(check_name, check_result, account_id, account_name)
+    # ------------------------------------------------------------------
+    # Async entry point (for backward compat / parallel execution)
+    # ------------------------------------------------------------------
 
-    async def _run_single_check_async(
-        self,
-        check_name: str,
-        checker: BaseChecker,
-        account_id: str = "current",
-        account_name: Optional[str] = None,
-    ) -> CheckResult:
-        """Execute a single checker (async) and process result."""
-        self.logger.info("Checking %s...", check_name.upper())
-        check_result = await checker.check_async()
-        return self._process_check_result(check_name, check_result, account_id, account_name)
+    async def run_all_checks_async(self, event: Dict[str, Any]) -> Dict[str, Any]:
+        """Async wrapper that runs ``run_all_checks`` in a thread executor."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self.run_all_checks, event)
 
-    def _process_check_result(
-        self,
-        check_name: str,
-        check_result: CheckResult,
-        account_id: str,
-        account_name: Optional[str],
-    ) -> CheckResult:
-        """Handle logging, storage, notification, and remediation for a check result."""
-        result_dict = check_result.to_dict()
+    # ------------------------------------------------------------------
+    # Account management
+    # ------------------------------------------------------------------
 
-        if check_result.severity == "INFO":
-            log_check_result(self.logger, check_name, "ok", check_result.message)
-            return check_result
+    def _get_accounts(self) -> List[Dict[str, str]]:
+        """Get list of AWS accounts to check."""
+        if not Config.is_organizations_enabled():
+            return [{"account_id": "current", "account_name": "Current Account"}]
 
-        log_check_result(self.logger, check_name, check_result.severity, check_result.message)
-        self.storage.save_event(
-            check_name, check_result.severity, result_dict, account_id=account_id
-        )
+        try:
+            orgs = AWSClientProvider.get_client("organizations")
+            paginator = orgs.get_paginator("list_accounts")
+            accounts = []
+            for page in paginator.paginate():
+                for account in page.get("Accounts", []):
+                    accounts.append(
+                        {
+                            "account_id": account["Id"],
+                            "account_name": account["Name"],
+                            "status": account["Status"],
+                        }
+                    )
+            self.logger.info("Retrieved %d accounts from Organizations", len(accounts))
+            return accounts
+        except Exception as e:
+            self.logger.warning("Failed to get accounts from Organizations: %s", e)
+            return [{"account_id": "current", "account_name": "Current Account"}]
 
-        self._notify_alert(
-            check_name,
-            result_dict,
-            account_id=account_id,
-            account_name=account_name or "",
-        )
-
-        if self.remediation:
-            self.remediation.handle_check_result(check_name, check_result)
-
-        return check_result
-
-    def _notify_alert(
-        self,
-        check_name: str,
-        alert_data: Dict[str, Any],
-        account_id: str = "current",
-        account_name: Optional[str] = None,
-    ):
-        if self.telegram:
-            self.telegram.send_alert(
-                check_name,
-                alert_data,
-                account_id=account_id,
-                account_name=account_name,
+    def _assume_role_for_account(
+        self, account_id: str, role_name: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        try:
+            if not role_name:
+                role_name = Config.get_cross_account_role_name()
+            sts_client = AWSClientProvider.get_client("sts")
+            assume_role_arn = f"arn:aws:iam::{account_id}:role/{role_name}"
+            response = sts_client.assume_role(
+                RoleArn=assume_role_arn,
+                RoleSessionName=f"guardian-cross-account-{account_id}",
             )
-        if self.discord:
-            self.discord.send_alert(
-                check_name,
-                alert_data,
-                account_id=account_id,
-                account_name=account_name,
-            )
+            credentials = response["Credentials"]
+            self.logger.info("Assumed role for account %s", account_id)
+            return {
+                "account_id": account_id,
+                "credentials": {
+                    "aws_access_key_id": credentials["AccessKeyId"],
+                    "aws_secret_access_key": credentials["SecretAccessKey"],
+                    "aws_session_token": credentials["SessionToken"],
+                },
+            }
+        except Exception as e:
+            self.logger.warning("Failed to assume role for account %s: %s", account_id, e)
+            return None
 
-    def _get_checks_for_type(self, check_type: str) -> List[str]:
-        if check_type == "cost":
-            return ["cost"]
-        elif check_type == "security":
-            return ["ec2", "s3", "cloudtrail", "iam", "guardduty"]
-        return ["cost", "ec2", "s3", "cloudtrail", "iam", "guardduty"]
-
-    async def _create_account_checkers_async(
+    def _create_account_checkers(
         self, account_id: str, credentials: Dict[str, str]
     ) -> Dict[str, Any]:
-        """Create account-specific checkers with cross-account credentials (async)."""
+        """Create account-specific checkers with cross-account credentials."""
         try:
             account_checkers = dict(self.checkers)
 
@@ -307,104 +285,84 @@ class GuardianOrchestrator:
             )
             return self.checkers
 
-    def _create_account_checkers(
-        self, account_id: str, credentials: Dict[str, str]
-    ) -> Dict[str, Any]:
-        """Backward compatibility wrapper - delegates to async version."""
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
+    # ------------------------------------------------------------------
+    # Single check execution (public API for tests / external callers)
+    # ------------------------------------------------------------------
 
-        if loop and loop.is_running():
-            import concurrent.futures
+    def _run_single_check(
+        self,
+        check_name: str,
+        checker: BaseChecker,
+        account_id: str = "current",
+        account_name: Optional[str] = None,
+    ) -> CheckResult:
+        """Execute a single checker and process result."""
+        self.logger.info("Checking %s...", check_name.upper())
+        check_result = checker.check()
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(asyncio.run, self._create_account_checkers_async(account_id, credentials))
-                return future.result()
-        else:
-            return asyncio.run(self._create_account_checkers_async(account_id, credentials))
+        result_dict = check_result.to_dict()
+        if check_result.severity == "INFO":
+            log_check_result(self.logger, check_name, "ok", check_result.message)
+            return check_result
 
-    async def _get_accounts_async(self) -> List[Dict[str, str]]:
-        """Get list of AWS accounts from Organizations API (async)."""
-        try:
-            if not Config.is_organizations_enabled():
-                return []
-            accounts = []
-            async with await AWSClientProvider.get_async_client("organizations") as orgs_client:
-                paginator = orgs_client.get_paginator("list_accounts")
-                async for page in paginator.paginate():
-                    for account in page.get("Accounts", []):
-                        accounts.append(
-                            {
-                                "account_id": account["Id"],
-                                "account_name": account["Name"],
-                                "status": account["Status"],
-                            }
-                        )
-            self.logger.info("Retrieved %d accounts from Organizations", len(accounts))
-            return accounts
-        except Exception as e:
-            self.logger.warning("Failed to get accounts from Organizations: %s", e)
-            return []
+        log_check_result(self.logger, check_name, check_result.severity, check_result.message)
+        self.storage.save_event(
+            check_name, check_result.severity, result_dict, account_id=account_id
+        )
+        self._notify_alert(
+            check_name, result_dict,
+            account_id=account_id, account_name=account_name or "",
+        )
+        if self.remediation:
+            self.remediation.handle_check_result(check_name, check_result)
 
-    def _get_accounts(self) -> List[Dict[str, str]]:
-        """Backward compatibility wrapper - delegates to async version."""
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
+        return check_result
 
-        if loop and loop.is_running():
-            import concurrent.futures
+    # ------------------------------------------------------------------
+    # Check type routing
+    # ------------------------------------------------------------------
 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(asyncio.run, self._get_accounts_async())
-                return future.result()
-        else:
-            return asyncio.run(self._get_accounts_async())
+    def _get_checks_for_type(self, check_type: str) -> List[str]:
+        if check_type == "cost":
+            return ["cost"]
+        elif check_type == "security":
+            return ["ec2", "s3", "cloudtrail", "iam", "guardduty"]
+        return ["cost", "ec2", "s3", "cloudtrail", "iam", "guardduty"]
 
-    def _assume_role_for_account(
-        self, account_id: str, role_name: Optional[str] = None
-    ) -> Optional[Dict[str, Any]]:
-        try:
-            if not role_name:
-                role_name = Config.get_cross_account_role_name()
-            sts_client = AWSClientProvider.get_client("sts")
-            assume_role_arn = f"arn:aws:iam::{account_id}:role/{role_name}"
-            response = sts_client.assume_role(
-                RoleArn=assume_role_arn,
-                RoleSessionName=f"guardian-cross-account-{account_id}",
+    # ------------------------------------------------------------------
+    # Notifications
+    # ------------------------------------------------------------------
+
+    def _notify_alert(
+        self,
+        check_name: str,
+        alert_data: Dict[str, Any],
+        account_id: str = "current",
+        account_name: Optional[str] = None,
+    ):
+        if self.telegram:
+            self.telegram.send_alert(
+                check_name, alert_data, account_id=account_id, account_name=account_name,
             )
-            credentials = response["Credentials"]
-            self.logger.info("Assumed role for account %s", account_id)
-            return {
-                "account_id": account_id,
-                "credentials": {
-                    "aws_access_key_id": credentials["AccessKeyId"],
-                    "aws_secret_access_key": credentials["SecretAccessKey"],
-                    "aws_session_token": credentials["SessionToken"],
-                },
-            }
-        except Exception as e:
-            self.logger.warning("Failed to assume role for account %s: %s", account_id, e)
-            return None
+        if self.discord:
+            self.discord.send_alert(
+                check_name, alert_data, account_id=account_id, account_name=account_name,
+            )
+
+    # ------------------------------------------------------------------
+    # Health & persistence
+    # ------------------------------------------------------------------
 
     def _determine_system_health(self, checks: Dict[str, Any]) -> str:
-        """Determine system health from check results.
-
-        Uses a single pass with explicit severity ordering.
-        """
+        """Determine system health from check results."""
         severity_priority = {"CRITICAL": 3, "HIGH": 2, "MEDIUM": 1, "LOW": 0}
         max_severity = -1
 
         for check_data in checks.values():
             if not isinstance(check_data, dict):
                 continue
-            # Direct severity field
             sev = check_data.get("severity", "")
             max_severity = max(max_severity, severity_priority.get(sev, -1))
-            # Structural anomaly flags
             if check_data.get("is_anomaly"):
                 max_severity = max(max_severity, 1)
             if check_data.get("new_instances") or check_data.get("new_buckets"):

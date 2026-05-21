@@ -1,12 +1,12 @@
-"""EC2 security checker for AWS Guardian"""
+"""EC2 security checker for AWS Guardian."""
 
-import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import boto3
 from botocore.exceptions import ClientError
+
 from guardian.aws_client_provider import AWSClientProvider
 from guardian.checkers.base import BaseChecker, CheckResult
 from guardian.config import Config
@@ -29,11 +29,10 @@ class EC2Checker(BaseChecker):
         if authorized_regions:
             effective_config.setdefault("authorized_regions", authorized_regions)
         super().__init__(clients or {}, effective_config, account_id, credentials)
-        # Get from clients dict (tests) or create new (production)
+
         self.ec2_client = self.clients.get("ec2")
         if self.ec2_client is None:
-            kwargs = Config.get_boto3_kwargs()
-            self.ec2_client = boto3.client("ec2", **kwargs)
+            self.ec2_client = boto3.client("ec2", **Config.get_boto3_kwargs())
 
         self.authorized_regions = self.config.get("authorized_regions", [])
         self.is_localstack = Config.is_localstack()
@@ -45,10 +44,13 @@ class EC2Checker(BaseChecker):
             self._client_cache[region] = AWSClientProvider.get_client("ec2", region=region)
         return self._client_cache[region]
 
+    # ------------------------------------------------------------------
+    # Main check entry (sync-first)
+    # ------------------------------------------------------------------
+
     def check(self) -> CheckResult:
         """Run all EC2 security checks and return unified CheckResult."""
         self._log_check_start("EC2")
-
         try:
             all_instances = self._get_all_instances()
             return self._analyze_instances(all_instances)
@@ -57,106 +59,51 @@ class EC2Checker(BaseChecker):
         except Exception as e:
             return self._handle_generic_error("EC2", e)
 
-    async def check_async(self) -> CheckResult:
-        """Check for EC2 security anomalies across all regions.
+    # ------------------------------------------------------------------
+    # Instance fetching
+    # ------------------------------------------------------------------
 
-        Detects:
-        - Unauthorized region instances (outside configured regions)
-        - Security groups with 0.0.0.0/0 exposure
-        - New instances launched in last hour
-
-        Uses region-by-region async checking with semaphore (max 10 concurrent).
-
-        Returns:
-            CheckResult: Contains severity, title, message, and detailed findings
-                - severity: "INFO" if healthy, "HIGH" if anomalies found
-                - details: Dict with anomalies list and contextual data
-        """
-        self._log_check_start("EC2")
-
+    def _get_all_instances(self) -> Dict[str, List[Dict]]:
+        """Fetch running instances across all regions using a cached client pool."""
+        instances_by_region: Dict[str, List[Dict]] = {}
         try:
-            # Use sync version if mocked (for tests)
-            if hasattr(self._get_all_instances_async, '_mock_name'):
-                all_instances = await self._get_all_instances_async()
+            if self.is_localstack:
+                regions = ["us-east-1"]
             else:
-                all_instances = await self._get_all_instances_async()
-            return await self._analyze_instances_async(all_instances)
+                ec2_global = AWSClientProvider.get_client("ec2")
+                regions_response = ec2_global.describe_regions()
+                regions = [r["RegionName"] for r in regions_response["Regions"]]
+
+            for region in regions:
+                regional_ec2 = self._get_regional_client(region)
+                try:
+                    response = regional_ec2.describe_instances(
+                        Filters=[{"Name": "instance-state-name", "Values": ["running"]}]
+                    )
+                    instances = []
+                    for reservation in response["Reservations"]:
+                        instances.extend(reservation["Instances"])
+                    if instances:
+                        instances_by_region[region] = instances
+                except ClientError as e:
+                    logger.error("ClientError in region %s: %s", region, e)
+                except Exception as e:
+                    logger.error("Error checking region %s: %s", region, e)
+
+            return instances_by_region
         except ClientError as e:
-            return self._handle_client_error("EC2", e)
+            logger.error("ClientError getting regions: %s", e)
+            return {}
         except Exception as e:
-            return self._handle_generic_error("EC2", e)
+            logger.error("Error getting all instances: %s", e)
+            return {}
 
-    async def _analyze_instances_async(self, all_instances: Dict[str, List[Dict]]) -> CheckResult:
-        """Async version of instance analysis with parallel security group checks."""
-        anomalies: List[str] = []
-        details: Dict[str, Any] = {
-            "is_anomaly": False,
-            "unauthorized_region_instances": {},
-            "exposed_instances": [],
-            "new_instances": [],
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-
-        if self.authorized_regions:
-            unauthorized = {
-                region: instances
-                for region, instances in all_instances.items()
-                if region not in self.authorized_regions
-            }
-            if unauthorized:
-                details["unauthorized_region_instances"] = unauthorized
-                anomalies.append(
-                    f"Instances in unauthorized regions: {list(unauthorized.keys())}"
-                )
-
-        async def check_instance_async(region: str, instance: Dict):
-            """Check a single instance for exposure."""
-            exposed_rules = await self._check_security_group_exposure_async(instance, region)
-            if exposed_rules:
-                return {
-                    "instance_id": instance["InstanceId"],
-                    "region": region,
-                    "exposed_rules": exposed_rules,
-                }
-            return None
-
-        if all_instances:
-            tasks = []
-            for region, instances in all_instances.items():
-                for instance in instances:
-                    tasks.append(check_instance_async(region, instance))
-
-            results = await asyncio.gather(*tasks, return_exceptions=False)
-            exposed = [r for r in results if r is not None]
-            if exposed:
-                details["exposed_instances"] = exposed
-                for exp in exposed:
-                    anomalies.append(f"Instance {exp['instance_id']} has 0.0.0.0/0 exposure")
-
-        new_instances = self._get_new_instances(all_instances)
-        if new_instances:
-            details["new_instances"] = new_instances
-            anomalies.append(f"Detected {len(new_instances)} new instances")
-
-        details["is_anomaly"] = len(anomalies) > 0
-        details["anomalies"] = anomalies
-
-        if not anomalies:
-            self._log_check_end("EC2", "INFO")
-            return CheckResult.info("EC2 Check", "All instances secure")
-
-        severity = "CRITICAL" if details["exposed_instances"] else "HIGH"
-        self._log_check_end("EC2", severity)
-        return CheckResult(
-            severity=severity,
-            title="EC2 Security Issues Detected",
-            message=f"Found {len(anomalies)} EC2 issues",
-            details=details,
-            suggested_action="Review and stop unauthorized/exposed instances",
-        )
+    # ------------------------------------------------------------------
+    # Instance analysis
+    # ------------------------------------------------------------------
 
     def _analyze_instances(self, all_instances: Dict[str, List[Dict]]) -> CheckResult:
-        """Analyze fetched instances for security issues (shared by sync/async)."""
+        """Analyze fetched instances for security issues."""
         anomalies: List[str] = []
         details: Dict[str, Any] = {
             "is_anomaly": False,
@@ -215,116 +162,9 @@ class EC2Checker(BaseChecker):
             suggested_action="Review and stop unauthorized/exposed instances",
         )
 
-    def _get_all_instances(self) -> Dict[str, List[Dict]]:
-        """Fetch running instances across all regions using a cached client pool."""
-        instances_by_region: Dict[str, List[Dict]] = {}
-
-        try:
-            if self.is_localstack:
-                regions = ["us-east-1"]
-            else:
-                ec2_global = AWSClientProvider.get_client("ec2")
-                regions_response = ec2_global.describe_regions()
-                regions = [r["RegionName"] for r in regions_response["Regions"]]
-
-            for region in regions:
-                regional_ec2 = self._get_regional_client(region)
-                try:
-                    response = regional_ec2.describe_instances(
-                        Filters=[{"Name": "instance-state-name", "Values": ["running"]}]
-                    )
-                    instances = []
-                    for reservation in response["Reservations"]:
-                        instances.extend(reservation["Instances"])
-                    if instances:
-                        instances_by_region[region] = instances
-                except ClientError as e:
-                    logger.error("ClientError in region %s: %s", region, e)
-                except Exception as e:
-                    logger.error("Error checking region %s: %s", region, e)
-
-            return instances_by_region
-        except ClientError as e:
-            logger.error("ClientError getting regions: %s", e)
-            return {}
-        except Exception as e:
-            logger.error("Error getting all instances: %s", e)
-            return {}
-
-    async def _get_all_instances_async(self) -> Dict[str, List[Dict]]:
-        """Async version with true aioboto3: Fetch running instances across all regions in parallel."""
-        try:
-            if self.is_localstack:
-                regions = ["us-east-1"]
-            else:
-                async with await AWSClientProvider.get_async_client("ec2") as ec2_global:
-                    regions_response = await ec2_global.describe_regions()
-                    regions = [r["RegionName"] for r in regions_response["Regions"]]
-
-            async def fetch_region_instances(region: str):
-                """Fetch instances for a single region with true async I/O."""
-                try:
-                    async with await AWSClientProvider.get_async_client("ec2", region=region) as regional_ec2:
-                        response = await regional_ec2.describe_instances(
-                            Filters=[{"Name": "instance-state-name", "Values": ["running"]}]
-                        )
-                        instances = []
-                        for reservation in response["Reservations"]:
-                            instances.extend(reservation["Instances"])
-                        return (region, instances) if instances else (region, [])
-                except ClientError as e:
-                    logger.error("ClientError in region %s: %s", region, e)
-                    return (region, [])
-                except Exception as e:
-                    logger.error("Error checking region %s: %s", region, e)
-                    return (region, [])
-
-            tasks = [fetch_region_instances(region) for region in regions]
-            results = await asyncio.gather(*tasks, return_exceptions=False)
-
-            instances_by_region = {region: instances for region, instances in results if instances}
-            return instances_by_region
-
-        except ClientError as e:
-            logger.error("ClientError getting regions: %s", e)
-            return {}
-        except Exception as e:
-            logger.error("Error getting all instances async: %s", e)
-            return {}
-
-    async def _check_security_group_exposure_async(self, instance: Dict, region: str) -> List[Dict]:
-        """Check if instance's security groups expose 0.0.0.0/0 using async I/O."""
-        exposed_rules = []
-
-        try:
-            async with await AWSClientProvider.get_async_client("ec2", region=region) as regional_ec2:
-                for sg in instance.get("SecurityGroups", []):
-                    sg_id = sg["GroupId"]
-                    try:
-                        sg_response = await regional_ec2.describe_security_groups(GroupIds=[sg_id])
-
-                        for sg_detail in sg_response["SecurityGroups"]:
-                            for rule in sg_detail.get("IpPermissions", []):
-                                for ip_range in rule.get("IpRanges", []):
-                                    if ip_range.get("CidrIp") == "0.0.0.0/0":
-                                        exposed_rules.append(
-                                            {
-                                                "group_id": sg_id,
-                                                "group_name": sg_detail["GroupName"],
-                                                "protocol": rule.get("IpProtocol", "N/A"),
-                                                "from_port": rule.get("FromPort"),
-                                                "to_port": rule.get("ToPort"),
-                                                "cidr": "0.0.0.0/0",
-                                            }
-                                        )
-                    except ClientError as e:
-                        logger.error("ClientError checking security group %s: %s", sg_id, e)
-                    except Exception as e:
-                        logger.error("Error checking security group %s: %s", sg_id, e)
-        except Exception as e:
-            logger.error("Error checking instance exposure for %s: %s", instance.get("InstanceId"), e)
-
-        return exposed_rules
+    # ------------------------------------------------------------------
+    # Security group checks
+    # ------------------------------------------------------------------
 
     def _check_security_group_exposure(self, instance: Dict, region: str) -> List[Dict]:
         """Check if the instance's security groups expose 0.0.0.0/0."""
@@ -363,7 +203,6 @@ class EC2Checker(BaseChecker):
         for region, instances in all_instances.items():
             for instance in instances:
                 launch_time = instance["LaunchTime"]
-                # Ensure timezone-aware comparison
                 if hasattr(launch_time, "tzinfo") and launch_time.tzinfo is None:
                     launch_time = launch_time.replace(tzinfo=timezone.utc)
                 if launch_time > cutoff_time:

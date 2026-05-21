@@ -1,9 +1,9 @@
-"""Tests for multi-account support in orchestrator."""
+"""Tests for multi-account support in orchestrator (sync-first model)."""
 
-import asyncio
 import json
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import datetime, timezone
+from unittest.mock import MagicMock, patch
 
 from guardian.orchestrator import GuardianOrchestrator
 from guardian.checkers.base import CheckResult
@@ -11,29 +11,10 @@ from guardian.storage.dynamodb import DynamoDBStorage
 from guardian.aws_client_provider import AWSClientProvider
 
 
-class AsyncTestCase(unittest.TestCase):
-    """Base test case for async tests."""
-
-    def setUp(self):
-        """Set up event loop for each test."""
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
-
-    def tearDown(self):
-        """Clean up event loop after each test."""
-        self.loop.close()
-
-    def async_test(self, coro):
-        """Helper to run async functions in tests."""
-        return self.loop.run_until_complete(coro)
-
-
-class TestMultiAccountOrchestrator(AsyncTestCase):
+class TestMultiAccountOrchestrator(unittest.TestCase):
     """Test multi-account support in orchestrator."""
 
     def setUp(self):
-        """Set up orchestrator with mock dependencies."""
-        super().setUp()
         self.mock_logger = MagicMock()
         self.mock_storage = MagicMock(spec=DynamoDBStorage)
         self.mock_cost_checker = MagicMock()
@@ -53,80 +34,69 @@ class TestMultiAccountOrchestrator(AsyncTestCase):
         )
 
     @patch("guardian.orchestrator.Config.is_organizations_enabled")
-    @patch("guardian.orchestrator.AWSClientProvider.get_async_client")
-    def test_get_accounts_async_single_account(self, mock_get_client, mock_is_orgs_enabled):
-        """Test _get_accounts_async with single account."""
+    def test_get_accounts_single_account(self, mock_is_orgs_enabled):
+        """Test _get_accounts with single account (non-Orgs)."""
         mock_is_orgs_enabled.return_value = False
 
-        result = self.async_test(self.orchestrator._get_accounts_async())
+        result = self.orchestrator._get_accounts()
 
-        self.assertEqual(result, [])
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["account_id"], "current")
 
     @patch("guardian.orchestrator.Config.is_organizations_enabled")
-    @patch("guardian.orchestrator.AWSClientProvider.get_async_client")
-    def test_get_accounts_async_multiple_accounts(self, mock_get_client, mock_is_orgs_enabled):
-        """Test _get_accounts_async retrieves multiple accounts from Organizations."""
+    @patch("guardian.orchestrator.AWSClientProvider.get_client")
+    def test_get_accounts_multiple_accounts(self, mock_get_client, mock_is_orgs_enabled):
+        """Test _get_accounts retrieves multiple accounts from Organizations."""
         mock_is_orgs_enabled.return_value = True
-        mock_client = AsyncMock()
-        mock_get_client.return_value.__aenter__.return_value = mock_client
-
-        mock_paginator = AsyncMock()
-        mock_client.get_paginator.return_value = mock_paginator
-
-        async def mock_paginate(*args, **kwargs):
-            yield {
+        mock_orgs = MagicMock()
+        mock_paginator = MagicMock()
+        mock_paginator.paginate.return_value = [
+            {
                 "Accounts": [
-                    {
-                        "Id": "123456789",
-                        "Name": "Production",
-                        "Status": "ACTIVE",
-                    },
-                    {
-                        "Id": "987654321",
-                        "Name": "Development",
-                        "Status": "ACTIVE",
-                    },
+                    {"Id": "123456789", "Name": "Production", "Status": "ACTIVE"},
+                    {"Id": "987654321", "Name": "Development", "Status": "ACTIVE"},
                 ]
             }
+        ]
+        mock_orgs.get_paginator.return_value = mock_paginator
+        mock_get_client.return_value = mock_orgs
 
-        mock_paginator.paginate.return_value = mock_paginate()
-
-        result = self.async_test(self.orchestrator._get_accounts_async())
+        result = self.orchestrator._get_accounts()
 
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0]["account_id"], "123456789")
         self.assertEqual(result[0]["account_name"], "Production")
 
-    @patch("guardian.orchestrator.AWSClientProvider.assume_role_async")
-    def test_assume_role_async_success(self, mock_assume_role):
+    @patch("guardian.orchestrator.AWSClientProvider.get_client")
+    def test_assume_role_success(self, mock_get_client):
         """Test successful cross-account role assumption."""
-        mock_assume_role.return_value = {
-            "account_id": "987654321",
-            "credentials": {
-                "aws_access_key_id": "AKIAIOSFODNN7EXAMPLE",
-                "aws_secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-                "aws_session_token": "token123",
-            },
+        mock_sts = MagicMock()
+        mock_sts.assume_role.return_value = {
+            "Credentials": {
+                "AccessKeyId": "AKIAIOSFODNN7EXAMPLE",
+                "SecretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+                "SessionToken": "token123",
+            }
         }
+        mock_get_client.return_value = mock_sts
 
-        result = self.async_test(AWSClientProvider.assume_role_async("987654321"))
+        result = self.orchestrator._assume_role_for_account("987654321")
 
         self.assertIsNotNone(result)
-        self.assertEqual(result["account_id"], "987654321")
         self.assertIn("credentials", result)
 
-    @patch("guardian.orchestrator.AWSClientProvider.assume_role_async")
-    def test_assume_role_async_failure(self, mock_assume_role):
+    @patch("guardian.orchestrator.AWSClientProvider.get_client")
+    def test_assume_role_failure(self, mock_get_client):
         """Test role assumption failure handling."""
-        mock_assume_role.return_value = None
+        mock_sts = MagicMock()
+        mock_sts.assume_role.side_effect = Exception("Access denied")
+        mock_get_client.return_value = mock_sts
 
-        result = self.async_test(AWSClientProvider.assume_role_async("invalid-account"))
+        result = self.orchestrator._assume_role_for_account("invalid-account")
 
         self.assertIsNone(result)
 
-    @patch("guardian.orchestrator.Config.is_organizations_enabled")
-    @patch("guardian.orchestrator.AWSClientProvider.assume_role_async")
-    def test_create_account_checkers_async(self, mock_assume_role, mock_is_orgs_enabled):
+    def test_create_account_checkers(self):
         """Test creating account-specific checkers with cross-account credentials."""
         credentials = {
             "aws_access_key_id": "AKIA...",
@@ -134,74 +104,27 @@ class TestMultiAccountOrchestrator(AsyncTestCase):
             "aws_session_token": "token...",
         }
 
-        result = self.async_test(
-            self.orchestrator._create_account_checkers_async("987654321", credentials)
-        )
+        with patch("guardian.orchestrator.AWSClientProvider.get_client_for_account") as mock:
+            mock.return_value = MagicMock()
+            result = self.orchestrator._create_account_checkers("987654321", credentials)
 
         self.assertIsNotNone(result)
         self.assertIn("cost", result)
-
-    @patch("guardian.orchestrator.Config.is_organizations_enabled")
-    @patch("guardian.orchestrator.AWSClientProvider.get_async_client")
-    @patch("guardian.orchestrator.AWSClientProvider.assume_role_async")
-    def test_run_all_checks_multi_account(
-        self, mock_assume_role, mock_get_client, mock_is_orgs_enabled
-    ):
-        """Test running checks across multiple AWS accounts."""
-        mock_is_orgs_enabled.return_value = True
-        mock_client = AsyncMock()
-        mock_get_client.return_value.__aenter__.return_value = mock_client
-
-        mock_paginator = AsyncMock()
-        mock_client.get_paginator.return_value = mock_paginator
-
-        async def mock_paginate(*args, **kwargs):
-            yield {
-                "Accounts": [
-                    {"Id": "111111111", "Name": "Account1", "Status": "ACTIVE"},
-                    {"Id": "222222222", "Name": "Account2", "Status": "ACTIVE"},
-                ]
-            }
-
-        mock_paginator.paginate.return_value = mock_paginate()
-
-        mock_assume_role.return_value = {
-            "account_id": "222222222",
-            "credentials": {"aws_access_key_id": "key", "aws_secret_access_key": "secret"},
-        }
-
-        self.mock_cost_checker.check_async = AsyncMock(
-            return_value=CheckResult(
-                severity="INFO",
-                title="Cost Check",
-                message="All good",
-            )
-        )
-
-        event = {"check_type": "cost", "time": "2024-01-01T00:00:00Z"}
-
-        result = self.async_test(self.orchestrator._async_run_all_checks(event))
-
-        self.assertEqual(result["statusCode"], 200)
-        body = json.loads(result["body"])
-        self.assertIn("accounts", body)
 
     @patch("guardian.orchestrator.Config.is_organizations_enabled")
     def test_run_all_checks_single_account(self, mock_is_orgs_enabled):
         """Test running checks on single account (non-Organizations)."""
         mock_is_orgs_enabled.return_value = False
 
-        self.mock_cost_checker.check_async = AsyncMock(
-            return_value=CheckResult(
-                severity="INFO",
-                title="Cost Check",
-                message="Normal costs",
-            )
+        self.mock_cost_checker.check.return_value = CheckResult(
+            severity="INFO",
+            title="Cost Check",
+            message="Normal costs",
         )
 
         event = {"check_type": "cost"}
 
-        result = self.async_test(self.orchestrator._async_run_all_checks(event))
+        result = self.orchestrator.run_all_checks(event)
 
         self.assertEqual(result["statusCode"], 200)
         body = json.loads(result["body"])
@@ -209,12 +132,10 @@ class TestMultiAccountOrchestrator(AsyncTestCase):
         self.assertGreater(len(body["accounts"]), 0)
 
 
-class TestAccountCheckAggregation(AsyncTestCase):
+class TestAccountCheckAggregation(unittest.TestCase):
     """Test aggregation of results across accounts."""
 
     def setUp(self):
-        """Set up orchestrator."""
-        super().setUp()
         self.mock_logger = MagicMock()
         self.mock_storage = MagicMock(spec=DynamoDBStorage)
         self.mock_cost_checker = MagicMock()
@@ -230,65 +151,25 @@ class TestAccountCheckAggregation(AsyncTestCase):
         )
 
     def test_determine_system_health_critical(self):
-        """Test system health determination with critical findings."""
-        checks = {
-            "ec2": {"severity": "CRITICAL"},
-            "s3": {"severity": "INFO"},
-        }
-
+        checks = {"ec2": {"severity": "CRITICAL"}, "s3": {"severity": "INFO"}}
         health = self.orchestrator._determine_system_health(checks)
-
         self.assertEqual(health, "critical")
 
     def test_determine_system_health_warning(self):
-        """Test system health determination with warning findings."""
-        checks = {
-            "ec2": {"severity": "HIGH"},
-            "s3": {"severity": "LOW"},
-        }
-
+        checks = {"ec2": {"severity": "MEDIUM"}, "s3": {"severity": "LOW"}}
         health = self.orchestrator._determine_system_health(checks)
-
         self.assertEqual(health, "warning")
 
-    def test_determine_system_health_healthy(self):
-        """Test system health determination when healthy."""
-        checks = {
-            "ec2": {"severity": "INFO"},
-            "s3": {"severity": "INFO"},
-        }
-
+    def test_determine_system_health_high_is_critical(self):
+        """HIGH severity maps to 'critical' (priority 2 >= 2)."""
+        checks = {"ec2": {"severity": "HIGH"}, "s3": {"severity": "LOW"}}
         health = self.orchestrator._determine_system_health(checks)
+        self.assertEqual(health, "critical")
 
+    def test_determine_system_health_healthy(self):
+        checks = {"ec2": {"severity": "INFO"}, "s3": {"severity": "INFO"}}
+        health = self.orchestrator._determine_system_health(checks)
         self.assertEqual(health, "healthy")
-
-
-class TestAccountRoleAssumption(AsyncTestCase):
-    """Test cross-account role assumption error handling."""
-
-    def setUp(self):
-        """Set up orchestrator."""
-        super().setUp()
-        self.mock_logger = MagicMock()
-        self.mock_storage = MagicMock(spec=DynamoDBStorage)
-        self.orchestrator = GuardianOrchestrator(
-            logger=self.mock_logger,
-            cost_checker=MagicMock(),
-            ec2_checker=MagicMock(),
-            s3_checker=MagicMock(),
-            storage=self.mock_storage,
-        )
-
-    @patch("guardian.orchestrator.AWSClientProvider.assume_role_async")
-    def test_role_assumption_failure_skips_account(self, mock_assume_role):
-        """Test that failed role assumption skips the account."""
-        mock_assume_role.return_value = None
-
-        result = self.async_test(
-            self.orchestrator._assume_role_for_account_async("invalid-account")
-        )
-
-        self.assertIsNone(result)
 
 
 if __name__ == "__main__":

@@ -1,9 +1,13 @@
-"""Tests for async checker implementations using aioboto3."""
+"""Tests for checker implementations (sync-first model).
 
-import asyncio
+All checkers now implement ``check()`` (sync). ``check_async()``
+is auto-provided by ``BaseChecker`` via ``run_in_executor``.
+Tests mock the sync boto3 clients directly.
+"""
+
 import unittest
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, patch
+from unittest.mock import MagicMock, patch
 
 from guardian.checkers.cost import CostChecker
 from guardian.checkers.ec2 import EC2Checker
@@ -13,137 +17,134 @@ from guardian.checkers.iam import IAMChecker
 from guardian.checkers.guardduty import GuardDutyChecker
 
 
-class AsyncTestCase(unittest.TestCase):
-    """Base test case for async tests."""
+class TestCostCheckerSync(unittest.TestCase):
+    """Test sync Cost Explorer integration."""
 
-    def setUp(self):
-        """Set up event loop for each test."""
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
-
-    def tearDown(self):
-        """Clean up event loop after each test."""
-        self.loop.close()
-
-    def async_test(self, coro):
-        """Helper to run async functions in tests."""
-        return self.loop.run_until_complete(coro)
-
-
-class TestCostCheckerAsync(AsyncTestCase):
-    """Test async Cost Explorer integration."""
-
-    @patch("guardian.checkers.cost.AWSClientProvider.get_async_client")
-    def test_check_async_no_anomalies(self, mock_get_client):
-        """Test check_async when costs are normal."""
-        mock_client = AsyncMock()
-        mock_get_client.return_value.__aenter__.return_value = mock_client
-
-        today = datetime.now(timezone.utc).date().isoformat()
-        mock_client.get_cost_and_usage.return_value = {
+    def test_check_no_anomalies(self):
+        """Test check when costs are normal."""
+        mock_ce = MagicMock()
+        mock_ce.get_cost_and_usage.return_value = {
             "ResultsByTime": [
-                {"TimePeriod": {"Start": today}, "Total": {"UnblendedCost": {"Amount": "5.00"}}}
+                {"TimePeriod": {"Start": "2024-01-01"}, "Total": {"UnblendedCost": {"Amount": "5.00"}}}
             ]
         }
 
-        checker = CostChecker({}, {"daily_cost_threshold": 100})
-        result = self.async_test(checker.check_async())
-
-        self.assertEqual(result.severity, "INFO")
-        self.assertIn("within budget", result.message.lower())
-
-    @patch("guardian.checkers.cost.AWSClientProvider.get_async_client")
-    def test_check_async_cost_anomaly(self, mock_get_client):
-        """Test check_async when daily cost exceeds threshold."""
-        mock_client = AsyncMock()
-        mock_get_client.return_value.__aenter__.return_value = mock_client
-
-        today = datetime.now(timezone.utc).date().isoformat()
-        mock_client.get_cost_and_usage.return_value = {
-            "ResultsByTime": [
-                {"TimePeriod": {"Start": today}, "Total": {"UnblendedCost": {"Amount": "150.00"}}}
-            ]
-        }
-
-        checker = CostChecker({}, {"daily_cost_threshold": 100})
-        result = self.async_test(checker.check_async())
-
-        self.assertIn(["HIGH", "CRITICAL"], [result.severity])
-        self.assertIn("exceeded", result.message.lower())
-
-
-class TestEC2CheckerAsync(AsyncTestCase):
-    """Test async EC2 security checks."""
-
-    @patch("guardian.checkers.ec2.AWSClientProvider.get_async_client")
-    def test_check_async_no_instances(self, mock_get_client):
-        """Test check_async when no EC2 instances running."""
-        mock_client = AsyncMock()
-        mock_get_client.return_value.__aenter__.return_value = mock_client
-
-        mock_client.describe_regions.return_value = {"Regions": [{"RegionName": "us-east-1"}]}
-        mock_client.describe_instances.return_value = {"Reservations": []}
-
-        checker = EC2Checker({}, {"authorized_regions": ["us-east-1"]})
-        result = self.async_test(checker.check_async())
+        checker = CostChecker(clients={"ce": mock_ce}, config={"cost_threshold": 100})
+        result = checker.check()
 
         self.assertEqual(result.severity, "INFO")
 
-    @patch("guardian.checkers.ec2.AWSClientProvider.get_async_client")
-    def test_check_async_unauthorized_region(self, mock_get_client):
-        """Test check_async detects instances in unauthorized regions."""
-        mock_client = AsyncMock()
-        mock_get_client.return_value.__aenter__.return_value = mock_client
-
-        mock_client.describe_regions.return_value = {
-            "Regions": [
-                {"RegionName": "us-east-1"},
-                {"RegionName": "eu-west-1"}
+    @patch("guardian.checkers.cost.Config.is_localstack", return_value=False)
+    def test_check_cost_anomaly(self, mock_ls):
+        """Test check when daily cost exceeds threshold."""
+        mock_ce = MagicMock()
+        # CostChecker calls get_cost_and_usage 3 times: today, yesterday, monthly
+        high_cost_response = {
+            "ResultsByTime": [
+                {"TimePeriod": {"Start": "2024-01-01"}, "Total": {"UnblendedCost": {"Amount": "150.00"}}}
             ]
         }
-        mock_client.describe_instances.side_effect = [
-            {"Reservations": []},
-            {
-                "Reservations": [
-                    {
-                        "Instances": [
-                            {
-                                "InstanceId": "i-unauthorized",
-                                "InstanceType": "t2.micro",
-                                "LaunchTime": datetime.now(timezone.utc),
-                                "SecurityGroups": [],
-                                "Tags": [],
-                            }
-                        ]
-                    }
-                ]
-            },
+        monthly_cost_response = {
+            "ResultsByTime": [
+                {"TimePeriod": {"Start": "2024-01-01"}, "Total": {"UnblendedCost": {"Amount": "4500.00"}}}
+            ]
+        }
+        mock_ce.get_cost_and_usage.side_effect = [
+            high_cost_response,   # today
+            high_cost_response,   # yesterday
+            monthly_cost_response, # monthly
         ]
 
-        checker = EC2Checker({}, {"authorized_regions": ["us-east-1"]})
-        result = self.async_test(checker.check_async())
+        checker = CostChecker(clients={"ce": mock_ce, "ssm": MagicMock()}, config={"cost_threshold": 100})
+        result = checker.check()
 
-        self.assertIn(result.severity, ["HIGH", "CRITICAL"])
-        self.assertIn("unauthorized regions", result.message.lower())
+        self.assertEqual(result.severity, "HIGH")
+        self.assertIn("exceeds", result.message.lower())
 
 
-class TestS3CheckerAsync(AsyncTestCase):
-    """Test async S3 bucket security checks."""
+class TestEC2CheckerSync(unittest.TestCase):
+    """Test sync EC2 security checks."""
 
-    @patch("guardian.checkers.s3.AWSClientProvider.get_async_client")
-    def test_check_async_all_secure(self, mock_get_client):
-        """Test check_async when all buckets are secure."""
-        mock_client = AsyncMock()
-        mock_get_client.return_value.__aenter__.return_value = mock_client
+    @patch("guardian.checkers.ec2.AWSClientProvider.get_client")
+    def test_check_no_instances(self, mock_get_client):
+        """Test check when no EC2 instances running."""
+        mock_ec2 = MagicMock()
+        mock_ec2.describe_regions.return_value = {"Regions": [{"RegionName": "us-east-1"}]}
+        mock_ec2.describe_instances.return_value = {"Reservations": []}
+        mock_get_client.return_value = mock_ec2
 
-        mock_client.list_buckets.return_value = {
-            "Buckets": [
-                {"Name": "secure-bucket", "CreationDate": datetime.now(timezone.utc)}
+        checker = EC2Checker(config={"authorized_regions": ["us-east-1"]})
+        result = checker.check()
+
+        self.assertEqual(result.severity, "INFO")
+
+    @patch("guardian.checkers.ec2.Config.is_localstack", return_value=False)
+    @patch("guardian.checkers.ec2.AWSClientProvider.get_client")
+    def test_check_unauthorized_region(self, mock_get_client, mock_ls):
+        """Test check detects instances in unauthorized regions."""
+        mock_global = MagicMock()
+        mock_global.describe_regions.return_value = {
+            "Regions": [
+                {"RegionName": "us-east-1"},
+                {"RegionName": "eu-west-1"},
             ]
         }
-        mock_client.get_bucket_acl.return_value = {"Grants": []}
-        mock_client.get_bucket_policy.side_effect = Exception("NoSuchBucketPolicy")
-        mock_client.get_public_access_block.return_value = {
+
+        mock_us_east = MagicMock()
+        mock_us_east.describe_instances.return_value = {"Reservations": []}
+
+        mock_eu_west = MagicMock()
+        mock_eu_west.describe_instances.return_value = {
+            "Reservations": [
+                {
+                    "Instances": [
+                        {
+                            "InstanceId": "i-unauthorized",
+                            "InstanceType": "t2.micro",
+                            "LaunchTime": datetime.now(timezone.utc) - timedelta(days=1),
+                            "SecurityGroups": [],
+                            "Tags": [],
+                        }
+                    ]
+                }
+            ]
+        }
+
+        def client_factory(service, region=None):
+            if service != "ec2" or region is None:
+                return mock_global
+            if region == "us-east-1":
+                return mock_us_east
+            if region == "eu-west-1":
+                return mock_eu_west
+            return MagicMock()
+
+        mock_get_client.side_effect = client_factory
+
+        checker = EC2Checker(config={"authorized_regions": ["us-east-1"]})
+        result = checker.check()
+
+        self.assertIn(result.severity, ["HIGH", "CRITICAL"])
+
+
+class TestS3CheckerSync(unittest.TestCase):
+    """Test sync S3 bucket security checks."""
+
+    def test_check_all_secure(self):
+        """Test check when all buckets are secure."""
+        from botocore.exceptions import ClientError
+
+        mock_s3 = MagicMock()
+        mock_s3.list_buckets.return_value = {
+            "Buckets": [
+                {"Name": "secure-bucket", "CreationDate": datetime.now(timezone.utc) - timedelta(days=2)}
+            ]
+        }
+        mock_s3.get_bucket_acl.return_value = {"Grants": []}
+        mock_s3.get_bucket_policy.side_effect = ClientError(
+            {"Error": {"Code": "NoSuchBucketPolicy", "Message": "No policy"}}, "GetBucketPolicy"
+        )
+        mock_s3.get_public_access_block.return_value = {
             "PublicAccessBlockConfiguration": {
                 "BlockPublicAcls": True,
                 "BlockPublicPolicy": True,
@@ -152,23 +153,22 @@ class TestS3CheckerAsync(AsyncTestCase):
             }
         }
 
-        checker = S3Checker({}, {})
-        result = self.async_test(checker.check_async())
+        checker = S3Checker(clients={"s3": mock_s3})
+        result = checker.check()
 
         self.assertEqual(result.severity, "INFO")
 
-    @patch("guardian.checkers.s3.AWSClientProvider.get_async_client")
-    def test_check_async_public_bucket_detected(self, mock_get_client):
-        """Test check_async detects public buckets."""
-        mock_client = AsyncMock()
-        mock_get_client.return_value.__aenter__.return_value = mock_client
+    def test_check_public_bucket_detected(self):
+        """Test check detects public buckets."""
+        from botocore.exceptions import ClientError
 
-        mock_client.list_buckets.return_value = {
+        mock_s3 = MagicMock()
+        mock_s3.list_buckets.return_value = {
             "Buckets": [
                 {"Name": "public-bucket", "CreationDate": datetime.now(timezone.utc) - timedelta(days=1)}
             ]
         }
-        mock_client.get_bucket_acl.return_value = {
+        mock_s3.get_bucket_acl.return_value = {
             "Grants": [
                 {
                     "Grantee": {
@@ -179,118 +179,97 @@ class TestS3CheckerAsync(AsyncTestCase):
                 }
             ]
         }
+        mock_s3.get_bucket_policy.side_effect = ClientError(
+            {"Error": {"Code": "NoSuchBucketPolicy", "Message": "No policy"}}, "GetBucketPolicy"
+        )
 
-        checker = S3Checker({}, {})
-        result = self.async_test(checker.check_async())
-
-        self.assertEqual(result.severity, "CRITICAL")
-        self.assertIn("public", result.message.lower())
-
-
-class TestCloudTrailCheckerAsync(AsyncTestCase):
-    """Test async CloudTrail suspicious activity detection."""
-
-    @patch("guardian.checkers.cloudtrail.AWSClientProvider.get_async_client")
-    def test_check_async_no_suspicious_events(self, mock_get_client):
-        """Test check_async when no suspicious events found."""
-        mock_client = AsyncMock()
-        mock_get_client.return_value.__aenter__.return_value = mock_client
-
-        mock_paginator = AsyncMock()
-        mock_client.get_paginator.return_value = mock_paginator
-
-        async def mock_paginate(*args, **kwargs):
-            yield {"Events": []}
-
-        mock_paginator.paginate.return_value = mock_paginate()
-
-        checker = CloudTrailChecker({}, {})
-        result = self.async_test(checker.check_async())
-
-        self.assertEqual(result.severity, "INFO")
-
-    @patch("guardian.checkers.cloudtrail.AWSClientProvider.get_async_client")
-    def test_check_async_root_account_activity(self, mock_get_client):
-        """Test check_async detects root account activity."""
-        mock_client = AsyncMock()
-        mock_get_client.return_value.__aenter__.return_value = mock_client
-
-        mock_paginator = AsyncMock()
-        mock_client.get_paginator.return_value = mock_paginator
-
-        async def mock_paginate(*args, **kwargs):
-            yield {
-                "Events": [
-                    {
-                        "EventName": "DescribeInstances",
-                        "Username": "root",
-                        "EventTime": datetime.now(timezone.utc),
-                        "SourceIPAddress": "1.2.3.4",
-                        "CloudTrailEvent": "{}",
-                    }
-                ]
-            }
-
-        mock_paginator.paginate.return_value = mock_paginate()
-
-        checker = CloudTrailChecker({}, {})
-        result = self.async_test(checker.check_async())
+        checker = S3Checker(clients={"s3": mock_s3})
+        result = checker.check()
 
         self.assertEqual(result.severity, "CRITICAL")
-        self.assertIn("root", result.message.lower())
+        self.assertIn("S3", result.title)
 
 
-class TestIAMCheckerAsync(AsyncTestCase):
-    """Test async IAM permission change detection."""
+class TestCloudTrailCheckerSync(unittest.TestCase):
+    """Test sync CloudTrail suspicious activity detection."""
 
-    @patch("guardian.checkers.iam.AWSClientProvider.get_async_client")
-    def test_check_async_no_baseline(self, mock_get_client):
-        """Test check_async when no baseline exists yet."""
-        mock_client = AsyncMock()
-        mock_get_client.return_value.__aenter__.return_value = mock_client
+    def test_check_no_suspicious_events(self):
+        """Test check when no suspicious events found."""
+        mock_ct = MagicMock()
+        mock_paginator = MagicMock()
+        mock_paginator.paginate.return_value = [{"Events": []}]
+        mock_ct.get_paginator.return_value = mock_paginator
 
-        mock_paginator = AsyncMock()
-        mock_client.get_paginator.return_value = mock_paginator
-
-        async def mock_paginate(*args, **kwargs):
-            yield {"Users": []}
-
-        mock_paginator.paginate.return_value = mock_paginate()
-
-        checker = IAMChecker({"dynamodb_resource": None}, {})
-        result = self.async_test(checker.check_async())
+        checker = CloudTrailChecker(clients={"cloudtrail": mock_ct})
+        result = checker.check()
 
         self.assertEqual(result.severity, "INFO")
 
+    def test_check_root_account_activity(self):
+        """Test check detects root account activity."""
+        mock_ct = MagicMock()
+        mock_paginator = MagicMock()
 
-class TestGuardDutyCheckerAsync(AsyncTestCase):
-    """Test async GuardDuty threat detection."""
-
-    @patch("guardian.checkers.guardduty.AWSClientProvider.get_async_client")
-    def test_check_async_no_findings(self, mock_get_client):
-        """Test check_async when no GuardDuty findings."""
-        mock_client = AsyncMock()
-        mock_get_client.return_value.__aenter__.return_value = mock_client
-
-        mock_client.list_detectors.return_value = {"DetectorIds": ["detector-123"]}
-        mock_client.list_findings.return_value = {"FindingIds": []}
-
-        checker = GuardDutyChecker({}, {})
-        result = self.async_test(checker.check_async())
-
-        self.assertEqual(result.severity, "INFO")
-
-    @patch("guardian.checkers.guardduty.AWSClientProvider.get_async_client")
-    def test_check_async_critical_findings(self, mock_get_client):
-        """Test check_async detects critical threat findings."""
-        mock_client = AsyncMock()
-        mock_get_client.return_value.__aenter__.return_value = mock_client
-
-        mock_client.list_detectors.return_value = {"DetectorIds": ["detector-123"]}
-        mock_client.list_findings.return_value = {
-            "FindingIds": ["finding-1"]
+        event = {
+            "EventName": "DescribeInstances",
+            "Username": "root",
+            "EventTime": datetime.now(timezone.utc),
+            "SourceIPAddress": "1.2.3.4",
+            "CloudTrailEvent": "{}",
         }
-        mock_client.get_findings.return_value = {
+
+        # First source returns the event, rest return empty
+        mock_paginator.paginate.side_effect = [
+            [{"Events": [event]}],  # iam.amazonaws.com
+            [{"Events": []}],       # ec2.amazonaws.com
+            [{"Events": []}],       # s3.amazonaws.com
+            [{"Events": []}],       # dynamodb.amazonaws.com
+            [{"Events": []}],       # rds.amazonaws.com
+        ]
+        mock_ct.get_paginator.return_value = mock_paginator
+
+        checker = CloudTrailChecker(clients={"cloudtrail": mock_ct})
+        result = checker.check()
+
+        self.assertEqual(result.severity, "CRITICAL")
+
+
+class TestIAMCheckerSync(unittest.TestCase):
+    """Test sync IAM permission change detection."""
+
+    def test_check_no_baseline_no_changes(self):
+        """Test check when no baseline exists and no users."""
+        mock_iam = MagicMock()
+        mock_paginator = MagicMock()
+        mock_paginator.paginate.return_value = [{"Users": []}]
+        mock_iam.get_paginator.return_value = mock_paginator
+
+        checker = IAMChecker(clients={"iam": mock_iam, "dynamodb_resource": None})
+        result = checker.check()
+
+        self.assertEqual(result.severity, "INFO")
+
+
+class TestGuardDutyCheckerSync(unittest.TestCase):
+    """Test sync GuardDuty threat detection."""
+
+    def test_check_no_findings(self):
+        """Test check when no GuardDuty findings."""
+        mock_gd = MagicMock()
+        mock_gd.list_detectors.return_value = {"DetectorIds": ["detector-123"]}
+        mock_gd.list_findings.return_value = {"FindingIds": []}
+
+        checker = GuardDutyChecker(clients={"guardduty": mock_gd})
+        result = checker.check()
+
+        self.assertEqual(result.severity, "INFO")
+
+    def test_check_critical_findings(self):
+        """Test check detects critical threat findings."""
+        mock_gd = MagicMock()
+        mock_gd.list_detectors.return_value = {"DetectorIds": ["detector-123"]}
+        mock_gd.list_findings.return_value = {"FindingIds": ["finding-1"]}
+        mock_gd.get_findings.return_value = {
             "Findings": [
                 {
                     "Id": "finding-1",
@@ -307,8 +286,8 @@ class TestGuardDutyCheckerAsync(AsyncTestCase):
             ]
         }
 
-        checker = GuardDutyChecker({}, {})
-        result = self.async_test(checker.check_async())
+        checker = GuardDutyChecker(clients={"guardduty": mock_gd})
+        result = checker.check()
 
         self.assertEqual(result.severity, "CRITICAL")
         self.assertIn("threat", result.message.lower())

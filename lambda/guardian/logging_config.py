@@ -4,7 +4,7 @@ import json
 import logging
 import sys
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 
 class JSONFormatter(logging.Formatter):
@@ -35,7 +35,7 @@ class JSONFormatter(logging.Formatter):
         return json.dumps(log_data, ensure_ascii=False)
 
 
-def setup_logger(name: str, log_file: str = None, level: int = logging.INFO) -> logging.Logger:
+def setup_logger(name: str, log_file: Optional[str] = None, level: int = logging.INFO) -> logging.Logger:
     """Configure logger with both console and file handlers.
 
     Guard against duplicate handlers when called multiple times
@@ -70,7 +70,7 @@ def setup_logger(name: str, log_file: str = None, level: int = logging.INFO) -> 
     return logger
 
 
-def log_check_result(logger: logging.Logger, check_type: str, status: str, detail: str = None):
+def log_check_result(logger: logging.Logger, check_type: str, status: str, detail: Optional[str] = None) -> None:
     logger.info(
         "%s: %s",
         check_type,
@@ -85,8 +85,8 @@ def log_check_result(logger: logging.Logger, check_type: str, status: str, detai
 
 
 def log_remediation(
-    logger: logging.Logger, action: str, resource: str, status: str, detail: str = None
-):
+    logger: logging.Logger, action: str, resource: str, status: str, detail: Optional[str] = None
+) -> None:
     logger.info(
         "%s: %s - %s",
         action,

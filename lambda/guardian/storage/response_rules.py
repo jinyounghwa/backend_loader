@@ -106,7 +106,7 @@ class ResponseRuleStorage:
             logger.error("Error getting rule %s: %s", rule_id, e)
         return None
 
-    def get_rules_for_region(self, region: str) -> List[ResponseRule]:
+    def get_rules_for_region(self, region: str) -> List[ResponseRule]:  # type: ignore
         cache_key = f"region:{region}"
         now = time.time()
 

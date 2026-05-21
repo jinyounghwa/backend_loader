@@ -5,7 +5,7 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 from io import StringIO
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 try:
     from fpdf import FPDF
@@ -39,7 +39,7 @@ class EventExporter:
         events: List[Dict[str, Any]],
         format_str: str = "csv",
         summary: Optional[Dict[str, Any]] = None,
-    ) -> tuple[str, str]:
+    ) -> tuple[str, Union[str, bytes]]:
         """
         Export events to specified format
         Returns: (file_path, file_content)
@@ -108,7 +108,7 @@ class EventExporter:
     @staticmethod
     def _export_to_pdf(
         events: List[Dict[str, Any]], summary: Optional[Dict[str, Any]] = None
-    ) -> bytes:
+    ) -> Union[str, bytes]:  # type: ignore
         """Export to PDF format with header, table, and summary (fpdf2)"""
         if FPDF is None:
             logger.warning("fpdf2 not installed, returning JSON instead")

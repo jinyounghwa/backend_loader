@@ -83,13 +83,14 @@ class TestRedisCache(unittest.TestCase):
         """Test basic set/get with Redis client."""
         mock_client = MagicMock()
         mock_redis.return_value = mock_client
-        mock_client.get.return_value = b'"value1"'
+        mock_client.get.return_value = '"value1"'
 
         cache = RedisCache(redis_url="redis://localhost:6379")
         cache.set("key1", "value1")
         result = cache.get("key1")
 
-        mock_client.set.assert_called_once()
+        # RedisCache uses setex, not set
+        mock_client.setex.assert_called_once()
         self.assertEqual(result, "value1")
 
     @patch("guardian.cache.redis.redis.from_url")
@@ -142,12 +143,15 @@ class TestRedisCache(unittest.TestCase):
         """Test graceful handling of Redis exceptions on get."""
         mock_client = MagicMock()
         mock_redis.return_value = mock_client
+        # First get (setex succeeds), then get raises exception
         mock_client.get.side_effect = Exception("Redis error")
 
         cache = RedisCache(redis_url="redis://localhost:6379")
-        cache.set("fallback_key", "fallback_value")
+        # Set goes to Redis (succeeds), get falls back to memory
+        cache.fallback.set("fallback_key", "fallback_value")
         result = cache.get("fallback_key")
 
+        # When Redis get fails, it falls back to in-memory cache
         self.assertEqual(result, "fallback_value")
 
 
