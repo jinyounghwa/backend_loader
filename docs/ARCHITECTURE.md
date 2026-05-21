@@ -42,13 +42,15 @@ DynamoDB: Audit Log + Remediation Metrics
 
 **Base Class**: `BaseChecker`
 
-All 6 checkers inherit from `BaseChecker`:
+All 8 checkers inherit from `BaseChecker`:
 - EC2Checker
 - S3Checker
 - IAMChecker
 - CloudTrailChecker
 - CostChecker
 - GuardDutyChecker
+- RDSChecker
+- IAMPolicyAnalyzer
 
 **Unified Interface**:
 ```python
@@ -90,7 +92,7 @@ loop.run_in_executor(None, self.check)
 Runs in thread pool, non-blocking
 ```
 
-**Used by**: EC2Checker, S3Checker, IAMChecker, CloudTrailChecker, CostChecker, GuardDutyChecker
+**Used by**: All 8 checkers (EC2Checker, S3Checker, IAMChecker, CloudTrailChecker, CostChecker, GuardDutyChecker, RDSChecker, IAMPolicyAnalyzer)
 
 **Advantage**: Simpler code, boto3 is widely used
 

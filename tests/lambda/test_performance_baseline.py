@@ -21,6 +21,8 @@ from guardian.checkers.cost import CostChecker
 from guardian.checkers.iam import IAMChecker
 from guardian.checkers.cloudtrail import CloudTrailChecker
 from guardian.checkers.guardduty import GuardDutyChecker
+from guardian.checkers.rds import RDSChecker
+from guardian.checkers.iam_policy_analyzer import IAMPolicyAnalyzer
 
 
 class TestCheckerPerformance(unittest.TestCase):
@@ -35,6 +37,7 @@ class TestCheckerPerformance(unittest.TestCase):
             "cloudtrail": Mock(),
             "ce": Mock(),
             "guardduty": Mock(),
+            "rds": Mock(),
         }
 
         # Configure EC2
@@ -69,6 +72,11 @@ class TestCheckerPerformance(unittest.TestCase):
 
         # Configure GuardDuty
         self.mock_clients["guardduty"].list_detectors.return_value = {"DetectorIds": []}
+
+        # Configure RDS
+        rds_paginator = Mock()
+        rds_paginator.paginate.return_value = [{"DBInstances": []}]
+        self.mock_clients["rds"].get_paginator.return_value = rds_paginator
 
     @patch("guardian.aws_client_provider.AWSClientProvider.get_client")
     def test_ec2_checker_performance(self, mock_get_client):
@@ -149,9 +157,65 @@ class TestCheckerPerformance(unittest.TestCase):
         self.assertIsNotNone(result.severity)
 
     @patch("guardian.aws_client_provider.AWSClientProvider.get_client")
+    def test_rds_checker_performance(self, mock_get_client):
+        """RDS checker should complete in < 500ms."""
+        mock_get_client.return_value = self.mock_clients["rds"]
+        checker = RDSChecker(clients=self.mock_clients)
+
+        start = time.perf_counter()
+        result = checker.check()
+        elapsed = time.perf_counter() - start
+
+        self.assertLess(elapsed, 0.5)
+        self.assertIsNotNone(result.severity)
+
+    @patch("guardian.aws_client_provider.AWSClientProvider.get_client")
+    def test_iam_policy_analyzer_performance(self, mock_get_client):
+        """IAM Policy Analyzer should complete in < 500ms."""
+        # Configure IAM paginators for policy analysis
+        users_paginator = Mock()
+        users_paginator.paginate.return_value = [{"Users": []}]
+        roles_paginator = Mock()
+        roles_paginator.paginate.return_value = [{"Roles": []}]
+
+        def get_paginator_impl(x):
+            if x == "list_users":
+                return users_paginator
+            elif x == "list_roles":
+                return roles_paginator
+            return Mock()
+
+        self.mock_clients["iam"].get_paginator.side_effect = get_paginator_impl
+        mock_get_client.return_value = self.mock_clients["iam"]
+
+        checker = IAMPolicyAnalyzer(clients=self.mock_clients)
+
+        start = time.perf_counter()
+        result = checker.check()
+        elapsed = time.perf_counter() - start
+
+        self.assertLess(elapsed, 0.5)
+        self.assertIsNotNone(result.severity)
+
+    @patch("guardian.aws_client_provider.AWSClientProvider.get_client")
     def test_all_checkers_combined(self, mock_get_client):
-        """All 6 checkers together should complete in < 2 seconds."""
+        """All 8 checkers together should complete in < 3 seconds."""
         def get_client_side_effect(service, **kwargs):
+            if service == "iam" and hasattr(self.mock_clients["iam"], "get_paginator"):
+                # Reconfigure IAM for policy analyzer
+                users_paginator = Mock()
+                users_paginator.paginate.return_value = [{"Users": []}]
+                roles_paginator = Mock()
+                roles_paginator.paginate.return_value = [{"Roles": []}]
+
+                def get_paginator_impl(x):
+                    if x == "list_users":
+                        return users_paginator
+                    elif x == "list_roles":
+                        return roles_paginator
+                    return Mock()
+
+                self.mock_clients["iam"].get_paginator.side_effect = get_paginator_impl
             return self.mock_clients.get(service, Mock())
 
         mock_get_client.side_effect = get_client_side_effect
@@ -163,15 +227,17 @@ class TestCheckerPerformance(unittest.TestCase):
             CloudTrailChecker(clients=self.mock_clients),
             CostChecker(clients=self.mock_clients, config={"cost_threshold": 10.0}),
             GuardDutyChecker(clients=self.mock_clients),
+            RDSChecker(clients=self.mock_clients),
+            IAMPolicyAnalyzer(clients=self.mock_clients),
         ]
 
         start = time.perf_counter()
         results = [checker.check() for checker in checkers]
         elapsed = time.perf_counter() - start
 
-        # All checkers together should be < 2 seconds
-        self.assertLess(elapsed, 2.0)
-        self.assertEqual(len(results), 6)
+        # All checkers together should be < 3 seconds
+        self.assertLess(elapsed, 3.0)
+        self.assertEqual(len(results), 8)
 
 
 if __name__ == "__main__":

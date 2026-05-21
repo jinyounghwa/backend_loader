@@ -21,6 +21,8 @@ from guardian.checkers.cost import CostChecker
 from guardian.checkers.ec2 import EC2Checker
 from guardian.checkers.guardduty import GuardDutyChecker
 from guardian.checkers.iam import IAMChecker
+from guardian.checkers.iam_policy_analyzer import IAMPolicyAnalyzer
+from guardian.checkers.rds import RDSChecker
 from guardian.checkers.s3 import S3Checker
 from guardian.config import Config
 from guardian.handlers.metrics import CloudWatchMetrics
@@ -47,6 +49,8 @@ class GuardianOrchestrator:
         cloudtrail_checker: Optional[CloudTrailChecker] = None,
         iam_checker: Optional[IAMChecker] = None,
         guardduty_checker: Optional[GuardDutyChecker] = None,
+        rds_checker: Optional[RDSChecker] = None,
+        iam_policy_analyzer: Optional[IAMPolicyAnalyzer] = None,
     ):
         self.logger = logger
         self.storage = storage
@@ -62,6 +66,8 @@ class GuardianOrchestrator:
             "cloudtrail": cloudtrail_checker,
             "iam": iam_checker,
             "guardduty": guardduty_checker,
+            "rds": rds_checker,
+            "iam_policy_analyzer": iam_policy_analyzer,
         }
 
     # ------------------------------------------------------------------
@@ -277,6 +283,22 @@ class GuardianOrchestrator:
                     gd_clients, {}, account_id=account_id, credentials=credentials
                 )
 
+            if self.checkers.get("rds"):
+                rds_clients = {
+                    "rds": AWSClientProvider.get_client_for_account("rds", account_id, credentials),
+                }
+                account_checkers["rds"] = RDSChecker(
+                    rds_clients, {}, account_id=account_id, credentials=credentials
+                )
+
+            if self.checkers.get("iam_policy_analyzer"):
+                iam_clients = {
+                    "iam": AWSClientProvider.get_client_for_account("iam", account_id, credentials),
+                }
+                account_checkers["iam_policy_analyzer"] = IAMPolicyAnalyzer(
+                    iam_clients, {}, account_id=account_id, credentials=credentials
+                )
+
             self.logger.info("Created account-specific checkers for %s", account_id)
             return account_checkers
         except Exception as e:
@@ -326,8 +348,8 @@ class GuardianOrchestrator:
         if check_type == "cost":
             return ["cost"]
         elif check_type == "security":
-            return ["ec2", "s3", "cloudtrail", "iam", "guardduty"]
-        return ["cost", "ec2", "s3", "cloudtrail", "iam", "guardduty"]
+            return ["ec2", "s3", "cloudtrail", "iam", "guardduty", "rds", "iam_policy_analyzer"]
+        return ["cost", "ec2", "s3", "cloudtrail", "iam", "guardduty", "rds", "iam_policy_analyzer"]
 
     # ------------------------------------------------------------------
     # Notifications
