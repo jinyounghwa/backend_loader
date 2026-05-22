@@ -4,7 +4,6 @@ HTTP API Gateway handler for querying WebSocket audit logs
 """
 
 import json
-import os
 import sys
 from pathlib import Path
 from typing import Dict, Any
