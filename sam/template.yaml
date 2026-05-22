@@ -69,6 +69,15 @@ Resources:
                 Action:
                   - execute-api:ManageConnections
                 Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${GuardianWebSocketApi}/*'
+        - PolicyName: CloudWatchMetrics
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                  - cloudwatch:GetMetricStatistics
+                Resource: '*'
 
   # ==========================================
   # Lambda Functions
@@ -87,6 +96,8 @@ Resources:
         Variables:
           WEBSOCKET_API_ID: !Ref GuardianWebSocketApi
           WEBSOCKET_API_ENDPOINT: !Sub '${GuardianWebSocketApi}.execute-api.${AWS::Region}.amazonaws.com'
+          CLOUDWATCH_NAMESPACE: 'aws-guardian/websocket'
+          METRICS_ENABLED: 'true'
       Tags:
         - Key: Function
           Value: WebSocketConnect
@@ -113,6 +124,10 @@ Resources:
       Handler: guardian/handlers/websocket_handler.handle_default
       Runtime: python3.12
       Role: !GetAtt WebSocketLambdaRole.Arn
+      Environment:
+        Variables:
+          CLOUDWATCH_NAMESPACE: 'aws-guardian/websocket'
+          METRICS_ENABLED: 'true'
       Tags:
         - Key: Function
           Value: WebSocketDefault
@@ -129,6 +144,8 @@ Resources:
       Environment:
         Variables:
           WEBSOCKET_API_ID: !Ref GuardianWebSocketApi
+          CLOUDWATCH_NAMESPACE: 'aws-guardian/websocket'
+          METRICS_ENABLED: 'true'
       Tags:
         - Key: Function
           Value: ThreatBroadcast
@@ -276,6 +293,135 @@ Resources:
       RetentionInDays: 30
 
   # ==========================================
+  # SNS Topic for Alerts
+  # ==========================================
+  WebSocketAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub '${ProjectName}-websocket-alerts'
+      DisplayName: WebSocket Monitoring Alerts
+
+  # ==========================================
+  # CloudWatch Dashboard
+  # ==========================================
+  WebSocketDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub '${ProjectName}-websocket-dashboard'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["aws-guardian/websocket", "ActiveConnections", {"stat": "Average"}],
+                  [".", "MessageThroughput", {"stat": "Sum"}],
+                  [".", "ThreatScore", {"stat": "Average"}],
+                  [".", "MessageProcessingLatency", {"stat": "Average"}]
+                ],
+                "period": 60,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "WebSocket Metrics Overview",
+                "yAxis": {"left": {"min": 0}}
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["aws-guardian/websocket", "ConnectionErrors", {"stat": "Sum"}],
+                  [".", "DisconnectionErrors", {"stat": "Sum"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Error Monitoring",
+                "yAxis": {"left": {"min": 0}}
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["aws-guardian/websocket", "ConnectionDuration", {"stat": "Average"}],
+                  ["...", {"stat": "Maximum"}]
+                ],
+                "period": 60,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Connection Duration (ms)"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["aws-guardian/websocket", "MessageCompressionRatio", {"stat": "Average"}],
+                  [".", "BroadcastLatency", {"stat": "Average"}]
+                ],
+                "period": 60,
+                "stat": "Average",
+                "region": "${AWS::Region}",
+                "title": "Performance Metrics"
+              }
+            }
+          ]
+        }
+
+  # ==========================================
+  # CloudWatch Alarms
+  # ==========================================
+  ConnectionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-websocket-connection-errors'
+      AlarmDescription: Alert when connection errors exceed threshold
+      MetricName: ConnectionErrors
+      Namespace: aws-guardian/websocket
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref WebSocketAlertsTopic
+      TreatMissingData: notBreaching
+
+  MessageLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-websocket-message-latency'
+      AlarmDescription: Alert when message processing latency exceeds threshold
+      MetricName: MessageProcessingLatency
+      Namespace: aws-guardian/websocket
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 5000
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref WebSocketAlertsTopic
+      TreatMissingData: notBreaching
+
+  ThreatScoreAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ProjectName}-websocket-threat-score'
+      AlarmDescription: Alert when threat score exceeds critical threshold
+      MetricName: ThreatScore
+      Namespace: aws-guardian/websocket
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 80
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref WebSocketAlertsTopic
+      TreatMissingData: notBreaching
+
+  # ==========================================
   # Outputs
   # ==========================================
 
@@ -317,3 +463,15 @@ Outputs:
   ProjectName:
     Description: Project Name
     Value: !Ref ProjectName
+
+  DashboardURL:
+    Description: CloudWatch Dashboard URL
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=${ProjectName}-websocket-dashboard'
+    Export:
+      Name: !Sub '${ProjectName}-DashboardURL'
+
+  SNSTopicArn:
+    Description: SNS Topic ARN for WebSocket alerts
+    Value: !Ref WebSocketAlertsTopic
+    Export:
+      Name: !Sub '${ProjectName}-SNSTopicArn'
