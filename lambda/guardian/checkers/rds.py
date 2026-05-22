@@ -123,9 +123,6 @@ class RDSChecker(BaseChecker):
         high_count = (
             len(details["unencrypted"]) + len(details["iam_auth_disabled"])
         )
-        low_count = len(details["backup_disabled"]) + len(
-            details["cloudwatch_logs_disabled"]
-        )
 
         if critical_count > 0:
             severity = "HIGH"

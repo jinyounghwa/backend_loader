@@ -4,7 +4,6 @@
 """
 
 from typing import Dict, List, Any
-from datetime import datetime, timezone
 
 
 class OptimizationSuggester:

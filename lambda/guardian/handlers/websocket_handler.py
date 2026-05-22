@@ -4,7 +4,6 @@ $connect, $disconnect, $default 라우트 처리
 """
 
 import json
-import os
 from typing import Dict, Any
 from datetime import datetime, timezone
 

@@ -7,7 +7,6 @@ Async parallel execution can be achieved via the base class's
 """
 
 import asyncio
-import concurrent.futures
 import json
 import time
 from datetime import datetime, timezone
@@ -15,7 +14,7 @@ from logging import Logger
 from typing import Any, Dict, List, Optional
 
 from guardian.aws_client_provider import AWSClientProvider
-from guardian.checkers.base import BaseChecker, CheckResult, _run_sync
+from guardian.checkers.base import BaseChecker, CheckResult
 from guardian.checkers.cloudtrail import CloudTrailChecker
 from guardian.checkers.cost import CostChecker
 from guardian.checkers.ec2 import EC2Checker

@@ -4,7 +4,6 @@ SAM 템플릿 구조, 리소스 정의, 출력값 검증
 """
 
 import unittest
-import json
 import yaml
 from pathlib import Path
 

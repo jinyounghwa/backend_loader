@@ -4,7 +4,7 @@ WebSocket 연결 생명주기 관리
 """
 
 from typing import Dict, List, Any
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 
 class ConnectionManager:

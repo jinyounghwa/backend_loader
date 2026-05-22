@@ -4,7 +4,6 @@ WebSocket 기반 실시간 양방향 알림 시스템
 
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timezone
-import json
 
 
 class WebSocketNotifier:

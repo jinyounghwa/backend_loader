@@ -3,12 +3,11 @@
 import logging
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import boto3
 from botocore.exceptions import ClientError
 
-from guardian.aws_client_provider import AWSClientProvider
 from guardian.checkers.base import BaseChecker, CheckResult
 from guardian.config import Config
 
@@ -196,4 +195,3 @@ class CostChecker(BaseChecker):
         except Exception as e:
             logger.warning("Error getting threshold from SSM: %s", e)
             return self.threshold
-

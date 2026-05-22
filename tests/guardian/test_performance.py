@@ -3,7 +3,7 @@
 import asyncio
 import time
 import unittest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -139,7 +139,7 @@ class TestAsyncCheckerPerformance(unittest.TestCase):
 
         # Measure async execution
         start = time.time()
-        _result = self.loop.run_until_complete(checker.check_async())
+        _ = self.loop.run_until_complete(checker.check_async())
         async_time = time.time() - start
 
         # With parallel execution, should be close to 0.2s, not 0.4s
@@ -188,7 +188,7 @@ class TestAsyncCheckerPerformance(unittest.TestCase):
 
         # Measure async execution
         start = time.time()
-        result = self.loop.run_until_complete(checker.check_async())
+        _ = self.loop.run_until_complete(checker.check_async())
         async_time = time.time() - start
 
         # With parallel execution, should be < 0.25s, not 1.0s
@@ -228,7 +228,7 @@ class TestCacheFailoverPerformance(unittest.TestCase):
         mock_redis.side_effect = Exception("Connection failed")
 
         start = time.time()
-        _cache = RedisCache(redis_url="redis://invalid")
+        _ = RedisCache(redis_url="redis://invalid")
         elapsed = time.time() - start
 
         # Fallback instantiation should be fast

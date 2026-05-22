@@ -3,8 +3,8 @@
 """
 
 import numpy as np
-from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Any, Optional
+from datetime import datetime, timezone
+from typing import Dict, List, Any
 from guardian.ml.anomaly_detector_v2 import AdvancedAnomalyDetector
 
 
@@ -67,12 +67,10 @@ class CostAnalyzer:
     ) -> List[Dict[str, Any]]:
         """비용 이상 감지"""
         anomalies = []
+        avg = sum(daily_costs) / len(daily_costs)
+        std = np.std(daily_costs)
 
         for i, cost in enumerate(daily_costs):
-            # 기본 임계값 기반 감지
-            avg = sum(daily_costs) / len(daily_costs)
-            std = np.std(daily_costs)
-
             # 평균 + 2 표준편차 이상 = 이상
             if cost > avg + 2 * std:
                 anomalies.append({
@@ -153,7 +151,6 @@ class CostAnalyzer:
 
         # 선형 회귀를 통한 예측
         avg = sum(daily_costs) / len(daily_costs)
-        std = np.std(daily_costs)
 
         # 추세 계산
         x = np.arange(len(daily_costs))

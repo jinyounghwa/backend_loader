@@ -2,13 +2,11 @@
 
 import json
 import unittest
-from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 from guardian.orchestrator import GuardianOrchestrator
 from guardian.checkers.base import CheckResult
 from guardian.storage.dynamodb import DynamoDBStorage
-from guardian.aws_client_provider import AWSClientProvider
 
 
 class TestMultiAccountOrchestrator(unittest.TestCase):

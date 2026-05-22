@@ -6,8 +6,6 @@ import os
 import asyncio
 import unittest
 import json
-import base64
-import gzip
 from pathlib import Path
 import sys
 

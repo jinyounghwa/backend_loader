@@ -119,7 +119,7 @@ class AdvancedAnomalyDetector:
 
         # 에러율 이상
         if error_rate > 0.05:
-            reasons.append(f'높은 에러율: {error_rate*100:.1f}%')
+            reasons.append(f'높은 에러율: {error_rate * 100:.1f}%')
 
         # API 호출 이상
         if api_calls > 2000:

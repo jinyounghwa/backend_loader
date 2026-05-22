@@ -52,7 +52,7 @@ class TestCostCheckerSync(unittest.TestCase):
         mock_ce.get_cost_and_usage.side_effect = [
             high_cost_response,   # today
             high_cost_response,   # yesterday
-            monthly_cost_response, # monthly
+            monthly_cost_response,  # monthly
         ]
 
         checker = CostChecker(clients={"ce": mock_ce, "ssm": MagicMock()}, config={"cost_threshold": 100})

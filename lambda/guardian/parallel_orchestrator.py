@@ -8,10 +8,9 @@ result processing. Runs checks in parallel using ``check_async()``
 
 import asyncio
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from guardian.checkers.base import _run_sync
-from guardian.config import Config
 from guardian.orchestrator import GuardianOrchestrator
 
 

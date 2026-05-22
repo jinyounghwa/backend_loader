@@ -5,7 +5,6 @@ CRITICAL → HIGH → MEDIUM → LOW 순서로 처리
 
 from typing import Dict, List, Any, Tuple
 import heapq
-from datetime import datetime, timezone
 
 
 class PriorityNotificationQueue:

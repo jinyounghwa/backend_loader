@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import boto3
 from botocore.exceptions import ClientError
 
-from guardian.aws_client_provider import AWSClientProvider
 from guardian.checkers.base import BaseChecker, CheckResult
 from guardian.config import Config
 

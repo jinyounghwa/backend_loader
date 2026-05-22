@@ -49,7 +49,6 @@ class LambdaHarness:
         except Exception:
             pytest.skip("Docker CLI is not available - skipping Lambda harness tests")
 
-
     def invoke_local(
         self, event: Dict[str, Any], env: Optional[Dict[str, str]] = None
     ) -> Dict[str, Any]:

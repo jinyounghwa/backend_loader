@@ -7,7 +7,7 @@ import asyncio
 import time
 import os
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 from pathlib import Path
 import sys
 
@@ -34,6 +34,7 @@ class TestParallelOrchestrator(unittest.TestCase):
             # sync check 메서드
             checker.check = Mock(return_value=CheckResult("INFO", f"{name} ok", "OK", {}, None))
             # async check_async 메서드
+
             async def mock_check_async():
                 return CheckResult("INFO", "ok", "OK", {}, None)
             checker.check_async = mock_check_async
