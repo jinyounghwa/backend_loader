@@ -24,6 +24,30 @@ class AdvancedAnomalyDetector:
         self.history: List[Dict[str, Any]] = []
         self.is_trained = False
 
+        # 기본 학습 데이터로 모델 초기화
+        self._initialize_model()
+
+    def _initialize_model(self):
+        """기본 학습 데이터로 모델 초기화"""
+        # 정상 범위 데이터 생성
+        normal_data = np.array([
+            [5.0, 500, 0.01, 3],      # 정상
+            [8.0, 600, 0.015, 4],     # 정상
+            [10.0, 700, 0.02, 5],     # 정상
+            [12.0, 800, 0.025, 6],    # 정상
+            [7.0, 550, 0.012, 3],     # 정상
+            [9.0, 650, 0.018, 4],     # 정상
+            [6.0, 450, 0.008, 2],     # 정상
+            [11.0, 750, 0.022, 5],    # 정상
+            [8.5, 600, 0.014, 3],     # 정상
+            [10.5, 700, 0.021, 4],    # 정상
+        ])
+
+        # 모델 학습
+        X_scaled = self.scaler.fit_transform(normal_data)
+        self.model.fit(X_scaled)
+        self.is_trained = True
+
     async def detect_anomaly(self, metrics: Dict[str, float]) -> Dict[str, Any]:
         """
         개선된 이상 탐지
