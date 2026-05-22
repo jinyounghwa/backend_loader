@@ -78,6 +78,16 @@ Resources:
                   - cloudwatch:PutMetricData
                   - cloudwatch:GetMetricStatistics
                 Resource: '*'
+        - PolicyName: DynamoDBAuditPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                  - dynamodb:GetItem
+                Resource: !GetAtt WebSocketAuditLogsTable.Arn
 
   # ==========================================
   # Lambda Functions
@@ -98,6 +108,9 @@ Resources:
           WEBSOCKET_API_ENDPOINT: !Sub '${GuardianWebSocketApi}.execute-api.${AWS::Region}.amazonaws.com'
           CLOUDWATCH_NAMESPACE: 'aws-guardian/websocket'
           METRICS_ENABLED: 'true'
+          AUDIT_LOGS_TABLE: !Ref WebSocketAuditLogsTable
+          AUDIT_LOGS_ENABLED: 'true'
+          TTL_DAYS: '90'
       Tags:
         - Key: Function
           Value: WebSocketConnect
@@ -111,6 +124,11 @@ Resources:
       Handler: guardian/handlers/websocket_handler.handle_disconnect
       Runtime: python3.12
       Role: !GetAtt WebSocketLambdaRole.Arn
+      Environment:
+        Variables:
+          AUDIT_LOGS_TABLE: !Ref WebSocketAuditLogsTable
+          AUDIT_LOGS_ENABLED: 'true'
+          TTL_DAYS: '90'
       Tags:
         - Key: Function
           Value: WebSocketDisconnect
@@ -128,6 +146,9 @@ Resources:
         Variables:
           CLOUDWATCH_NAMESPACE: 'aws-guardian/websocket'
           METRICS_ENABLED: 'true'
+          AUDIT_LOGS_TABLE: !Ref WebSocketAuditLogsTable
+          AUDIT_LOGS_ENABLED: 'true'
+          TTL_DAYS: '90'
       Tags:
         - Key: Function
           Value: WebSocketDefault
@@ -146,6 +167,9 @@ Resources:
           WEBSOCKET_API_ID: !Ref GuardianWebSocketApi
           CLOUDWATCH_NAMESPACE: 'aws-guardian/websocket'
           METRICS_ENABLED: 'true'
+          AUDIT_LOGS_TABLE: !Ref WebSocketAuditLogsTable
+          AUDIT_LOGS_ENABLED: 'true'
+          TTL_DAYS: '90'
       Tags:
         - Key: Function
           Value: ThreatBroadcast
@@ -291,6 +315,33 @@ Resources:
     Properties:
       LogGroupName: !Sub '/aws/apigateway/${ProjectName}-websocket'
       RetentionInDays: 30
+
+  # ==========================================
+  # DynamoDB Audit Logs Table
+  # ==========================================
+  WebSocketAuditLogsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-websocket-audit-logs'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: connection_id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: connection_id
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: expiration_time
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
 
   # ==========================================
   # SNS Topic for Alerts
@@ -475,3 +526,15 @@ Outputs:
     Value: !Ref WebSocketAlertsTopic
     Export:
       Name: !Sub '${ProjectName}-SNSTopicArn'
+
+  AuditLogsTableName:
+    Description: WebSocket Audit Logs Table Name
+    Value: !Ref WebSocketAuditLogsTable
+    Export:
+      Name: !Sub '${ProjectName}-AuditLogsTable'
+
+  AuditLogsTableArn:
+    Description: WebSocket Audit Logs Table ARN
+    Value: !GetAtt WebSocketAuditLogsTable.Arn
+    Export:
+      Name: !Sub '${ProjectName}-AuditLogsTableArn'
