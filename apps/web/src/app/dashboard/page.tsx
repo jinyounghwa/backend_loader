@@ -7,6 +7,7 @@ import GuardianEventLog from '@/components/Dashboard/GuardianEventLog';
 import GuardianActionHistory from '@/components/Dashboard/GuardianActionHistory';
 import GuardianThreatAnalysis from '@/components/Dashboard/GuardianThreatAnalysis';
 import GuardianReportDownload from '@/components/Dashboard/GuardianReportDownload';
+import { AuditLogsDashboard } from '@/components/Dashboard/AuditLogsDashboard';
 
 interface DashboardStatus {
   version: string;
@@ -184,6 +185,11 @@ export default function DashboardPage() {
 
         {/* Report Download */}
         <GuardianReportDownload />
+
+        {/* Audit Logs Dashboard */}
+        <section className="rounded-lg border border-slate-700/50 bg-slate-900/50 p-6">
+          <AuditLogsDashboard connectionId="all" />
+        </section>
       </div>
     </div>
   );
