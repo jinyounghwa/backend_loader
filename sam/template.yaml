@@ -1,0 +1,319 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: 'AWS Guardian - Real-time WebSocket Notification System'
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Environment:
+      Variables:
+        AWS_ENV: prod
+        LOG_LEVEL: INFO
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Deployment environment
+
+  ProjectName:
+    Type: String
+    Default: aws-guardian
+    Description: Project name for resource naming
+
+Resources:
+  # ==========================================
+  # WebSocket API Gateway
+  # ==========================================
+  GuardianWebSocketApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${ProjectName}-websocket-${Environment}'
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: $request.body.action
+      Description: AWS Guardian real-time threat notification system
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ==========================================
+  # IAM Role for Lambda Functions
+  # ==========================================
+  WebSocketLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-websocket-lambda-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: WebSocketManagement
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - execute-api:ManageConnections
+                Resource: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${GuardianWebSocketApi}/*'
+
+  # ==========================================
+  # Lambda Functions
+  # ==========================================
+
+  # $connect Route Handler
+  ConnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-websocket-connect'
+      CodeUri: ../lambda
+      Handler: guardian/handlers/websocket_handler.handle_connect
+      Runtime: python3.12
+      Role: !GetAtt WebSocketLambdaRole.Arn
+      Environment:
+        Variables:
+          WEBSOCKET_API_ID: !Ref GuardianWebSocketApi
+          WEBSOCKET_API_ENDPOINT: !Sub '${GuardianWebSocketApi}.execute-api.${AWS::Region}.amazonaws.com'
+      Tags:
+        - Key: Function
+          Value: WebSocketConnect
+
+  # $disconnect Route Handler
+  DisconnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-websocket-disconnect'
+      CodeUri: ../lambda
+      Handler: guardian/handlers/websocket_handler.handle_disconnect
+      Runtime: python3.12
+      Role: !GetAtt WebSocketLambdaRole.Arn
+      Tags:
+        - Key: Function
+          Value: WebSocketDisconnect
+
+  # $default Route Handler
+  DefaultFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-websocket-default'
+      CodeUri: ../lambda
+      Handler: guardian/handlers/websocket_handler.handle_default
+      Runtime: python3.12
+      Role: !GetAtt WebSocketLambdaRole.Arn
+      Tags:
+        - Key: Function
+          Value: WebSocketDefault
+
+  # Threat Broadcast Handler
+  BroadcastFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-threat-broadcast'
+      CodeUri: ../lambda
+      Handler: guardian/handlers/websocket_handler.handle_threat_broadcast
+      Runtime: python3.12
+      Role: !GetAtt WebSocketLambdaRole.Arn
+      Environment:
+        Variables:
+          WEBSOCKET_API_ID: !Ref GuardianWebSocketApi
+      Tags:
+        - Key: Function
+          Value: ThreatBroadcast
+
+  # Anomaly Alert Handler
+  AnomalyAlertFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-anomaly-alert'
+      CodeUri: ../lambda
+      Handler: guardian/handlers/websocket_handler.handle_anomaly_alert
+      Runtime: python3.12
+      Role: !GetAtt WebSocketLambdaRole.Arn
+      Tags:
+        - Key: Function
+          Value: AnomalyAlert
+
+  # Connection Stats Handler
+  ConnectionStatsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-connection-stats'
+      CodeUri: ../lambda
+      Handler: guardian/handlers/websocket_handler.handle_connection_stats
+      Runtime: python3.12
+      Role: !GetAtt WebSocketLambdaRole.Arn
+      Tags:
+        - Key: Function
+          Value: ConnectionStats
+
+  # ==========================================
+  # Lambda Permissions
+  # ==========================================
+  ConnectFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ConnectFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${GuardianWebSocketApi}/*'
+
+  DisconnectFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DisconnectFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${GuardianWebSocketApi}/*'
+
+  DefaultFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DefaultFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${GuardianWebSocketApi}/*'
+
+  BroadcastFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref BroadcastFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${GuardianWebSocketApi}/*'
+
+  # ==========================================
+  # API Integrations
+  # ==========================================
+  ConnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref GuardianWebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub 'arn:aws:apigatewayv2:${AWS::Region}:lambda:path/2015-03-31/functions/${ConnectFunction.Arn}/invocations'
+      PayloadFormatVersion: '2.0'
+
+  DisconnectIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref GuardianWebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub 'arn:aws:apigatewayv2:${AWS::Region}:lambda:path/2015-03-31/functions/${DisconnectFunction.Arn}/invocations'
+      PayloadFormatVersion: '2.0'
+
+  DefaultIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref GuardianWebSocketApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub 'arn:aws:apigatewayv2:${AWS::Region}:lambda:path/2015-03-31/functions/${DefaultFunction.Arn}/invocations'
+      PayloadFormatVersion: '2.0'
+
+  # ==========================================
+  # API Routes
+  # ==========================================
+  ConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref GuardianWebSocketApi
+      RouteKey: $connect
+      Target: !Sub 'integrations/${ConnectIntegration}'
+      AuthorizationType: NONE
+
+  DisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref GuardianWebSocketApi
+      RouteKey: $disconnect
+      Target: !Sub 'integrations/${DisconnectIntegration}'
+      AuthorizationType: NONE
+
+  DefaultRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref GuardianWebSocketApi
+      RouteKey: $default
+      Target: !Sub 'integrations/${DefaultIntegration}'
+      AuthorizationType: NONE
+
+  # ==========================================
+  # API Deployment Stage
+  # ==========================================
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref GuardianWebSocketApi
+      StageName: !Ref Environment
+      AutoDeploy: true
+      LoggingLevel: INFO
+      DataTraceEnabled: true
+      DefaultRouteSettings:
+        ThrottleSettings:
+          BurstLimit: 100
+          RateLimit: 50
+      Tags:
+        Environment: !Ref Environment
+
+  # ==========================================
+  # CloudWatch Log Group
+  # ==========================================
+  WebSocketApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/${ProjectName}-websocket'
+      RetentionInDays: 30
+
+  # ==========================================
+  # Outputs
+  # ==========================================
+
+Outputs:
+  WebSocketApiId:
+    Description: WebSocket API ID
+    Value: !Ref GuardianWebSocketApi
+    Export:
+      Name: !Sub '${ProjectName}-websocket-api-id'
+
+  WebSocketApiEndpoint:
+    Description: WebSocket API Endpoint
+    Value: !Sub 'wss://${GuardianWebSocketApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${ProjectName}-websocket-endpoint'
+
+  ConnectFunctionArn:
+    Description: Connect Function ARN
+    Value: !GetAtt ConnectFunction.Arn
+    Export:
+      Name: !Sub '${ProjectName}-connect-function-arn'
+
+  DisconnectFunctionArn:
+    Description: Disconnect Function ARN
+    Value: !GetAtt DisconnectFunction.Arn
+    Export:
+      Name: !Sub '${ProjectName}-disconnect-function-arn'
+
+  BroadcastFunctionArn:
+    Description: Broadcast Function ARN
+    Value: !GetAtt BroadcastFunction.Arn
+    Export:
+      Name: !Sub '${ProjectName}-broadcast-function-arn'
+
+  Environment:
+    Description: Deployment Environment
+    Value: !Ref Environment
+
+  ProjectName:
+    Description: Project Name
+    Value: !Ref ProjectName

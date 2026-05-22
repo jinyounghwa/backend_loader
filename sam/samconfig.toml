@@ -1,0 +1,78 @@
+# SAM Configuration File
+
+version = 0.1
+
+[default]
+[default.build]
+# Build parameters
+cached = true
+parallel = true
+
+[default.build.parameters]
+# Build environment variables
+use_container = false
+build_dir = ".aws-sam/build"
+
+[default.package]
+# Packaging parameters
+s3_bucket = "aws-guardian-deployments"
+s3_prefix = "lambda-builds"
+region = "us-east-1"
+
+[default.deploy]
+# Deployment parameters
+stack_name = "aws-guardian-websocket"
+s3_bucket = "aws-guardian-deployments"
+s3_prefix = "lambda-builds"
+region = "us-east-1"
+confirm_changeset = false
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Environment=prod"
+tags = [
+    "Project=aws-guardian",
+    "Environment=prod",
+    "ManagedBy=SAM"
+]
+
+[default.local_start_api]
+# Local API testing
+port = 3000
+host = "127.0.0.1"
+
+# ==========================================
+# Deployment Profiles
+# ==========================================
+
+[dev]
+[dev.deploy]
+stack_name = "aws-guardian-websocket-dev"
+region = "us-east-1"
+parameter_overrides = "Environment=dev"
+tags = [
+    "Project=aws-guardian",
+    "Environment=dev",
+    "ManagedBy=SAM"
+]
+
+[staging]
+[staging.deploy]
+stack_name = "aws-guardian-websocket-staging"
+region = "us-east-1"
+parameter_overrides = "Environment=staging"
+tags = [
+    "Project=aws-guardian",
+    "Environment=staging",
+    "ManagedBy=SAM"
+]
+
+[prod]
+[prod.deploy]
+stack_name = "aws-guardian-websocket-prod"
+region = "us-east-1"
+parameter_overrides = "Environment=prod"
+confirm_changeset = true
+tags = [
+    "Project=aws-guardian",
+    "Environment=prod",
+    "ManagedBy=SAM"
+]
