@@ -50,7 +50,9 @@ class RedisCache(CacheBackend):
             try:
                 value_json = self.redis.get(key)
                 if value_json:
-                    return json.loads(str(value_json))
+                    if isinstance(value_json, bytes):
+                        value_json = value_json.decode("utf-8")
+                    return json.loads(value_json)
                 return None
             except Exception as e:
                 logger.error("Redis get failed for key %s: %s", key, e)

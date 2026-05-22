@@ -43,13 +43,15 @@ class TestGuardianOrchestratorRegistry(unittest.TestCase):
 
     def test_checkers_registry_initialized(self):
         self.assertIsNotNone(self.orchestrator.checkers)
-        self.assertEqual(len(self.orchestrator.checkers), 6)
+        self.assertEqual(len(self.orchestrator.checkers), 8)
         self.assertIn("cost", self.orchestrator.checkers)
         self.assertIn("ec2", self.orchestrator.checkers)
         self.assertIn("s3", self.orchestrator.checkers)
         self.assertIn("cloudtrail", self.orchestrator.checkers)
         self.assertIn("iam", self.orchestrator.checkers)
         self.assertIn("guardduty", self.orchestrator.checkers)
+        self.assertIn("rds", self.orchestrator.checkers)
+        self.assertIn("iam_policy_analyzer", self.orchestrator.checkers)
 
     def test_checkers_mapped_correctly(self):
         self.assertEqual(self.orchestrator.checkers["cost"], self.mock_cost_checker)
@@ -58,6 +60,8 @@ class TestGuardianOrchestratorRegistry(unittest.TestCase):
         self.assertEqual(self.orchestrator.checkers["cloudtrail"], self.mock_cloudtrail_checker)
         self.assertEqual(self.orchestrator.checkers["iam"], self.mock_iam_checker)
         self.assertEqual(self.orchestrator.checkers["guardduty"], self.mock_guardduty_checker)
+        self.assertIsNone(self.orchestrator.checkers["rds"])
+        self.assertIsNone(self.orchestrator.checkers["iam_policy_analyzer"])
 
     def test_get_checks_for_type_cost(self):
         checks = self.orchestrator._get_checks_for_type("cost")
@@ -65,16 +69,18 @@ class TestGuardianOrchestratorRegistry(unittest.TestCase):
 
     def test_get_checks_for_type_security(self):
         checks = self.orchestrator._get_checks_for_type("security")
-        self.assertEqual(len(checks), 5)
+        self.assertEqual(len(checks), 7)
         self.assertIn("ec2", checks)
         self.assertIn("s3", checks)
         self.assertIn("cloudtrail", checks)
         self.assertIn("iam", checks)
         self.assertIn("guardduty", checks)
+        self.assertIn("rds", checks)
+        self.assertIn("iam_policy_analyzer", checks)
 
     def test_get_checks_for_type_all(self):
         checks = self.orchestrator._get_checks_for_type("all")
-        self.assertEqual(len(checks), 6)
+        self.assertEqual(len(checks), 8)
 
 
 class TestGuardianOrchestratorSingleCheck(unittest.TestCase):

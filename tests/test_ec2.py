@@ -9,6 +9,14 @@ from guardian.config import Config
 from guardian.responders.aws_action_executor import AWSActionExecutor
 
 
+import os
+import pytest
+
+LOCALSTACK_AVAILABLE = os.getenv("LOCALSTACK_ENDPOINT") is not None
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not LOCALSTACK_AVAILABLE, reason="LocalStack not available")
 class TestEC2Checker(unittest.TestCase):
 
     @classmethod

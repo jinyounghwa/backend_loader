@@ -74,7 +74,7 @@ class EC2Checker(BaseChecker):
                 regions_response = ec2_global.describe_regions()
                 regions = [r["RegionName"] for r in regions_response["Regions"]]
 
-            for region in regions:
+            def _fetch_instances_for_region(region: str) -> Optional[tuple]:
                 regional_ec2 = self._get_regional_client(region)
                 try:
                     response = regional_ec2.describe_instances(
@@ -84,11 +84,22 @@ class EC2Checker(BaseChecker):
                     for reservation in response["Reservations"]:
                         instances.extend(reservation["Instances"])
                     if instances:
-                        instances_by_region[region] = instances
+                        return region, instances
                 except ClientError as e:
                     logger.error("ClientError in region %s: %s", region, e)
                 except Exception as e:
                     logger.error("Error checking region %s: %s", region, e)
+                return None
+
+            from concurrent.futures import ThreadPoolExecutor
+            # Limit parallelism to 10 concurrent requests to prevent throttling
+            with ThreadPoolExecutor(max_workers=min(len(regions), 10)) as executor:
+                results = executor.map(_fetch_instances_for_region, regions)
+
+            for res in results:
+                if res:
+                    region, instances = res
+                    instances_by_region[region] = instances
 
             return instances_by_region
         except ClientError as e:

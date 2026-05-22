@@ -177,7 +177,7 @@ class S3Checker(BaseChecker):
         public_buckets = []
         buckets = self._list_all_buckets()
 
-        for bucket in buckets:
+        def _check_bucket(bucket: Dict[str, Any]) -> Optional[Dict]:
             bucket_name = bucket["Name"]
             public_reasons: List[str] = []
 
@@ -192,13 +192,20 @@ class S3Checker(BaseChecker):
                 public_reasons.append("Public Access Block Disabled")
 
             if public_reasons:
-                public_buckets.append(
-                    {
-                        "bucket_name": bucket_name,
-                        "creation_date": bucket["CreationDate"].isoformat(),
-                        "public_reasons": public_reasons,
-                    }
-                )
+                return {
+                    "bucket_name": bucket_name,
+                    "creation_date": bucket["CreationDate"].isoformat(),
+                    "public_reasons": public_reasons,
+                }
+            return None
+
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=min(len(buckets), 10) if buckets else 1) as executor:
+            results = executor.map(_check_bucket, buckets)
+
+        for res in results:
+            if res:
+                public_buckets.append(res)
 
         return public_buckets
 

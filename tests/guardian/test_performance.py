@@ -3,7 +3,7 @@
 import asyncio
 import time
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, patch, MagicMock
 
 import pytest
 
@@ -112,16 +112,23 @@ class TestAsyncCheckerPerformance(unittest.TestCase):
         """Clean up event loop."""
         self.loop.close()
 
-    @patch("guardian.checkers.ec2.AWSClientProvider.get_async_client")
-    def test_parallel_region_checking(self, mock_get_client):
+    @patch("guardian.checkers.ec2.Config.is_localstack", return_value=False)
+    @patch("guardian.checkers.ec2.AWSClientProvider.get_client")
+    def test_parallel_region_checking(self, mock_get_client, mock_is_localstack):
         """Test parallel region checking performance."""
-        mock_client = AsyncMock()
-        mock_get_client.return_value.__aenter__.return_value = mock_client
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
 
-        # Simulate 3 regions with 1 second response time each
-        async def slow_operation(*args, **kwargs):
-            await asyncio.sleep(0.1)
-            return {"Regions": [{"RegionName": "us-east-1"}]} if "describe_regions" in str(args) else {"Reservations": []}
+        # Simulate 3 regions with response time
+        def slow_operation(*args, **kwargs):
+            time.sleep(0.1)
+            return {
+                "Regions": [
+                    {"RegionName": "us-east-1"},
+                    {"RegionName": "us-west-2"},
+                    {"RegionName": "eu-west-1"},
+                ]
+            } if "describe_regions" in str(args) else {"Reservations": []}
 
         mock_client.describe_regions.side_effect = slow_operation
         mock_client.describe_instances.side_effect = slow_operation
@@ -135,15 +142,13 @@ class TestAsyncCheckerPerformance(unittest.TestCase):
         _result = self.loop.run_until_complete(checker.check_async())
         async_time = time.time() - start
 
-        # With parallel execution, should be close to 0.1s, not 0.3s
-        assert async_time < 0.3
-        print(f"EC2 parallel check: {async_time:.2f}s (parallel) vs ~0.3s (sequential)")
+        # With parallel execution, should be close to 0.2s, not 0.4s
+        assert async_time < 0.35
+        print(f"EC2 parallel check: {async_time:.2f}s (parallel) vs ~0.4s (sequential)")
 
-    @patch("guardian.checkers.s3.AWSClientProvider.get_async_client")
-    def test_parallel_bucket_checking(self, mock_get_client):
+    def test_parallel_bucket_checking(self):
         """Test parallel bucket checking performance."""
-        mock_client = AsyncMock()
-        mock_get_client.return_value.__aenter__.return_value = mock_client
+        mock_client = MagicMock()
 
         # Mock 10 buckets
         mock_client.list_buckets.return_value = {
@@ -153,26 +158,42 @@ class TestAsyncCheckerPerformance(unittest.TestCase):
             ]
         }
 
-        async def slow_check(*args, **kwargs):
-            await asyncio.sleep(0.05)
-            return False
+        def slow_check(*args, **kwargs):
+            time.sleep(0.05)
+            return {"Grants": []}
+
+        def slow_policy(*args, **kwargs):
+            from botocore.exceptions import ClientError
+            raise ClientError({"Error": {"Code": "NoSuchBucketPolicy", "Message": "No policy"}}, "GetBucketPolicy")
+
+        def slow_block(*args, **kwargs):
+            time.sleep(0.05)
+            return {
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": True,
+                    "BlockPublicPolicy": True,
+                    "IgnorePublicAcls": True,
+                    "RestrictPublicBuckets": True,
+                }
+            }
 
         mock_client.get_bucket_acl.side_effect = slow_check
-        mock_client.get_bucket_policy.side_effect = Exception("NoSuchBucketPolicy")
-        mock_client.get_public_access_block.side_effect = slow_check
+        mock_client.get_bucket_policy.side_effect = slow_policy
+        mock_client.get_public_access_block.side_effect = slow_block
 
         from guardian.checkers.s3 import S3Checker
 
-        checker = S3Checker({}, {})
+        # Pass the mocked client in
+        checker = S3Checker(clients={"s3": mock_client}, config={})
 
         # Measure async execution
         start = time.time()
         result = self.loop.run_until_complete(checker.check_async())
         async_time = time.time() - start
 
-        # With parallel execution, should be < 0.1s, not 0.5s
-        assert async_time < 0.2
-        print(f"S3 parallel check: {async_time:.2f}s (parallel) vs ~0.5s (sequential)")
+        # With parallel execution, should be < 0.25s, not 1.0s
+        assert async_time < 0.25
+        print(f"S3 parallel check: {async_time:.2f}s (parallel) vs ~1.0s (sequential)")
 
     async def async_io_operation(self, delay: float = 0.1):
         """Simulate async I/O operation."""
