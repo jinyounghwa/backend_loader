@@ -473,6 +473,69 @@ Resources:
       TreatMissingData: notBreaching
 
   # ==========================================
+  # Audit Logs API (HTTP API Gateway)
+  # ==========================================
+  AuditApiGateway:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${ProjectName}-audit-api'
+      ProtocolType: HTTP
+      Description: WebSocket Audit Logs Query API
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  AuditApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref AuditApiGateway
+      StageName: !Ref Environment
+      AutoDeploy: true
+      LoggingLevel: INFO
+      DataTraceEnabled: true
+
+  AuditApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref AuditApiGateway
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub 'arn:aws:apigatewayv2:${AWS::Region}:lambda:path/2015-03-31/functions/${GetAuditLogsFunction.Arn}/invocations'
+      PayloadFormatVersion: '2.0'
+
+  AuditApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref AuditApiGateway
+      RouteKey: 'GET /audit-logs'
+      Target: !Sub 'integrations/${AuditApiIntegration}'
+      AuthorizationType: NONE
+
+  GetAuditLogsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-get-audit-logs'
+      CodeUri: ../lambda
+      Handler: guardian/handlers/audit_api_handler.handle_get_audit_logs
+      Runtime: python3.12
+      Role: !GetAtt WebSocketLambdaRole.Arn
+      Environment:
+        Variables:
+          AUDIT_LOGS_TABLE: !Ref WebSocketAuditLogsTable
+      Tags:
+        - Key: Function
+          Value: GetAuditLogs
+
+  GetAuditLogsFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetAuditLogsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${AuditApiGateway}/*'
+
+  # ==========================================
   # Outputs
   # ==========================================
 
@@ -538,3 +601,9 @@ Outputs:
     Value: !GetAtt WebSocketAuditLogsTable.Arn
     Export:
       Name: !Sub '${ProjectName}-AuditLogsTableArn'
+
+  AuditApiEndpoint:
+    Description: Audit Logs API Endpoint
+    Value: !Sub 'https://${AuditApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/audit-logs'
+    Export:
+      Name: !Sub '${ProjectName}-AuditApiEndpoint'

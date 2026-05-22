@@ -139,3 +139,32 @@ class AuditLogger:
         except Exception as e:
             print(f"Error querying audit logs: {e}")
             return []
+
+    @staticmethod
+    def query_with_filters(
+        connection_id: str,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        event_type: Optional[str] = None
+    ) -> list:
+        """Query audit logs with filtering by time range and event type"""
+        logs = AuditLogger.query_connection_logs(connection_id)
+
+        if not logs:
+            return []
+
+        filtered_logs = logs
+
+        # Filter by start_time (ISO 8601 string comparison)
+        if start_time:
+            filtered_logs = [log for log in filtered_logs if log.get('timestamp', '') >= start_time]
+
+        # Filter by end_time (ISO 8601 string comparison)
+        if end_time:
+            filtered_logs = [log for log in filtered_logs if log.get('timestamp', '') <= end_time]
+
+        # Filter by event_type
+        if event_type:
+            filtered_logs = [log for log in filtered_logs if log.get('event_type') == event_type]
+
+        return filtered_logs
