@@ -2,6 +2,7 @@
 
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -198,8 +199,8 @@ class S3Checker(BaseChecker):
                 }
             return None
 
-        from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=min(len(buckets), 10) if buckets else 1) as executor:
+        max_workers = min(len(buckets), 10) if buckets else 1
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
             results = executor.map(_check_bucket, buckets)
 
         for res in results:

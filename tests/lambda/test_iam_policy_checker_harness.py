@@ -44,11 +44,7 @@ class TestIAMPolicyAnalyzer(unittest.TestCase):
     def test_policy_star_star_detected(self):
         """Detect Action=* and Resource=* (CRITICAL)."""
         users_paginator = Mock()
-        users_paginator.paginate.return_value = [
-            {
-                "Users": [{"UserName": "admin"}]
-            }
-        ]
+        users_paginator.paginate.return_value = [{"Users": [{"UserName": "admin"}]}]
 
         self.mock_iam.get_paginator.side_effect = lambda x: users_paginator
 
@@ -65,9 +61,7 @@ class TestIAMPolicyAnalyzer(unittest.TestCase):
         }
 
         user_policies_paginator = Mock()
-        user_policies_paginator.paginate.return_value = [
-            {"PolicyNames": ["AdminPolicy"]}
-        ]
+        user_policies_paginator.paginate.return_value = [{"PolicyNames": ["AdminPolicy"]}]
 
         original_side_effect = self.mock_iam.get_paginator.side_effect
 
@@ -87,14 +81,10 @@ class TestIAMPolicyAnalyzer(unittest.TestCase):
     def test_policy_iam_full_access(self):
         """Detect 'iam:*' permission (HIGH)."""
         users_paginator = Mock()
-        users_paginator.paginate.return_value = [
-            {"Users": [{"UserName": "dev"}]}
-        ]
+        users_paginator.paginate.return_value = [{"Users": [{"UserName": "dev"}]}]
 
         user_policies_paginator = Mock()
-        user_policies_paginator.paginate.return_value = [
-            {"PolicyNames": ["DevPolicy"]}
-        ]
+        user_policies_paginator.paginate.return_value = [{"PolicyNames": ["DevPolicy"]}]
 
         self.mock_iam.get_paginator.side_effect = lambda x: (
             user_policies_paginator if x == "list_user_policies" else users_paginator
@@ -121,14 +111,10 @@ class TestIAMPolicyAnalyzer(unittest.TestCase):
     def test_policy_ec2_full_access(self):
         """Detect 'ec2:*' permission (HIGH)."""
         users_paginator = Mock()
-        users_paginator.paginate.return_value = [
-            {"Users": [{"UserName": "ops"}]}
-        ]
+        users_paginator.paginate.return_value = [{"Users": [{"UserName": "ops"}]}]
 
         user_policies_paginator = Mock()
-        user_policies_paginator.paginate.return_value = [
-            {"PolicyNames": ["OpsPolicy"]}
-        ]
+        user_policies_paginator.paginate.return_value = [{"PolicyNames": ["OpsPolicy"]}]
 
         self.mock_iam.get_paginator.side_effect = lambda x: (
             user_policies_paginator if x == "list_user_policies" else users_paginator
@@ -154,14 +140,10 @@ class TestIAMPolicyAnalyzer(unittest.TestCase):
     def test_policy_s3_public_read(self):
         """Detect S3 GetObject with Resource: '*' (HIGH)."""
         users_paginator = Mock()
-        users_paginator.paginate.return_value = [
-            {"Users": [{"UserName": "webapp"}]}
-        ]
+        users_paginator.paginate.return_value = [{"Users": [{"UserName": "webapp"}]}]
 
         user_policies_paginator = Mock()
-        user_policies_paginator.paginate.return_value = [
-            {"PolicyNames": ["S3ReadPolicy"]}
-        ]
+        user_policies_paginator.paginate.return_value = [{"PolicyNames": ["S3ReadPolicy"]}]
 
         self.mock_iam.get_paginator.side_effect = lambda x: (
             user_policies_paginator if x == "list_user_policies" else users_paginator
@@ -187,14 +169,10 @@ class TestIAMPolicyAnalyzer(unittest.TestCase):
     def test_policy_notaction(self):
         """Detect NotAction with Deny Effect (MEDIUM)."""
         users_paginator = Mock()
-        users_paginator.paginate.return_value = [
-            {"Users": [{"UserName": "restricted"}]}
-        ]
+        users_paginator.paginate.return_value = [{"Users": [{"UserName": "restricted"}]}]
 
         user_policies_paginator = Mock()
-        user_policies_paginator.paginate.return_value = [
-            {"PolicyNames": ["DenyPolicy"]}
-        ]
+        user_policies_paginator.paginate.return_value = [{"PolicyNames": ["DenyPolicy"]}]
 
         self.mock_iam.get_paginator.side_effect = lambda x: (
             user_policies_paginator if x == "list_user_policies" else users_paginator
@@ -220,14 +198,10 @@ class TestIAMPolicyAnalyzer(unittest.TestCase):
     def test_policy_safe(self):
         """Return INFO for restrictive policies."""
         users_paginator = Mock()
-        users_paginator.paginate.return_value = [
-            {"Users": [{"UserName": "safe"}]}
-        ]
+        users_paginator.paginate.return_value = [{"Users": [{"UserName": "safe"}]}]
 
         user_policies_paginator = Mock()
-        user_policies_paginator.paginate.return_value = [
-            {"PolicyNames": ["SafePolicy"]}
-        ]
+        user_policies_paginator.paginate.return_value = [{"PolicyNames": ["SafePolicy"]}]
 
         self.mock_iam.get_paginator.side_effect = lambda x: (
             user_policies_paginator if x == "list_user_policies" else users_paginator
@@ -254,14 +228,10 @@ class TestIAMPolicyAnalyzer(unittest.TestCase):
     def test_policy_list_actions(self):
         """Handle policies with list of actions."""
         users_paginator = Mock()
-        users_paginator.paginate.return_value = [
-            {"Users": [{"UserName": "listing"}]}
-        ]
+        users_paginator.paginate.return_value = [{"Users": [{"UserName": "listing"}]}]
 
         user_policies_paginator = Mock()
-        user_policies_paginator.paginate.return_value = [
-            {"PolicyNames": ["ListPolicy"]}
-        ]
+        user_policies_paginator.paginate.return_value = [{"PolicyNames": ["ListPolicy"]}]
 
         self.mock_iam.get_paginator.side_effect = lambda x: (
             user_policies_paginator if x == "list_user_policies" else users_paginator
@@ -287,14 +257,10 @@ class TestIAMPolicyAnalyzer(unittest.TestCase):
     def test_policy_with_roles(self):
         """Analyze policies attached to roles."""
         roles_paginator = Mock()
-        roles_paginator.paginate.return_value = [
-            {"Roles": [{"RoleName": "LambdaRole"}]}
-        ]
+        roles_paginator.paginate.return_value = [{"Roles": [{"RoleName": "LambdaRole"}]}]
 
         role_policies_paginator = Mock()
-        role_policies_paginator.paginate.return_value = [
-            {"PolicyNames": ["LambdaPolicy"]}
-        ]
+        role_policies_paginator.paginate.return_value = [{"PolicyNames": ["LambdaPolicy"]}]
 
         users_paginator = Mock()
         users_paginator.paginate.return_value = [{"Users": []}]

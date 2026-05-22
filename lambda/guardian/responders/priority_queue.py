@@ -10,12 +10,7 @@ import heapq
 class PriorityNotificationQueue:
     """우선순위 기반 알림 큐"""
 
-    PRIORITY_MAP = {
-        "CRITICAL": 1,
-        "HIGH": 2,
-        "MEDIUM": 3,
-        "LOW": 4
-    }
+    PRIORITY_MAP = {"CRITICAL": 1, "HIGH": 2, "MEDIUM": 3, "LOW": 4}
 
     def __init__(self, max_batch_size: int = 50):
         """
@@ -49,7 +44,7 @@ class PriorityNotificationQueue:
             "status": "enqueued",
             "priority": priority,
             "severity": severity,
-            "queue_size": len(self.queue)
+            "queue_size": len(self.queue),
         }
 
     def dequeue(self) -> Dict[str, Any] | None:
@@ -117,10 +112,7 @@ class PriorityNotificationQueue:
             알림 리스트
         """
         target_priority = self.PRIORITY_MAP.get(severity, 4)
-        return [
-            notif for priority, _, notif in self.queue
-            if priority == target_priority
-        ]
+        return [notif for priority, _, notif in self.queue if priority == target_priority]
 
     def get_stats(self) -> Dict[str, Any]:
         """큐 통계"""
@@ -135,7 +127,7 @@ class PriorityNotificationQueue:
             "total_dequeued": self.total_dequeued,
             "current_queue_size": len(self.queue),
             "by_severity": size_by_severity,
-            "max_batch_size": self.max_batch_size
+            "max_batch_size": self.max_batch_size,
         }
 
 

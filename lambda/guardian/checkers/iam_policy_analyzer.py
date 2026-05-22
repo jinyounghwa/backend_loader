@@ -5,6 +5,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set
 
+import boto3
 from botocore.exceptions import ClientError
 
 from guardian.checkers.base import BaseChecker, CheckResult
@@ -34,8 +35,6 @@ class IAMPolicyAnalyzer(BaseChecker):
         super().__init__(clients or {}, config or {}, account_id, credentials)
         self.iam_client = self.clients.get("iam")
         if self.iam_client is None:
-            import boto3
-
             self.iam_client = boto3.client("iam", **Config.get_boto3_kwargs())
 
     def check(self) -> CheckResult:
@@ -150,9 +149,7 @@ class IAMPolicyAnalyzer(BaseChecker):
                 entity = entity_policy["entity"]
                 policy_doc = entity_policy["policy"]
 
-                policy_findings = self._analyze_policy_document(
-                    policy_doc, entity, entity_type
-                )
+                policy_findings = self._analyze_policy_document(policy_doc, entity, entity_type)
                 for finding in policy_findings:
                     findings.append(finding)
                     severity_map.add(finding["severity"])

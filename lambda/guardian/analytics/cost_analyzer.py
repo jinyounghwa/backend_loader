@@ -16,10 +16,7 @@ class CostAnalyzer:
         self.history: List[Dict[str, Any]] = []
 
     async def generate_monthly_report(
-        self,
-        account_id: str,
-        daily_costs: List[float],
-        month: str
+        self, account_id: str, daily_costs: List[float], month: str
     ) -> Dict[str, Any]:
         """
         월별 비용 추이 분석 리포트 생성
@@ -61,10 +58,7 @@ class CostAnalyzer:
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 
-    async def _detect_cost_anomalies(
-        self,
-        daily_costs: List[float]
-    ) -> List[Dict[str, Any]]:
+    async def _detect_cost_anomalies(self, daily_costs: List[float]) -> List[Dict[str, Any]]:
         """비용 이상 감지"""
         anomalies = []
         avg = sum(daily_costs) / len(daily_costs)
@@ -73,13 +67,15 @@ class CostAnalyzer:
         for i, cost in enumerate(daily_costs):
             # 평균 + 2 표준편차 이상 = 이상
             if cost > avg + 2 * std:
-                anomalies.append({
-                    "day": i + 1,
-                    "cost": round(cost, 2),
-                    "expected": round(avg, 2),
-                    "deviation": round(cost - avg, 2),
-                    "severity": "high" if cost > avg + 3 * std else "medium",
-                })
+                anomalies.append(
+                    {
+                        "day": i + 1,
+                        "cost": round(cost, 2),
+                        "expected": round(avg, 2),
+                        "deviation": round(cost - avg, 2),
+                        "severity": "high" if cost > avg + 3 * std else "medium",
+                    }
+                )
 
         return anomalies
 
@@ -192,25 +188,25 @@ _analyzer = CostAnalyzer()
 
 
 async def generate_monthly_report(
-    account_id: str,
-    daily_costs: List[float],
-    month: str
+    account_id: str, daily_costs: List[float], month: str
 ) -> Dict[str, Any]:
     """월별 리포트 생성 (async)"""
     return await _analyzer.generate_monthly_report(account_id, daily_costs, month)
 
 
 def generate_monthly_report_sync(
-    account_id: str,
-    daily_costs: List[float],
-    month: str
+    account_id: str, daily_costs: List[float], month: str
 ) -> Dict[str, Any]:
-    """월별 리포트 생성 (sync)"""
+    """월별 리포트 생성 (sync)."""
     import asyncio
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    result = loop.run_until_complete(
-        _analyzer.generate_monthly_report(account_id, daily_costs, month)
-    )
-    loop.close()
-    return result
+
+    try:
+        asyncio.get_running_loop()
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(
+                asyncio.run, _analyzer.generate_monthly_report(account_id, daily_costs, month)
+            ).result()
+    except RuntimeError:
+        return asyncio.run(_analyzer.generate_monthly_report(account_id, daily_costs, month))

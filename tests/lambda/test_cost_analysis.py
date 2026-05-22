@@ -132,18 +132,14 @@ class TestCostAnalyzer(unittest.TestCase):
         """모듈 레벨 함수"""
         daily_costs = [10.0] * 30
 
-        result = asyncio.run(
-            generate_monthly_report("123456789", daily_costs, "2026-05")
-        )
+        result = asyncio.run(generate_monthly_report("123456789", daily_costs, "2026-05"))
 
         self.assertIsNotNone(result)
         self.assertGreater(result["total_cost"], 0)
 
     def test_empty_daily_costs(self):
         """빈 비용 데이터"""
-        result = asyncio.run(
-            self.analyzer.generate_monthly_report("123456789", [], "2026-05")
-        )
+        result = asyncio.run(self.analyzer.generate_monthly_report("123456789", [], "2026-05"))
 
         self.assertEqual(result["total_cost"], 0)
         self.assertEqual(result["trend"], "no_data")
@@ -192,7 +188,7 @@ class TestOptimizationSuggester(unittest.TestCase):
                     "cpu_utilization": 80.0,
                     "monthly_cost": 100.0,
                 },
-            ]
+            ],
         }
 
         result = asyncio.run(self.suggester.suggest_optimizations(findings))
@@ -218,7 +214,7 @@ class TestOptimizationSuggester(unittest.TestCase):
                     "cpu_utilization": 60.0,
                     "monthly_cost": 50.0,
                 },
-            ]
+            ],
         }
 
         result = asyncio.run(self.suggester.suggest_optimizations(findings))
@@ -238,7 +234,7 @@ class TestOptimizationSuggester(unittest.TestCase):
                     "cpu_utilization": 2.0,
                     "monthly_cost": 50.0,
                 },
-            ]
+            ],
         }
 
         suggestions = asyncio.run(self.suggester.suggest_optimizations(findings))
@@ -260,7 +256,7 @@ class TestOptimizationSuggester(unittest.TestCase):
                     "cpu_utilization": 2.0,
                     "monthly_cost": 50.0,
                 }
-            ]
+            ],
         }
 
         result = suggest_optimizations_sync(findings)
@@ -287,7 +283,7 @@ class TestOptimizationSuggester(unittest.TestCase):
                     "monthly_cost": 50.0 + (i * 10),
                 }
                 for i in range(3)
-            ]
+            ],
         }
 
         suggestions = asyncio.run(self.suggester.suggest_optimizations(findings))

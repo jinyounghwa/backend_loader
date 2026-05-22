@@ -3,6 +3,7 @@ WebSocket 메시지 압축 유틸리티
 gzip 기반 메시지 압축으로 대역폭 절감
 """
 
+import base64
 import gzip
 import json
 from typing import Dict, Any, Union
@@ -23,7 +24,7 @@ class WebSocketMessageCompressor:
             "total_compressed": 0,
             "total_uncompressed": 0,
             "total_original_bytes": 0,
-            "total_compressed_bytes": 0
+            "total_compressed_bytes": 0,
         }
 
     def compress_message(self, message: Dict[str, Any]) -> Dict[str, Any]:
@@ -45,8 +46,8 @@ class WebSocketMessageCompressor:
             return self._create_uncompressed_message(message)
 
         # JSON 직렬화
-        json_str = json.dumps(message, separators=(',', ':'))
-        json_bytes = json_str.encode('utf-8')
+        json_str = json.dumps(message, separators=(",", ":"))
+        json_bytes = json_str.encode("utf-8")
         original_size = len(json_bytes)
 
         # 최소 크기 미만이면 압축하지 않음
@@ -61,9 +62,7 @@ class WebSocketMessageCompressor:
         if compressed_size >= original_size * 0.9:
             return self._create_uncompressed_message(message)
 
-        # Base64 인코딩
-        import base64
-        encoded = base64.b64encode(compressed_bytes).decode('ascii')
+        encoded = base64.b64encode(compressed_bytes).decode("ascii")
 
         self.stats["total_compressed"] += 1
         self.stats["total_original_bytes"] += original_size
@@ -74,13 +73,10 @@ class WebSocketMessageCompressor:
             "data": encoded,
             "original_size": original_size,
             "compressed_size": compressed_size,
-            "ratio": round((compressed_size / original_size) * 100, 1)
+            "ratio": round((compressed_size / original_size) * 100, 1),
         }
 
-    def decompress_message(
-        self,
-        compressed_data: Union[str, bytes]
-    ) -> Dict[str, Any]:
+    def decompress_message(self, compressed_data: Union[str, bytes]) -> Dict[str, Any]:
         """
         Base64 디코딩 후 gzip 해제
 
@@ -91,17 +87,15 @@ class WebSocketMessageCompressor:
             원본 메시지 dict
         """
         try:
-            import base64
-
             # Base64 디코딩
             if isinstance(compressed_data, str):
-                compressed_data = compressed_data.encode('ascii')
+                compressed_data = compressed_data.encode("ascii")
 
             compressed_bytes = base64.b64decode(compressed_data)
 
             # gzip 해제
             json_bytes = gzip.decompress(compressed_bytes)
-            json_str = json_bytes.decode('utf-8')
+            json_str = json_bytes.decode("utf-8")
 
             # JSON 파싱
             message = json.loads(json_str)
@@ -115,21 +109,16 @@ class WebSocketMessageCompressor:
 
     def _create_uncompressed_message(self, message: Dict[str, Any]) -> Dict[str, Any]:
         """비압축 메시지 생성"""
-        json_str = json.dumps(message, separators=(',', ':'))
-        json_bytes = json_str.encode('utf-8')
+        json_str = json.dumps(message, separators=(",", ":"))
+        json_bytes = json_str.encode("utf-8")
         size = len(json_bytes)
 
-        import base64
-        encoded = base64.b64encode(json_bytes).decode('ascii')
+        encoded = base64.b64encode(json_bytes).decode("ascii")
 
         self.stats["total_uncompressed"] += 1
         self.stats["total_original_bytes"] += size
 
-        return {
-            "type": "uncompressed",
-            "data": encoded,
-            "size": size
-        }
+        return {"type": "uncompressed", "data": encoded, "size": size}
 
     def get_compression_stats(self) -> Dict[str, Any]:
         """압축 통계"""
@@ -141,10 +130,7 @@ class WebSocketMessageCompressor:
         if total_compressed > 0:
             avg_ratio = (total_compressed_bytes / total_original) * 100
 
-        total_messages = (
-            self.stats["total_compressed"] +
-            self.stats["total_uncompressed"]
-        )
+        total_messages = self.stats["total_compressed"] + self.stats["total_uncompressed"]
 
         return {
             "total_messages": total_messages,
@@ -155,14 +141,13 @@ class WebSocketMessageCompressor:
             "avg_compression_ratio": round(avg_ratio, 1),
             "total_bytes_saved": total_original - total_compressed_bytes,
             "compression_enabled": self.compression_enabled,
-            "min_size_bytes": self.min_size_bytes
+            "min_size_bytes": self.min_size_bytes,
         }
 
 
 # 글로벌 압축기 인스턴스
 _compressor = WebSocketMessageCompressor(
-    compression_enabled=True,
-    min_size_bytes=1024  # 1KB 이상만 압축
+    compression_enabled=True, min_size_bytes=1024  # 1KB 이상만 압축
 )
 
 

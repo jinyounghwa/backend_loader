@@ -5,7 +5,11 @@ AdvancedAnomalyDetector v2 정확도 및 기능 검증
 
 import unittest
 import asyncio
-from guardian.ml.anomaly_detector_v2 import AdvancedAnomalyDetector, detect_anomaly, detect_anomaly_sync
+from guardian.ml.anomaly_detector_v2 import (
+    AdvancedAnomalyDetector,
+    detect_anomaly,
+    detect_anomaly_sync,
+)
 
 
 class TestAdvancedAnomalyDetector(unittest.TestCase):

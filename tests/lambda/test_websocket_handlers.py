@@ -38,17 +38,13 @@ class TestWebSocketHandlers(unittest.TestCase):
         connection_id: str = "conn-123",
         token: str = "valid_token",
         body: dict = None,
-        route: str = "connect"
+        route: str = "connect",
     ) -> dict:
         """테스트용 Lambda 이벤트 생성"""
         event = {
-            "requestContext": {
-                "connectionId": connection_id,
-                "routeKey": route,
-                "stage": "prod"
-            },
+            "requestContext": {"connectionId": connection_id, "routeKey": route, "stage": "prod"},
             "queryStringParameters": {"token": token} if route == "connect" else None,
-            "body": json.dumps(body) if body else None
+            "body": json.dumps(body) if body else None,
         }
         return event
 
@@ -64,10 +60,7 @@ class TestWebSocketHandlers(unittest.TestCase):
 
     def test_handle_connect_missing_token(self):
         """토큰 누락"""
-        event = {
-            "requestContext": {"connectionId": "conn-123"},
-            "queryStringParameters": None
-        }
+        event = {"requestContext": {"connectionId": "conn-123"}, "queryStringParameters": None}
         result = asyncio.run(handle_connect(event, None))
 
         self.assertEqual(result["statusCode"], 401)
@@ -86,9 +79,7 @@ class TestWebSocketHandlers(unittest.TestCase):
         asyncio.run(handle_connect(connect_event, None))
 
         # 연결 해제
-        disconnect_event = {
-            "requestContext": {"connectionId": "conn-123"}
-        }
+        disconnect_event = {"requestContext": {"connectionId": "conn-123"}}
         result = asyncio.run(handle_disconnect(disconnect_event, None))
 
         self.assertEqual(result["statusCode"], 200)
@@ -104,10 +95,7 @@ class TestWebSocketHandlers(unittest.TestCase):
         # 구독 메시지
         default_event = {
             "requestContext": {"connectionId": "conn-123"},
-            "body": json.dumps({
-                "action": "subscribe",
-                "event_types": ["threat", "anomaly"]
-            })
+            "body": json.dumps({"action": "subscribe", "event_types": ["threat", "anomaly"]}),
         }
         result = asyncio.run(handle_default(default_event, None))
 
@@ -124,7 +112,7 @@ class TestWebSocketHandlers(unittest.TestCase):
         # 핑 메시지
         default_event = {
             "requestContext": {"connectionId": "conn-123"},
-            "body": json.dumps({"action": "ping"})
+            "body": json.dumps({"action": "ping"}),
         }
         result = asyncio.run(handle_default(default_event, None))
 
@@ -134,22 +122,14 @@ class TestWebSocketHandlers(unittest.TestCase):
 
     def test_handle_default_invalid_json(self):
         """유효하지 않은 JSON"""
-        default_event = {
-            "requestContext": {"connectionId": "conn-123"},
-            "body": "invalid json"
-        }
+        default_event = {"requestContext": {"connectionId": "conn-123"}, "body": "invalid json"}
         result = asyncio.run(handle_default(default_event, None))
 
         self.assertEqual(result["statusCode"], 400)
 
     def test_handle_threat_broadcast(self):
         """위협 점수 브로드캐스트"""
-        event = {
-            "body": json.dumps({
-                "threat_score": 7.5,
-                "severity": "HIGH"
-            })
-        }
+        event = {"body": json.dumps({"threat_score": 7.5, "severity": "HIGH"})}
         result = asyncio.run(handle_threat_broadcast(event, None))
 
         self.assertEqual(result["statusCode"], 200)
@@ -159,12 +139,7 @@ class TestWebSocketHandlers(unittest.TestCase):
 
     def test_handle_threat_broadcast_invalid_score(self):
         """유효하지 않은 위협 점수"""
-        event = {
-            "body": json.dumps({
-                "threat_score": 15,  # > 10
-                "severity": "HIGH"
-            })
-        }
+        event = {"body": json.dumps({"threat_score": 15, "severity": "HIGH"})}  # > 10
         result = asyncio.run(handle_threat_broadcast(event, None))
 
         self.assertEqual(result["statusCode"], 400)
@@ -177,11 +152,13 @@ class TestWebSocketHandlers(unittest.TestCase):
 
         # 이상 탐지 알림
         event = {
-            "body": json.dumps({
-                "connection_id": "conn-123",
-                "anomaly_type": "cost",
-                "details": {"daily_cost": 150.0, "threshold": 100.0}
-            })
+            "body": json.dumps(
+                {
+                    "connection_id": "conn-123",
+                    "anomaly_type": "cost",
+                    "details": {"daily_cost": 150.0, "threshold": 100.0},
+                }
+            )
         }
         result = asyncio.run(handle_anomaly_alert(event, None))
 
@@ -211,8 +188,7 @@ class TestWebSocketMessageCompression(unittest.TestCase):
 
     def setUp(self):
         self.compressor = WebSocketMessageCompressor(
-            compression_enabled=True,
-            min_size_bytes=100  # 테스트용 작은 크기
+            compression_enabled=True, min_size_bytes=100  # 테스트용 작은 크기
         )
 
     def test_compress_small_message(self):
@@ -226,35 +202,27 @@ class TestWebSocketMessageCompression(unittest.TestCase):
 
     def test_compress_large_message(self):
         """큰 메시지 압축"""
-        message = {
-            "type": "bulk_data",
-            "data": "x" * 10000  # 10KB
-        }
+        message = {"type": "bulk_data", "data": "x" * 10000}  # 10KB
 
         result = self.compressor.compress_message(message)
 
         # 큰 메시지는 압축됨
         if result["type"] == "compressed":
-            self.assertLess(
-                result["compressed_size"],
-                result["original_size"]
-            )
+            self.assertLess(result["compressed_size"], result["original_size"])
 
     def test_decompress_message(self):
         """메시지 해제"""
         original = {
             "type": "alert",
             "severity": "HIGH",
-            "message": "Critical threat detected: " + "x" * 500  # 500바이트 추가
+            "message": "Critical threat detected: " + "x" * 500,  # 500바이트 추가
         }
 
         # 압축
         compressed = self.compressor.compress_message(original)
 
         # 해제
-        decompressed = self.compressor.decompress_message(
-            compressed["data"]
-        )
+        decompressed = self.compressor.decompress_message(compressed["data"])
 
         self.assertEqual(decompressed["type"], original["type"])
         self.assertEqual(decompressed["severity"], original["severity"])
@@ -270,10 +238,7 @@ class TestWebSocketMessageCompression(unittest.TestCase):
 
     def test_compression_ratio(self):
         """압축 비율 계산"""
-        message = {
-            "type": "data",
-            "content": "A" * 5000  # 5KB 반복 데이터
-        }
+        message = {"type": "data", "content": "A" * 5000}  # 5KB 반복 데이터
 
         result = self.compressor.compress_message(message)
 
@@ -305,11 +270,7 @@ class TestWebSocketMessageCompression(unittest.TestCase):
         """압축-해제 왕복"""
         original = {
             "type": "complex",
-            "nested": {
-                "level": 1,
-                "items": [1, 2, 3, 4, 5],
-                "data": "x" * 2000
-            }
+            "nested": {"level": 1, "items": [1, 2, 3, 4, 5], "data": "x" * 2000},
         }
 
         # 압축

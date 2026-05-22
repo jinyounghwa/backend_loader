@@ -13,11 +13,7 @@ class WebSocketNotifier:
         self.connections: Dict[str, Dict[str, Any]] = {}
         self.connection_count = 0
 
-    async def connect_client(
-        self,
-        connection_id: str,
-        auth_token: str
-    ) -> Dict[str, Any]:
+    async def connect_client(self, connection_id: str, auth_token: str) -> Dict[str, Any]:
         """
         클라이언트 WebSocket 연결
 
@@ -37,14 +33,14 @@ class WebSocketNotifier:
             "auth_token": auth_token,
             "connected_at": datetime.now(timezone.utc).isoformat(),
             "subscriptions": set(),  # 구독 중인 이벤트 타입
-            "message_count": 0
+            "message_count": 0,
         }
         self.connection_count += 1
 
         return {
             "status": "connected",
             "connection_id": connection_id,
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     async def disconnect_client(self, connection_id: str) -> None:
@@ -58,11 +54,7 @@ class WebSocketNotifier:
             del self.connections[connection_id]
             self.connection_count -= 1
 
-    async def broadcast_threat_update(
-        self,
-        threat_score: float,
-        severity: str
-    ) -> Dict[str, Any]:
+    async def broadcast_threat_update(self, threat_score: float, severity: str) -> Dict[str, Any]:
         """
         모든 클라이언트에게 위협 점수 브로드캐스트
 
@@ -77,7 +69,7 @@ class WebSocketNotifier:
             "type": "threat_detected",
             "score": round(threat_score, 1),
             "severity": severity,
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         sent_count = 0
@@ -85,17 +77,10 @@ class WebSocketNotifier:
             await self._send_to_connection(conn_id, message)
             sent_count += 1
 
-        return {
-            "status": "broadcasted",
-            "recipients": sent_count,
-            "message": message
-        }
+        return {"status": "broadcasted", "recipients": sent_count, "message": message}
 
     async def send_anomaly_alert(
-        self,
-        connection_id: str,
-        anomaly_type: str,
-        details: Dict[str, Any]
+        self, connection_id: str, anomaly_type: str, details: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
         특정 클라이언트에게 이상 탐지 알림
@@ -112,7 +97,7 @@ class WebSocketNotifier:
             "type": "anomaly_detected",
             "anomaly_type": anomaly_type,
             "details": details,
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         if connection_id not in self.connections:
@@ -123,9 +108,7 @@ class WebSocketNotifier:
         return {"status": "sent", "connection_id": connection_id}
 
     async def handle_client_message(
-        self,
-        connection_id: str,
-        message_body: Dict[str, Any]
+        self, connection_id: str, message_body: Dict[str, Any]
     ) -> Dict[str, Any]:
         """
         클라이언트로부터 수신한 메시지 처리
@@ -159,11 +142,7 @@ class WebSocketNotifier:
         else:
             return {"status": "unknown_action", "action": action}
 
-    async def _send_to_connection(
-        self,
-        connection_id: str,
-        message: Dict[str, Any]
-    ) -> None:
+    async def _send_to_connection(self, connection_id: str, message: Dict[str, Any]) -> None:
         """
         특정 연결에 메시지 전송
 
@@ -191,10 +170,7 @@ class WebSocketNotifier:
 _ws_notifier = WebSocketNotifier()
 
 
-async def connect_client(
-    connection_id: str,
-    auth_token: str
-) -> Dict[str, Any]:
+async def connect_client(connection_id: str, auth_token: str) -> Dict[str, Any]:
     """클라이언트 연결 (async)"""
     return await _ws_notifier.connect_client(connection_id, auth_token)
 
@@ -204,26 +180,18 @@ async def disconnect_client(connection_id: str) -> None:
     await _ws_notifier.disconnect_client(connection_id)
 
 
-async def broadcast_threat_update(
-    threat_score: float,
-    severity: str
-) -> Dict[str, Any]:
+async def broadcast_threat_update(threat_score: float, severity: str) -> Dict[str, Any]:
     """위협 점수 브로드캐스트 (async)"""
     return await _ws_notifier.broadcast_threat_update(threat_score, severity)
 
 
 async def send_anomaly_alert(
-    connection_id: str,
-    anomaly_type: str,
-    details: Dict[str, Any]
+    connection_id: str, anomaly_type: str, details: Dict[str, Any]
 ) -> Dict[str, Any]:
     """이상 탐지 알림 전송 (async)"""
     return await _ws_notifier.send_anomaly_alert(connection_id, anomaly_type, details)
 
 
-async def handle_client_message(
-    connection_id: str,
-    message_body: Dict[str, Any]
-) -> Dict[str, Any]:
+async def handle_client_message(connection_id: str, message_body: Dict[str, Any]) -> Dict[str, Any]:
     """클라이언트 메시지 처리 (async)"""
     return await _ws_notifier.handle_client_message(connection_id, message_body)

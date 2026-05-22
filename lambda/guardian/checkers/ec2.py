@@ -1,6 +1,7 @@
 """EC2 security checker for AWS Guardian."""
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -91,9 +92,8 @@ class EC2Checker(BaseChecker):
                     logger.error("Error checking region %s: %s", region, e)
                 return None
 
-            from concurrent.futures import ThreadPoolExecutor
-            # Limit parallelism to 10 concurrent requests to prevent throttling
-            with ThreadPoolExecutor(max_workers=min(len(regions), 10)) as executor:
+            max_workers = min(len(regions), 10)
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 results = executor.map(_fetch_instances_for_region, regions)
 
             for res in results:
@@ -132,9 +132,7 @@ class EC2Checker(BaseChecker):
             }
             if unauthorized:
                 details["unauthorized_region_instances"] = unauthorized
-                anomalies.append(
-                    f"Instances in unauthorized regions: {list(unauthorized.keys())}"
-                )
+                anomalies.append(f"Instances in unauthorized regions: {list(unauthorized.keys())}")
 
         for region, instances in all_instances.items():
             for instance in instances:
@@ -147,9 +145,7 @@ class EC2Checker(BaseChecker):
                             "exposed_rules": exposed_rules,
                         }
                     )
-                    anomalies.append(
-                        f"Instance {instance['InstanceId']} has 0.0.0.0/0 exposure"
-                    )
+                    anomalies.append(f"Instance {instance['InstanceId']} has 0.0.0.0/0 exposure")
 
         new_instances = self._get_new_instances(all_instances)
         if new_instances:

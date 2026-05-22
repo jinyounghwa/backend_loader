@@ -11,6 +11,7 @@ from pathlib import Path
 
 class CloudFormationLoader(yaml.SafeLoader):
     """CloudFormation 태그 처리"""
+
     pass
 
 
@@ -24,7 +25,7 @@ def cfn_constructor(loader, tag_suffix, node):
         return {tag_suffix[1:]: loader.construct_mapping(node)}
 
 
-CloudFormationLoader.add_multi_constructor('!', cfn_constructor)
+CloudFormationLoader.add_multi_constructor("!", cfn_constructor)
 
 
 class TestCloudWatchDashboard(unittest.TestCase):
@@ -34,7 +35,7 @@ class TestCloudWatchDashboard(unittest.TestCase):
     def setUpClass(cls):
         """템플릿 로드"""
         template_path = Path(__file__).parent.parent.parent / "sam" / "template.yaml"
-        with open(template_path, 'r') as f:
+        with open(template_path, "r") as f:
             cls.template = yaml.load(f, Loader=CloudFormationLoader)
 
     def test_dashboard_resource_exists(self):
@@ -58,7 +59,7 @@ class TestCloudWatchDashboard(unittest.TestCase):
         self.assertIsInstance(name, dict)
         # 키가 'Sub' 또는 'ub' (cfn_constructor의 tag_suffix[1:]로 인해)
         keys = list(name.keys())
-        self.assertTrue(any('ub' in k or 'Sub' in k for k in keys))
+        self.assertTrue(any("ub" in k or "Sub" in k for k in keys))
 
     def test_dashboard_body_valid_json(self):
         """Dashboard Body JSON 문법 검증"""
@@ -101,7 +102,7 @@ class TestCloudWatchAlarms(unittest.TestCase):
     def setUpClass(cls):
         """템플릿 로드"""
         template_path = Path(__file__).parent.parent.parent / "sam" / "template.yaml"
-        with open(template_path, 'r') as f:
+        with open(template_path, "r") as f:
             cls.template = yaml.load(f, Loader=CloudFormationLoader)
 
     def test_connection_error_alarm_exists(self):
@@ -171,7 +172,7 @@ class TestCloudWatchAlarms(unittest.TestCase):
             self.assertIsInstance(action, dict)
             # CloudFormationLoader는 'Ref'를 'ef'로 파싱
             keys = list(action.keys())
-            self.assertTrue(any('Ref' in k or 'ef' in k for k in keys))
+            self.assertTrue(any("Ref" in k or "ef" in k for k in keys))
             # WebSocketAlertsTopic 참조 확인
             action_value = list(action.values())[0]
             self.assertEqual(action_value, "WebSocketAlertsTopic")
@@ -212,7 +213,7 @@ class TestSNSTopic(unittest.TestCase):
     def setUpClass(cls):
         """템플릿 로드"""
         template_path = Path(__file__).parent.parent.parent / "sam" / "template.yaml"
-        with open(template_path, 'r') as f:
+        with open(template_path, "r") as f:
             cls.template = yaml.load(f, Loader=CloudFormationLoader)
 
     def test_sns_topic_exists(self):
@@ -233,7 +234,7 @@ class TestSNSTopic(unittest.TestCase):
         # !Sub 문법 확인
         self.assertIsInstance(name, dict)
         keys = list(name.keys())
-        self.assertTrue(any('ub' in k or 'Sub' in k for k in keys))
+        self.assertTrue(any("ub" in k or "Sub" in k for k in keys))
 
     def test_sns_topic_display_name(self):
         """SNS Topic DisplayName 설정"""
@@ -250,7 +251,7 @@ class TestCloudWatchMetricsIAM(unittest.TestCase):
     def setUpClass(cls):
         """템플릿 로드"""
         template_path = Path(__file__).parent.parent.parent / "sam" / "template.yaml"
-        with open(template_path, 'r') as f:
+        with open(template_path, "r") as f:
             cls.template = yaml.load(f, Loader=CloudFormationLoader)
 
     def test_cloudwatch_metrics_iam_policy(self):
@@ -320,7 +321,7 @@ class TestCloudWatchOutputs(unittest.TestCase):
     def setUpClass(cls):
         """템플릿 로드"""
         template_path = Path(__file__).parent.parent.parent / "sam" / "template.yaml"
-        with open(template_path, 'r') as f:
+        with open(template_path, "r") as f:
             cls.template = yaml.load(f, Loader=CloudFormationLoader)
 
     def test_dashboard_url_output(self):
@@ -356,7 +357,7 @@ class TestCloudWatchOutputs(unittest.TestCase):
             # !Sub 문법 확인
             self.assertIsInstance(export, dict)
             keys = list(export.keys())
-            self.assertTrue(any('ub' in k or 'Sub' in k for k in keys))
+            self.assertTrue(any("ub" in k or "Sub" in k for k in keys))
 
 
 if __name__ == "__main__":

@@ -25,7 +25,10 @@ class TestCostCheckerSync(unittest.TestCase):
         mock_ce = MagicMock()
         mock_ce.get_cost_and_usage.return_value = {
             "ResultsByTime": [
-                {"TimePeriod": {"Start": "2024-01-01"}, "Total": {"UnblendedCost": {"Amount": "5.00"}}}
+                {
+                    "TimePeriod": {"Start": "2024-01-01"},
+                    "Total": {"UnblendedCost": {"Amount": "5.00"}},
+                }
             ]
         }
 
@@ -41,21 +44,29 @@ class TestCostCheckerSync(unittest.TestCase):
         # CostChecker calls get_cost_and_usage 3 times: today, yesterday, monthly
         high_cost_response = {
             "ResultsByTime": [
-                {"TimePeriod": {"Start": "2024-01-01"}, "Total": {"UnblendedCost": {"Amount": "150.00"}}}
+                {
+                    "TimePeriod": {"Start": "2024-01-01"},
+                    "Total": {"UnblendedCost": {"Amount": "150.00"}},
+                }
             ]
         }
         monthly_cost_response = {
             "ResultsByTime": [
-                {"TimePeriod": {"Start": "2024-01-01"}, "Total": {"UnblendedCost": {"Amount": "4500.00"}}}
+                {
+                    "TimePeriod": {"Start": "2024-01-01"},
+                    "Total": {"UnblendedCost": {"Amount": "4500.00"}},
+                }
             ]
         }
         mock_ce.get_cost_and_usage.side_effect = [
-            high_cost_response,   # today
-            high_cost_response,   # yesterday
+            high_cost_response,  # today
+            high_cost_response,  # yesterday
             monthly_cost_response,  # monthly
         ]
 
-        checker = CostChecker(clients={"ce": mock_ce, "ssm": MagicMock()}, config={"cost_threshold": 100})
+        checker = CostChecker(
+            clients={"ce": mock_ce, "ssm": MagicMock()}, config={"cost_threshold": 100}
+        )
         result = checker.check()
 
         self.assertEqual(result.severity, "HIGH")
@@ -137,7 +148,10 @@ class TestS3CheckerSync(unittest.TestCase):
         mock_s3 = MagicMock()
         mock_s3.list_buckets.return_value = {
             "Buckets": [
-                {"Name": "secure-bucket", "CreationDate": datetime.now(timezone.utc) - timedelta(days=2)}
+                {
+                    "Name": "secure-bucket",
+                    "CreationDate": datetime.now(timezone.utc) - timedelta(days=2),
+                }
             ]
         }
         mock_s3.get_bucket_acl.return_value = {"Grants": []}
@@ -165,7 +179,10 @@ class TestS3CheckerSync(unittest.TestCase):
         mock_s3 = MagicMock()
         mock_s3.list_buckets.return_value = {
             "Buckets": [
-                {"Name": "public-bucket", "CreationDate": datetime.now(timezone.utc) - timedelta(days=1)}
+                {
+                    "Name": "public-bucket",
+                    "CreationDate": datetime.now(timezone.utc) - timedelta(days=1),
+                }
             ]
         }
         mock_s3.get_bucket_acl.return_value = {
@@ -221,10 +238,10 @@ class TestCloudTrailCheckerSync(unittest.TestCase):
         # First source returns the event, rest return empty
         mock_paginator.paginate.side_effect = [
             [{"Events": [event]}],  # iam.amazonaws.com
-            [{"Events": []}],       # ec2.amazonaws.com
-            [{"Events": []}],       # s3.amazonaws.com
-            [{"Events": []}],       # dynamodb.amazonaws.com
-            [{"Events": []}],       # rds.amazonaws.com
+            [{"Events": []}],  # ec2.amazonaws.com
+            [{"Events": []}],  # s3.amazonaws.com
+            [{"Events": []}],  # dynamodb.amazonaws.com
+            [{"Events": []}],  # rds.amazonaws.com
         ]
         mock_ct.get_paginator.return_value = mock_paginator
 

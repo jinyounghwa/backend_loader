@@ -341,49 +341,75 @@ class TelegramBotListener:
             return COMMANDS[text], text
 
         if text.startswith("/"):
-            parts = text.split()
-            command = parts[0].lstrip("/")
-            args = " ".join(parts[1:]) if len(parts) > 1 else None
-
-            if command == "status":
-                return get_status, "/status"
-            elif command == "instances":
-                return get_instances, "/instances"
-            elif command == "stop" and args:
-                return lambda: stop_instance(args), f"/stop {args}"
-            elif command == "threshold" and args:
-                return lambda: set_threshold(args), f"/threshold {args}"
-            elif command == "history":
-                try:
-                    hours = int(args) if args else 24
-                    hours = max(1, min(hours, MAX_HISTORY_HOURS))
-                    return lambda: get_history(hours), f"/history {hours}"
-                except ValueError:
-                    return lambda: get_history(), "/history"
-            # Sprint 9: New advanced commands
-            elif command == "remediate" and args:
-                return lambda: remediate_finding(args), f"/remediate {args}"
-            elif command == "export":
-                format_match = re.search(r"\b(csv|pdf|json)\b", text)
-                days_match = re.search(r"--days\s+(\d+)", text)
-                severity_match = re.search(r"--severity\s+(\w+)", text)
-
-                fmt = format_match.group(1) if format_match else "csv"
-                days = int(days_match.group(1)) if days_match else 7
-                days = max(1, min(days, MAX_EXPORT_DAYS))
-                severity = severity_match.group(1).lower() if severity_match else None
-                if severity and severity not in ALLOWED_SEVERITIES:
-                    severity = None
-
-                return lambda: export_events(fmt, days, severity), f"/export {fmt} --days {days}"
-            elif command == "help":
-                return self._show_help, "/help"
+            return self._parse_slash_command(text)
 
         for keyword, handler in COMMANDS.items():
             if keyword in text:
                 return handler, keyword
 
         return None
+
+    def _parse_slash_command(self, text: str):
+        """Parse /command style messages and return (handler, display_text)."""
+        parts = text.split()
+        command = parts[0].lstrip("/")
+        args = " ".join(parts[1:]) if len(parts) > 1 else None
+
+        dispatch = {
+            "status": (lambda: get_status(), "/status"),
+            "instances": (lambda: get_instances(), "/instances"),
+            "help": (self._show_help, "/help"),
+        }
+
+        if command in dispatch:
+            handler, label = dispatch[command]
+            return handler, label
+
+        if command == "stop" and args:
+            return lambda: stop_instance(args), f"/stop {args}"
+
+        if command == "threshold" and args:
+            return lambda: set_threshold(args), f"/threshold {args}"
+
+        if command == "history":
+            return self._build_history_handler(args), f"/history {args or 24}"
+
+        if command == "remediate" and args:
+            return lambda: remediate_finding(args), f"/remediate {args}"
+
+        if command == "export":
+            fmt, days, severity = self._parse_export_args(text)
+            return (
+                lambda: export_events(fmt, days, severity),
+                f"/export {fmt} --days {days}",
+            )
+
+        return None
+
+    @staticmethod
+    def _build_history_handler(args):
+        """Create a handler closure for /history."""
+        try:
+            hours = int(args) if args else 24
+            hours = max(1, min(hours, MAX_HISTORY_HOURS))
+        except (ValueError, TypeError):
+            hours = 24
+        return lambda: get_history(hours)
+
+    @staticmethod
+    def _parse_export_args(text: str):
+        """Extract format, days, severity from /export command text."""
+        format_match = re.search(r"\b(csv|pdf|json)\b", text)
+        days_match = re.search(r"--days\s+(\d+)", text)
+        severity_match = re.search(r"--severity\s+(\w+)", text)
+
+        fmt = format_match.group(1) if format_match else "csv"
+        days = int(days_match.group(1)) if days_match else 7
+        days = max(1, min(days, MAX_EXPORT_DAYS))
+        severity = severity_match.group(1).lower() if severity_match else None
+        if severity and severity not in ALLOWED_SEVERITIES:
+            severity = None
+        return fmt, days, severity
 
     def _show_help(self) -> dict:
         help_text = """
@@ -437,107 +463,39 @@ class TelegramBotListener:
             self._format_response(result, command_text)
         except Exception as e:
             logger.error("Command error for '%s': %s", command_text, e)
-            self.telegram.send_message(f"❌ <b>명령 실패</b>\n명령: {command_text}\n오류: 내부 처리 오류")
+            self.telegram.send_message(
+                f"❌ <b>명령 실패</b>\n명령: {command_text}\n오류: 내부 처리 오류"
+            )
 
     def _format_response(self, result: dict, command_text: str):
+        """Route the response dict to the appropriate formatter."""
         if "error" in result:
             self.telegram.send_message(f"❌ <b>오류</b>\n{result['error']}")
             return
 
+        # Dispatch table keyed by a recognizable field in the result
         if "steps" in result:
-            lines = [
-                "✅ <b>자동 수정 완료</b>",
-                f"📋 명령: {command_text}",
-                f"🕐 시간: {result['timestamp'][:10]}",
-                "",
-                "<b>실행 내역:</b>",
-            ]
-
-            for step in result.get("steps", []):
-                status_icon = (
-                    "✅"
-                    if step["status"] == "done"
-                    else "🔍" if step["status"] == "analyzed" else "❌"
-                )
-                lines.append(f"{status_icon} {step['name']}")
-                lines.append(f"   └ {step['detail']}")
-
-            lines.append("")
-            lines.append("<b>요약:</b>")
-            lines.append(result.get("summary", "완료"))
-
-            self.telegram.send_message("\n".join(lines))
-
+            self._format_remediation_steps(result, command_text)
         elif "ec2_running" in result:
-            threshold_icon = "🟢" if result.get("today_cost", 0) < result["threshold"] else "🔴"
-            lines = [
-                "<b>📊 현재 상태</b>",
-                "━━━━━━━━━━━━━━━━━━━",
-                f"🖥️  EC2: {result['ec2_running']}개 실행 중",
-                f"🪣 S3: {result['s3_buckets']}개 버킷",
-                f"{threshold_icon} 임계값: ${result['threshold']:.2f}",
-                "━━━━━━━━━━━━━━━━━━━",
-            ]
-            self.telegram.send_message("\n".join(lines))
-
+            self._format_status(result)
         elif "instances" in result and result.get("count", 0) > 0:
-            lines = [
-                f"<b>🖥️  실행 중인 인스턴스 ({result['count']})</b>",
-                "━━━━━━━━━━━━━━━━━━━",
-            ]
-            for inst in result["instances"][:10]:
-                lines.append(f"• <code>{inst['instance_id']}</code>")
-                lines.append(f"  타입: {inst['instance_type']} | 상태: {inst['state']}")
-            if result["count"] > 10:
-                lines.append(f"\n... 외 {result['count'] - 10}개")
-            lines.append("━━━━━━━━━━━━━━━━━━━")
-            self.telegram.send_message("\n".join(lines))
+            self._format_instance_list(result)
         elif "instances" in result:
             self.telegram.send_message("✅ 실행 중인 인스턴스가 없습니다.")
-
         elif result.get("action") == "stop_instance":
             self.telegram.send_message(
                 f"✅ <b>인스턴스 중지</b>\nID: <code>{result['instance_id']}</code>\n상태: {result['status']}"
             )
-
         elif result.get("action") == "set_threshold":
             self.telegram.send_message(
                 f"✅ <b>임계값 변경</b>\n새 임계값: ${result['new_threshold']:.2f}"
             )
-
         elif "events" in result and result.get("count", 0) > 0:
-            lines = [
-                f"<b>📜 최근 이벤트 ({result['count']})</b> (최근 {result['hours']}시간)",
-                "━━━━━━━━━━━━━━━━━━━",
-            ]
-            for event in result["events"][:10]:
-                lines.append(
-                    f"• {event.get('check_type', 'unknown')}: {event.get('status', 'N/A')}"
-                )
-            if result["count"] > 10:
-                lines.append(f"\n... 외 {result['count'] - 10}개")
-            lines.append("━━━━━━━━━━━━━━━━━━━")
-            self.telegram.send_message("\n".join(lines))
+            self._format_event_list(result)
         elif "events" in result:
             self.telegram.send_message(f"✅ 최근 {result.get('hours', 24)}시간 이벤트가 없습니다.")
-
-        # Sprint 9: Advanced commands
         elif result.get("action") == "remediate":
-            status = result.get("status", "error")
-            if status == "in_progress":
-                self.telegram.send_message(
-                    f"⏳ <b>대응 진행 중</b>\nFinding: {result['finding_id']}\n{result['message']}"
-                )
-            elif status == "completed":
-                self.telegram.send_message(
-                    f"✅ <b>대응 완료</b>\nFinding: {result['finding_id']}\n{result['message']}"
-                )
-            else:
-                msg = result.get("message", "성공")
-                self.telegram.send_message(
-                    f"✅ <b>대응 실행</b>\nFinding: {result['finding_id']}\n{msg}"
-                )
-
+            self._format_remediate_action(result)
         elif result.get("action") == "export":
             self.telegram.send_message(
                 f"✅ <b>보고서 생성</b>\n"
@@ -546,6 +504,78 @@ class TelegramBotListener:
                 f"파일: {result['file_path']}\n"
                 f"크기: {result['size_bytes'] / 1024:.1f} KB"
             )
+
+    # ------------------------------------------------------------------
+    # Response formatters (extracted from the monolithic _format_response)
+    # ------------------------------------------------------------------
+
+    def _format_remediation_steps(self, result: dict, command_text: str):
+        lines = [
+            "✅ <b>자동 수정 완료</b>",
+            f"📋 명령: {command_text}",
+            f"🕐 시간: {result['timestamp'][:10]}",
+            "",
+            "<b>실행 내역:</b>",
+        ]
+        for step in result.get("steps", []):
+            icon = (
+                "✅" if step["status"] == "done" else "🔍" if step["status"] == "analyzed" else "❌"
+            )
+            lines.append(f"{icon} {step['name']}")
+            lines.append(f"   └ {step['detail']}")
+        lines.append("")
+        lines.append("<b>요약:</b>")
+        lines.append(result.get("summary", "완료"))
+        self.telegram.send_message("\n".join(lines))
+
+    def _format_status(self, result: dict):
+        icon = "🟢" if result.get("today_cost", 0) < result["threshold"] else "🔴"
+        lines = [
+            "<b>📊 현재 상태</b>",
+            "━━━━━━━━━━━━━━━━━━━",
+            f"🖥️  EC2: {result['ec2_running']}개 실행 중",
+            f"🪣 S3: {result['s3_buckets']}개 버킷",
+            f"{icon} 임계값: ${result['threshold']:.2f}",
+            "━━━━━━━━━━━━━━━━━━━",
+        ]
+        self.telegram.send_message("\n".join(lines))
+
+    def _format_instance_list(self, result: dict):
+        lines = [
+            f"<b>🖥️  실행 중인 인스턴스 ({result['count']})</b>",
+            "━━━━━━━━━━━━━━━━━━━",
+        ]
+        for inst in result["instances"][:10]:
+            lines.append(f"• <code>{inst['instance_id']}</code>")
+            lines.append(f"  타입: {inst['instance_type']} | 상태: {inst['state']}")
+        if result["count"] > 10:
+            lines.append(f"\n... 외 {result['count'] - 10}개")
+        lines.append("━━━━━━━━━━━━━━━━━━━")
+        self.telegram.send_message("\n".join(lines))
+
+    def _format_event_list(self, result: dict):
+        lines = [
+            f"<b>📜 최근 이벤트 ({result['count']})</b> (최근 {result['hours']}시간)",
+            "━━━━━━━━━━━━━━━━━━━",
+        ]
+        for event in result["events"][:10]:
+            lines.append(f"• {event.get('check_type', 'unknown')}: {event.get('status', 'N/A')}")
+        if result["count"] > 10:
+            lines.append(f"\n... 외 {result['count'] - 10}개")
+        lines.append("━━━━━━━━━━━━━━━━━━━")
+        self.telegram.send_message("\n".join(lines))
+
+    def _format_remediate_action(self, result: dict):
+        status = result.get("status", "error")
+        finding_id = result["finding_id"]
+        msg = result.get("message", "성공")
+
+        if status == "in_progress":
+            self.telegram.send_message(f"⏳ <b>대응 진행 중</b>\nFinding: {finding_id}\n{msg}")
+        elif status == "completed":
+            self.telegram.send_message(f"✅ <b>대응 완료</b>\nFinding: {finding_id}\n{msg}")
+        else:
+            self.telegram.send_message(f"✅ <b>대응 실행</b>\nFinding: {finding_id}\n{msg}")
 
     def run(self):
         logger.info("AWS Guardian Telegram Bot 시작")

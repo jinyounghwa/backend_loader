@@ -179,9 +179,7 @@ class TestS3CheckerLocalStack(unittest.TestCase):
         mock_get_client.return_value.__aenter__.return_value = mock_client
 
         mock_client.list_buckets.return_value = {
-            "Buckets": [
-                {"Name": "public-test-bucket", "CreationDate": datetime.now(timezone.utc)}
-            ]
+            "Buckets": [{"Name": "public-test-bucket", "CreationDate": datetime.now(timezone.utc)}]
         }
         mock_client.get_bucket_acl.return_value = {
             "Grants": [
@@ -210,9 +208,7 @@ class TestS3CheckerLocalStack(unittest.TestCase):
         mock_get_client.return_value.__aenter__.return_value = mock_client
 
         mock_client.list_buckets.return_value = {
-            "Buckets": [
-                {"Name": "secure-test-bucket", "CreationDate": datetime.now(timezone.utc)}
-            ]
+            "Buckets": [{"Name": "secure-test-bucket", "CreationDate": datetime.now(timezone.utc)}]
         }
         mock_client.get_bucket_acl.return_value = {"Grants": []}
         mock_client.get_bucket_policy.side_effect = Exception("NoSuchBucketPolicy")
@@ -256,9 +252,7 @@ class TestMultiCheckerIntegration(unittest.TestCase):
     @patch("guardian.checkers.cost.AWSClientProvider.get_async_client")
     @patch("guardian.checkers.ec2.AWSClientProvider.get_async_client")
     @patch("guardian.checkers.s3.AWSClientProvider.get_async_client")
-    def test_run_all_checkers_concurrently(
-        self, mock_s3_client, mock_ec2_client, mock_ce_client
-    ):
+    def test_run_all_checkers_concurrently(self, mock_s3_client, mock_ec2_client, mock_ce_client):
         """Test running multiple checkers concurrently."""
         # Setup mock clients
         cost_client = AsyncMock()

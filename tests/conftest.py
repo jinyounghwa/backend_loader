@@ -38,6 +38,7 @@ def _reset_config_cache():
     """Reset Config and AWSClientProvider caches between tests."""
     from guardian.aws_client_provider import AWSClientProvider
     from guardian.config import Config
+
     yield
     Config.reset_cache()
     AWSClientProvider.clear_cache()

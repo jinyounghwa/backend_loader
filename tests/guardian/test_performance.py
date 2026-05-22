@@ -122,13 +122,17 @@ class TestAsyncCheckerPerformance(unittest.TestCase):
         # Simulate 3 regions with response time
         def slow_operation(*args, **kwargs):
             time.sleep(0.1)
-            return {
-                "Regions": [
-                    {"RegionName": "us-east-1"},
-                    {"RegionName": "us-west-2"},
-                    {"RegionName": "eu-west-1"},
-                ]
-            } if "describe_regions" in str(args) else {"Reservations": []}
+            return (
+                {
+                    "Regions": [
+                        {"RegionName": "us-east-1"},
+                        {"RegionName": "us-west-2"},
+                        {"RegionName": "eu-west-1"},
+                    ]
+                }
+                if "describe_regions" in str(args)
+                else {"Reservations": []}
+            )
 
         mock_client.describe_regions.side_effect = slow_operation
         mock_client.describe_instances.side_effect = slow_operation
@@ -153,7 +157,12 @@ class TestAsyncCheckerPerformance(unittest.TestCase):
         # Mock 10 buckets
         mock_client.list_buckets.return_value = {
             "Buckets": [
-                {"Name": f"bucket-{i}", "CreationDate": __import__("datetime").datetime.now(__import__("datetime").timezone.utc)}
+                {
+                    "Name": f"bucket-{i}",
+                    "CreationDate": __import__("datetime").datetime.now(
+                        __import__("datetime").timezone.utc
+                    ),
+                }
                 for i in range(10)
             ]
         }
@@ -164,7 +173,10 @@ class TestAsyncCheckerPerformance(unittest.TestCase):
 
         def slow_policy(*args, **kwargs):
             from botocore.exceptions import ClientError
-            raise ClientError({"Error": {"Code": "NoSuchBucketPolicy", "Message": "No policy"}}, "GetBucketPolicy")
+
+            raise ClientError(
+                {"Error": {"Code": "NoSuchBucketPolicy", "Message": "No policy"}}, "GetBucketPolicy"
+            )
 
         def slow_block(*args, **kwargs):
             time.sleep(0.05)
@@ -202,6 +214,7 @@ class TestAsyncCheckerPerformance(unittest.TestCase):
 
     def test_concurrent_async_operations(self):
         """Test concurrent async operation execution."""
+
         async def run_concurrent():
             # 10 concurrent operations with 0.1s each
             tasks = [self.async_io_operation(0.1) for _ in range(10)]
@@ -301,6 +314,7 @@ class TestLoadTesting(unittest.TestCase):
 
     def test_concurrent_checker_execution(self):
         """Test running many checkers concurrently."""
+
         async def run_load():
             # Simulate 20 concurrent checker executions
             tasks = [self.async_checker_workload(0.05) for _ in range(20)]

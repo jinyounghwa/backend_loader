@@ -10,6 +10,7 @@ from pathlib import Path
 
 class CloudFormationLoader(yaml.SafeLoader):
     """CloudFormation 태그 처리"""
+
     pass
 
 
@@ -23,7 +24,7 @@ def cfn_constructor(loader, tag_suffix, node):
         return {tag_suffix[1:]: loader.construct_mapping(node)}
 
 
-CloudFormationLoader.add_multi_constructor('!', cfn_constructor)
+CloudFormationLoader.add_multi_constructor("!", cfn_constructor)
 
 
 class TestAuditApiGateway(unittest.TestCase):
@@ -33,7 +34,7 @@ class TestAuditApiGateway(unittest.TestCase):
     def setUpClass(cls):
         """템플릿 로드"""
         template_path = Path(__file__).parent.parent.parent / "sam" / "template.yaml"
-        with open(template_path, 'r') as f:
+        with open(template_path, "r") as f:
             cls.template = yaml.load(f, Loader=CloudFormationLoader)
 
     def test_audit_api_gateway_exists(self):
@@ -54,7 +55,7 @@ class TestAuditApiGateway(unittest.TestCase):
         # !Sub 문법 확인
         self.assertIsInstance(name, dict)
         keys = list(name.keys())
-        self.assertTrue(any('ub' in k or 'Sub' in k for k in keys))
+        self.assertTrue(any("ub" in k or "Sub" in k for k in keys))
 
     def test_audit_api_stage(self):
         """API Stage 자동 배포 설정"""
@@ -73,7 +74,7 @@ class TestAuditApiRoute(unittest.TestCase):
     def setUpClass(cls):
         """템플릿 로드"""
         template_path = Path(__file__).parent.parent.parent / "sam" / "template.yaml"
-        with open(template_path, 'r') as f:
+        with open(template_path, "r") as f:
             cls.template = yaml.load(f, Loader=CloudFormationLoader)
 
     def test_audit_api_integration_exists(self):
@@ -115,7 +116,7 @@ class TestGetAuditLogsFunction(unittest.TestCase):
     def setUpClass(cls):
         """템플릿 로드"""
         template_path = Path(__file__).parent.parent.parent / "sam" / "template.yaml"
-        with open(template_path, 'r') as f:
+        with open(template_path, "r") as f:
             cls.template = yaml.load(f, Loader=CloudFormationLoader)
 
     def test_get_audit_logs_function_exists(self):
@@ -151,7 +152,7 @@ class TestAuditApiPermission(unittest.TestCase):
     def setUpClass(cls):
         """템플릿 로드"""
         template_path = Path(__file__).parent.parent.parent / "sam" / "template.yaml"
-        with open(template_path, 'r') as f:
+        with open(template_path, "r") as f:
             cls.template = yaml.load(f, Loader=CloudFormationLoader)
 
     def test_get_audit_logs_function_permission_exists(self):
@@ -180,7 +181,7 @@ class TestAuditApiPermission(unittest.TestCase):
         self.assertIsInstance(source_arn, dict)
         # !Sub 참조 확인
         keys = list(source_arn.keys())
-        self.assertTrue(any('ub' in k or 'Sub' in k for k in keys))
+        self.assertTrue(any("ub" in k or "Sub" in k for k in keys))
 
 
 class TestAuditApiOutputs(unittest.TestCase):
@@ -190,7 +191,7 @@ class TestAuditApiOutputs(unittest.TestCase):
     def setUpClass(cls):
         """템플릿 로드"""
         template_path = Path(__file__).parent.parent.parent / "sam" / "template.yaml"
-        with open(template_path, 'r') as f:
+        with open(template_path, "r") as f:
             cls.template = yaml.load(f, Loader=CloudFormationLoader)
 
     def test_audit_api_endpoint_output_exists(self):
@@ -213,7 +214,7 @@ class TestAuditApiOutputs(unittest.TestCase):
         # !Sub 형식 확인
         self.assertIsInstance(value, dict)
         keys = list(value.keys())
-        self.assertTrue(any('ub' in k or 'Sub' in k for k in keys))
+        self.assertTrue(any("ub" in k or "Sub" in k for k in keys))
 
     def test_audit_api_endpoint_export(self):
         """Export 이름이 올바른 형식"""
@@ -223,7 +224,7 @@ class TestAuditApiOutputs(unittest.TestCase):
         export = output["Export"]["Name"]
         self.assertIsInstance(export, dict)
         keys = list(export.keys())
-        self.assertTrue(any('ub' in k or 'Sub' in k for k in keys))
+        self.assertTrue(any("ub" in k or "Sub" in k for k in keys))
 
 
 class TestAuditApiIntegration(unittest.TestCase):
@@ -233,7 +234,7 @@ class TestAuditApiIntegration(unittest.TestCase):
     def setUpClass(cls):
         """템플릿 로드"""
         template_path = Path(__file__).parent.parent.parent / "sam" / "template.yaml"
-        with open(template_path, 'r') as f:
+        with open(template_path, "r") as f:
             cls.template = yaml.load(f, Loader=CloudFormationLoader)
 
     def test_integration_payload_format(self):
@@ -251,7 +252,7 @@ class TestAuditApiIntegration(unittest.TestCase):
         uri = integration["Properties"]["IntegrationUri"]
         self.assertIsInstance(uri, dict)
         keys = list(uri.keys())
-        self.assertTrue(any('ub' in k or 'Sub' in k for k in keys))
+        self.assertTrue(any("ub" in k or "Sub" in k for k in keys))
 
 
 if __name__ == "__main__":

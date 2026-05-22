@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+import boto3
 from botocore.exceptions import ClientError
 
 from guardian.checkers.base import BaseChecker, CheckResult
@@ -25,8 +26,6 @@ class RDSChecker(BaseChecker):
         super().__init__(clients or {}, config or {}, account_id, credentials)
         self.rds_client = self.clients.get("rds")
         if self.rds_client is None:
-            import boto3
-
             self.rds_client = boto3.client("rds", **Config.get_boto3_kwargs())
 
     def check(self) -> CheckResult:
@@ -73,17 +72,13 @@ class RDSChecker(BaseChecker):
 
             # Check 1: Public accessibility
             if instance.get("PubliclyAccessible", False):
-                anomalies.append(
-                    f"RDS instance {db_id} ({instance_type}) is publicly accessible"
-                )
+                anomalies.append(f"RDS instance {db_id} ({instance_type}) is publicly accessible")
                 details["publicly_accessible"].append(db_id)
                 details["is_anomaly"] = True
 
             # Check 2: Storage encryption
             if not instance.get("StorageEncrypted", False):
-                anomalies.append(
-                    f"RDS instance {db_id} ({instance_type}) has encryption disabled"
-                )
+                anomalies.append(f"RDS instance {db_id} ({instance_type}) has encryption disabled")
                 details["unencrypted"].append(db_id)
                 details["is_anomaly"] = True
 
@@ -97,9 +92,7 @@ class RDSChecker(BaseChecker):
 
             # Check 4: IAM authentication
             if not instance.get("IAMDatabaseAuthenticationEnabled", False):
-                anomalies.append(
-                    f"RDS instance {db_id} ({instance_type}) has IAM auth disabled"
-                )
+                anomalies.append(f"RDS instance {db_id} ({instance_type}) has IAM auth disabled")
                 details["iam_auth_disabled"].append(db_id)
 
             # Check 5: CloudWatch Logs
@@ -120,9 +113,7 @@ class RDSChecker(BaseChecker):
 
         # Determine overall severity
         critical_count = len(details["publicly_accessible"])
-        high_count = (
-            len(details["unencrypted"]) + len(details["iam_auth_disabled"])
-        )
+        high_count = len(details["unencrypted"]) + len(details["iam_auth_disabled"])
 
         if critical_count > 0:
             severity = "HIGH"

@@ -1,10 +1,12 @@
-"""DynamoDB storage for AWS Guardian"""
+"""DynamoDB storage for AWS Guardian."""
 
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
+
+from boto3.dynamodb.conditions import Attr, Key
 
 from guardian.aws_client_provider import AWSClientProvider
 from guardian.config import Config
@@ -82,27 +84,24 @@ class DynamoDBStorage:
 
     def get_recent_events(self, hours: int = 24, event_type: Optional[str] = None) -> List[Dict]:  # type: ignore
         try:
-            from boto3.dynamodb.conditions import Key
-
             cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
 
             if event_type:
-                response = self.table.query(
-                    IndexName="TypeTimestampIndex",
-                    KeyConditionExpression=Key("event_type").eq(event_type)
-                    & Key("timestamp").gt(cutoff_time.isoformat()),
-                    ScanIndexForward=False,
-                    Limit=100,
+                index, pk_name, pk_val = (
+                    "TypeTimestampIndex",
+                    "event_type",
+                    event_type,
                 )
             else:
-                response = self.table.query(
-                    IndexName="AllEventsIndex",
-                    KeyConditionExpression=Key("gsi_pk").eq("EVENT")
-                    & Key("timestamp").gt(cutoff_time.isoformat()),
-                    ScanIndexForward=False,
-                    Limit=100,
-                )
+                index, pk_name, pk_val = "AllEventsIndex", "gsi_pk", "EVENT"
 
+            response = self.table.query(
+                IndexName=index,
+                KeyConditionExpression=Key(pk_name).eq(pk_val)
+                & Key("timestamp").gt(cutoff_time.isoformat()),
+                ScanIndexForward=False,
+                Limit=100,
+            )
             return response.get("Items", [])
         except Exception as e:
             logger.error("Error getting recent events: %s", e)
@@ -110,8 +109,6 @@ class DynamoDBStorage:
 
     def get_events_by_severity(self, severity: str, hours: int = 24) -> List[Dict]:
         try:
-            from boto3.dynamodb.conditions import Key
-
             cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
 
             response = self.table.query(
@@ -121,7 +118,6 @@ class DynamoDBStorage:
                 ScanIndexForward=False,
                 Limit=100,
             )
-
             return response.get("Items", [])
         except Exception as e:
             logger.error("Error getting events by severity: %s", e)
@@ -133,8 +129,6 @@ class DynamoDBStorage:
         Falls back to scan if no account-specific GSI exists, but limits result size.
         """
         try:
-            from boto3.dynamodb.conditions import Attr
-
             cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
 
             # Use scan with strict limit to prevent unbounded reads
@@ -156,7 +150,9 @@ class DynamoDBStorage:
             logger.error("Error getting events by account %s: %s", account_id, e)
             return []
 
-    def get_event_summary(self, hours: int = 24, account_id: Optional[str] = None) -> Dict[str, Any]:
+    def get_event_summary(
+        self, hours: int = 24, account_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         try:
             if account_id:
                 events = self.get_events_by_account(account_id, hours)
@@ -185,14 +181,9 @@ class DynamoDBStorage:
             logger.error("Error getting event summary: %s", e)
             return {}
 
-    def get_latest_check_result(self, time_filter: str = None) -> List[Dict]:
+    def get_latest_check_result(self, time_filter: Optional[str] = None) -> List[Dict]:
         try:
-            from boto3.dynamodb.conditions import Key
-
-            if time_filter:
-                cutoff = time_filter
-            else:
-                cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+            cutoff = time_filter or (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
 
             response = self.table.query(
                 IndexName="TypeTimestampIndex",
@@ -201,7 +192,6 @@ class DynamoDBStorage:
                 ScanIndexForward=False,
                 Limit=10,
             )
-
             return response.get("Items", [])
         except Exception as e:
             logger.error("Error getting latest check result: %s", e)
@@ -264,17 +254,18 @@ class DynamoDBStorage:
             logger.error("Error creating table: %s", e)
             return False
 
+    def _query_by_event_id(self, event_id: str) -> List[Dict]:
+        """Query items by event_id, returning the raw response Items."""
+        return self.table.query(
+            KeyConditionExpression=Key("event_id").eq(event_id),
+            Limit=1,
+        ).get("Items", [])
+
     def get_item_by_id(self, event_id: str) -> Optional[Dict[str, Any]]:
         try:
             if not self.table:
                 return None
-            from boto3.dynamodb.conditions import Key
-
-            response = self.table.query(
-                KeyConditionExpression=Key("event_id").eq(event_id),
-                Limit=1,
-            )
-            items = response.get("Items", [])
+            items = self._query_by_event_id(event_id)
             return items[0] if items else None
         except Exception as e:
             logger.error("Error getting item by id %s: %s", event_id, e)
@@ -290,14 +281,8 @@ class DynamoDBStorage:
             if not self.table:
                 return False
 
-            from boto3.dynamodb.conditions import Key
-
             # Retrieve the item first to get the full composite key
-            query_response = self.table.query(
-                KeyConditionExpression=Key("event_id").eq(event_id),
-                Limit=1,
-            )
-            items = query_response.get("Items", [])
+            items = self._query_by_event_id(event_id)
             if not items:
                 logger.warning("No item found for event_id %s", event_id)
                 return False

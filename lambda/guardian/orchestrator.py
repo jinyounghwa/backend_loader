@@ -126,8 +126,10 @@ class GuardianOrchestrator:
                             check_name, check_result.severity, result_dict, account_id=account_id
                         )
                         self._notify_alert(
-                            check_name, result_dict,
-                            account_id=account_id, account_name=account_name,
+                            check_name,
+                            result_dict,
+                            account_id=account_id,
+                            account_name=account_name,
                         )
                         if self.remediation:
                             self.remediation.handle_check_result(check_name, check_result)
@@ -331,8 +333,10 @@ class GuardianOrchestrator:
             check_name, check_result.severity, result_dict, account_id=account_id
         )
         self._notify_alert(
-            check_name, result_dict,
-            account_id=account_id, account_name=account_name or "",
+            check_name,
+            result_dict,
+            account_id=account_id,
+            account_name=account_name or "",
         )
         if self.remediation:
             self.remediation.handle_check_result(check_name, check_result)
@@ -343,12 +347,24 @@ class GuardianOrchestrator:
     # Check type routing
     # ------------------------------------------------------------------
 
+    _ALL_CHECKS = [
+        "cost",
+        "ec2",
+        "s3",
+        "cloudtrail",
+        "iam",
+        "guardduty",
+        "rds",
+        "iam_policy_analyzer",
+    ]
+    _SECURITY_CHECKS = ["ec2", "s3", "cloudtrail", "iam", "guardduty", "rds", "iam_policy_analyzer"]
+
     def _get_checks_for_type(self, check_type: str) -> List[str]:
-        if check_type == "cost":
-            return ["cost"]
-        elif check_type == "security":
-            return ["ec2", "s3", "cloudtrail", "iam", "guardduty", "rds", "iam_policy_analyzer"]
-        return ["cost", "ec2", "s3", "cloudtrail", "iam", "guardduty", "rds", "iam_policy_analyzer"]
+        """Map a check_type string to the list of checker names to execute."""
+        return {
+            "cost": ["cost"],
+            "security": self._SECURITY_CHECKS,
+        }.get(check_type, self._ALL_CHECKS)
 
     # ------------------------------------------------------------------
     # Notifications
@@ -363,11 +379,17 @@ class GuardianOrchestrator:
     ):
         if self.telegram:
             self.telegram.send_alert(
-                check_name, alert_data, account_id=account_id, account_name=account_name,
+                check_name,
+                alert_data,
+                account_id=account_id,
+                account_name=account_name,
             )
         if self.discord:
             self.discord.send_alert(
-                check_name, alert_data, account_id=account_id, account_name=account_name,
+                check_name,
+                alert_data,
+                account_id=account_id,
+                account_name=account_name,
             )
 
     # ------------------------------------------------------------------

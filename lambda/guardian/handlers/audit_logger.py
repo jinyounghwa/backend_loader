@@ -14,10 +14,10 @@ class AuditLogger:
     """WebSocket event audit logging to DynamoDB"""
 
     def __init__(self):
-        self.dynamodb = boto3.resource('dynamodb')
-        self.table_name = os.getenv('AUDIT_LOGS_TABLE')
-        self.enabled = os.getenv('AUDIT_LOGS_ENABLED', 'true').lower() == 'true'
-        self.ttl_days = int(os.getenv('TTL_DAYS', '90'))
+        self.dynamodb = boto3.resource("dynamodb")
+        self.table_name = os.getenv("AUDIT_LOGS_TABLE")
+        self.enabled = os.getenv("AUDIT_LOGS_ENABLED", "true").lower() == "true"
+        self.ttl_days = int(os.getenv("TTL_DAYS", "90"))
 
         if self.table_name and self.enabled:
             self.table = self.dynamodb.Table(self.table_name)
@@ -36,10 +36,10 @@ class AuditLogger:
 
         try:
             item = {
-                'connection_id': connection_id,
-                'timestamp': timestamp,
-                'expiration_time': self._get_expiration_timestamp(),
-                **event_data
+                "connection_id": connection_id,
+                "timestamp": timestamp,
+                "expiration_time": self._get_expiration_timestamp(),
+                **event_data,
             }
             self.table.put_item(Item=item)
             return True
@@ -51,17 +51,17 @@ class AuditLogger:
     def log_connect(
         connection_id: str,
         user_id: Optional[str] = None,
-        status: str = 'success',
-        details: Optional[Dict[str, Any]] = None
+        status: str = "success",
+        details: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """Log $connect event"""
         logger = AuditLogger()
-        timestamp = datetime.utcnow().isoformat() + 'Z'
+        timestamp = datetime.utcnow().isoformat() + "Z"
         event_data = {
-            'event_type': '$connect',
-            'user_id': user_id or 'anonymous',
-            'status': status,
-            'details': details or {}
+            "event_type": "$connect",
+            "user_id": user_id or "anonymous",
+            "status": status,
+            "details": details or {},
         }
         return logger._put_item(connection_id, timestamp, event_data)
 
@@ -69,17 +69,17 @@ class AuditLogger:
     def log_disconnect(
         connection_id: str,
         user_id: Optional[str] = None,
-        status: str = 'success',
-        details: Optional[Dict[str, Any]] = None
+        status: str = "success",
+        details: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """Log $disconnect event"""
         logger = AuditLogger()
-        timestamp = datetime.utcnow().isoformat() + 'Z'
+        timestamp = datetime.utcnow().isoformat() + "Z"
         event_data = {
-            'event_type': '$disconnect',
-            'user_id': user_id or 'anonymous',
-            'status': status,
-            'details': details or {}
+            "event_type": "$disconnect",
+            "user_id": user_id or "anonymous",
+            "status": status,
+            "details": details or {},
         }
         return logger._put_item(connection_id, timestamp, event_data)
 
@@ -87,19 +87,19 @@ class AuditLogger:
     def log_message(
         connection_id: str,
         user_id: Optional[str] = None,
-        message_type: str = 'unknown',
-        status: str = 'success',
-        details: Optional[Dict[str, Any]] = None
+        message_type: str = "unknown",
+        status: str = "success",
+        details: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """Log message processing event"""
         logger = AuditLogger()
-        timestamp = datetime.utcnow().isoformat() + 'Z'
+        timestamp = datetime.utcnow().isoformat() + "Z"
         event_data = {
-            'event_type': 'message',
-            'user_id': user_id or 'anonymous',
-            'message_type': message_type,
-            'status': status,
-            'details': details or {}
+            "event_type": "message",
+            "user_id": user_id or "anonymous",
+            "message_type": message_type,
+            "status": status,
+            "details": details or {},
         }
         return logger._put_item(connection_id, timestamp, event_data)
 
@@ -108,18 +108,18 @@ class AuditLogger:
         connection_id: str,
         user_id: Optional[str] = None,
         threat_score: int = 0,
-        status: str = 'success',
-        details: Optional[Dict[str, Any]] = None
+        status: str = "success",
+        details: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """Log threat broadcast event"""
         logger = AuditLogger()
-        timestamp = datetime.utcnow().isoformat() + 'Z'
+        timestamp = datetime.utcnow().isoformat() + "Z"
         event_data = {
-            'event_type': 'broadcast',
-            'user_id': user_id or 'system',
-            'threat_score': threat_score,
-            'status': status,
-            'details': details or {}
+            "event_type": "broadcast",
+            "user_id": user_id or "system",
+            "threat_score": threat_score,
+            "status": status,
+            "details": details or {},
         }
         return logger._put_item(connection_id, timestamp, event_data)
 
@@ -132,10 +132,10 @@ class AuditLogger:
 
         try:
             response = logger.table.query(
-                KeyConditionExpression='connection_id = :cid',
-                ExpressionAttributeValues={':cid': connection_id}
+                KeyConditionExpression="connection_id = :cid",
+                ExpressionAttributeValues={":cid": connection_id},
             )
-            return response.get('Items', [])
+            return response.get("Items", [])
         except Exception as e:
             print(f"Error querying audit logs: {e}")
             return []
@@ -145,7 +145,7 @@ class AuditLogger:
         connection_id: str,
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
-        event_type: Optional[str] = None
+        event_type: Optional[str] = None,
     ) -> list:
         """Query audit logs with filtering by time range and event type"""
         logs = AuditLogger.query_connection_logs(connection_id)
@@ -157,14 +157,14 @@ class AuditLogger:
 
         # Filter by start_time (ISO 8601 string comparison)
         if start_time:
-            filtered_logs = [log for log in filtered_logs if log.get('timestamp', '') >= start_time]
+            filtered_logs = [log for log in filtered_logs if log.get("timestamp", "") >= start_time]
 
         # Filter by end_time (ISO 8601 string comparison)
         if end_time:
-            filtered_logs = [log for log in filtered_logs if log.get('timestamp', '') <= end_time]
+            filtered_logs = [log for log in filtered_logs if log.get("timestamp", "") <= end_time]
 
         # Filter by event_type
         if event_type:
-            filtered_logs = [log for log in filtered_logs if log.get('event_type') == event_type]
+            filtered_logs = [log for log in filtered_logs if log.get("event_type") == event_type]
 
         return filtered_logs

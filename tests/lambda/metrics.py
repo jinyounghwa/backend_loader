@@ -154,7 +154,11 @@ class PerformanceMetrics:
         warm_stats = self.get_statistics("warm_invocation")
         multi_stats = self.get_statistics("multi_region")
 
-        cold_start_val = f"{cold_starts[0]:.1f}ms (first invocation with SAM container startup)" if cold_starts else "Not measured"
+        cold_start_val = (
+            f"{cold_starts[0]:.1f}ms (first invocation with SAM container startup)"
+            if cold_starts
+            else "Not measured"
+        )
         cold_start_target = "N/A"
         cold_start_status = "N/A"
         if cold_starts:

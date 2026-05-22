@@ -29,7 +29,16 @@ class TestParallelOrchestrator(unittest.TestCase):
         """테스트 설정"""
         # 간단한 Mock 체커 생성
         self.mock_checkers = {}
-        for name in ["ec2", "s3", "cost", "iam", "cloudtrail", "guardduty", "rds", "iam_policy_analyzer"]:
+        for name in [
+            "ec2",
+            "s3",
+            "cost",
+            "iam",
+            "cloudtrail",
+            "guardduty",
+            "rds",
+            "iam_policy_analyzer",
+        ]:
             checker = Mock()
             # sync check 메서드
             checker.check = Mock(return_value=CheckResult("INFO", f"{name} ok", "OK", {}, None))
@@ -37,6 +46,7 @@ class TestParallelOrchestrator(unittest.TestCase):
 
             async def mock_check_async():
                 return CheckResult("INFO", "ok", "OK", {}, None)
+
             checker.check_async = mock_check_async
             self.mock_checkers[name] = checker
 
@@ -140,6 +150,7 @@ class TestParallelOrchestrator(unittest.TestCase):
 
     def test_concurrent_semaphore_pattern(self):
         """동시성 제한 패턴 테스트"""
+
         async def run_with_semaphore():
             semaphore = asyncio.Semaphore(5)
 
@@ -163,6 +174,7 @@ class TestParallelOrchestrator(unittest.TestCase):
 
     def test_parallel_multiple_regions_simulation(self):
         """다중 리전 병렬 처리 시뮬레이션"""
+
         async def check_multiple_regions():
             """여러 리전에서 병렬로 체크"""
             tasks = []
@@ -186,6 +198,7 @@ class TestParallelOrchestrator(unittest.TestCase):
 
     def test_large_scale_simulation(self):
         """대규모 환경 시뮬레이션 (20개 리전)"""
+
         async def check_large_scale():
             """20개 리전에서 병렬 체크"""
             regions = [f"region-{i}" for i in range(20)]

@@ -10,6 +10,7 @@ from pathlib import Path
 
 class CloudFormationLoader(yaml.SafeLoader):
     """CloudFormation 태그 처리"""
+
     pass
 
 
@@ -23,7 +24,7 @@ def cfn_constructor(loader, tag_suffix, node):
         return {tag_suffix[1:]: loader.construct_mapping(node)}
 
 
-CloudFormationLoader.add_multi_constructor('!', cfn_constructor)
+CloudFormationLoader.add_multi_constructor("!", cfn_constructor)
 
 
 class TestDynamoDBTable(unittest.TestCase):
@@ -33,7 +34,7 @@ class TestDynamoDBTable(unittest.TestCase):
     def setUpClass(cls):
         """템플릿 로드"""
         template_path = Path(__file__).parent.parent.parent / "sam" / "template.yaml"
-        with open(template_path, 'r') as f:
+        with open(template_path, "r") as f:
             cls.template = yaml.load(f, Loader=CloudFormationLoader)
 
     def test_websocket_audit_logs_table_exists(self):
@@ -61,7 +62,7 @@ class TestDynamoDBTable(unittest.TestCase):
         # !Sub 문법 확인
         self.assertIsInstance(name, dict)
         keys = list(name.keys())
-        self.assertTrue(any('ub' in k or 'Sub' in k for k in keys))
+        self.assertTrue(any("ub" in k or "Sub" in k for k in keys))
 
     def test_ttl_specification(self):
         """TTL 설정 활성화"""
@@ -81,7 +82,7 @@ class TestTableAttributes(unittest.TestCase):
     def setUpClass(cls):
         """템플릿 로드"""
         template_path = Path(__file__).parent.parent.parent / "sam" / "template.yaml"
-        with open(template_path, 'r') as f:
+        with open(template_path, "r") as f:
             cls.template = yaml.load(f, Loader=CloudFormationLoader)
 
     def test_attribute_definitions(self):
@@ -144,7 +145,7 @@ class TestDynamoDBAuditPolicy(unittest.TestCase):
     def setUpClass(cls):
         """템플릿 로드"""
         template_path = Path(__file__).parent.parent.parent / "sam" / "template.yaml"
-        with open(template_path, 'r') as f:
+        with open(template_path, "r") as f:
             cls.template = yaml.load(f, Loader=CloudFormationLoader)
 
     def test_dynamodb_audit_policy_exists(self):
@@ -200,8 +201,9 @@ class TestDynamoDBAuditPolicy(unittest.TestCase):
         resource = statement["Resource"]
         self.assertIsInstance(resource, dict)
         keys = list(resource.keys())
-        self.assertTrue(any('GetAtt' in k or 'etAtt' in k for k in keys),
-                       "Resource should use GetAtt")
+        self.assertTrue(
+            any("GetAtt" in k or "etAtt" in k for k in keys), "Resource should use GetAtt"
+        )
 
 
 class TestAuditEnvironmentVariables(unittest.TestCase):
@@ -211,7 +213,7 @@ class TestAuditEnvironmentVariables(unittest.TestCase):
     def setUpClass(cls):
         """템플릿 로드"""
         template_path = Path(__file__).parent.parent.parent / "sam" / "template.yaml"
-        with open(template_path, 'r') as f:
+        with open(template_path, "r") as f:
             cls.template = yaml.load(f, Loader=CloudFormationLoader)
 
     def test_connect_function_audit_variables(self):
@@ -265,7 +267,7 @@ class TestAuditOutputs(unittest.TestCase):
     def setUpClass(cls):
         """템플릿 로드"""
         template_path = Path(__file__).parent.parent.parent / "sam" / "template.yaml"
-        with open(template_path, 'r') as f:
+        with open(template_path, "r") as f:
             cls.template = yaml.load(f, Loader=CloudFormationLoader)
 
     def test_audit_logs_table_name_output(self):
@@ -301,7 +303,7 @@ class TestAuditOutputs(unittest.TestCase):
             # !Sub 문법 확인
             self.assertIsInstance(export, dict)
             keys = list(export.keys())
-            self.assertTrue(any('ub' in k or 'Sub' in k for k in keys))
+            self.assertTrue(any("ub" in k or "Sub" in k for k in keys))
 
 
 if __name__ == "__main__":

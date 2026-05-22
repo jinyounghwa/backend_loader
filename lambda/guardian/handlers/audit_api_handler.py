@@ -37,19 +37,17 @@ def handle_get_audit_logs(event: Dict[str, Any], context: Any) -> Dict[str, Any]
     """
     try:
         # Parse query string parameters
-        query_params = event.get('queryStringParameters') or {}
-        connection_id = query_params.get('connection_id')
-        start_time = query_params.get('start_time')
-        end_time = query_params.get('end_time')
-        event_type = query_params.get('event_type')
+        query_params = event.get("queryStringParameters") or {}
+        connection_id = query_params.get("connection_id")
+        start_time = query_params.get("start_time")
+        end_time = query_params.get("end_time")
+        event_type = query_params.get("event_type")
 
         # Validate required parameter
         if not connection_id:
             return {
-                'statusCode': 400,
-                'body': json.dumps({
-                    'error': 'Missing required parameter: connection_id'
-                })
+                "statusCode": 400,
+                "body": json.dumps({"error": "Missing required parameter: connection_id"}),
             }
 
         # Query audit logs with filters
@@ -57,32 +55,29 @@ def handle_get_audit_logs(event: Dict[str, Any], context: Any) -> Dict[str, Any]
             connection_id=connection_id,
             start_time=start_time,
             end_time=end_time,
-            event_type=event_type
+            event_type=event_type,
         )
 
         return {
-            'statusCode': 200,
-            'headers': {
-                'Content-Type': 'application/json'
-            },
-            'body': json.dumps({
-                'items': logs,
-                'count': len(logs),
-                'connection_id': connection_id,
-                'filters': {
-                    'start_time': start_time,
-                    'end_time': end_time,
-                    'event_type': event_type
+            "statusCode": 200,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps(
+                {
+                    "items": logs,
+                    "count": len(logs),
+                    "connection_id": connection_id,
+                    "filters": {
+                        "start_time": start_time,
+                        "end_time": end_time,
+                        "event_type": event_type,
+                    },
                 }
-            })
+            ),
         }
 
     except Exception as e:
         print(f"Error handling audit logs query: {e}")
         return {
-            'statusCode': 500,
-            'body': json.dumps({
-                'error': 'Internal server error',
-                'message': str(e)
-            })
+            "statusCode": 500,
+            "body": json.dumps({"error": "Internal server error", "message": str(e)}),
         }

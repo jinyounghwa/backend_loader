@@ -45,9 +45,7 @@ class TestCheckerPerformance(unittest.TestCase):
         ec2_paginator.paginate.return_value = [{"Reservations": []}]
         self.mock_clients["ec2"].get_paginator.return_value = ec2_paginator
         self.mock_clients["ec2"].describe_instances.return_value = {"Reservations": []}
-        self.mock_clients["ec2"].describe_security_groups.return_value = {
-            "SecurityGroups": []
-        }
+        self.mock_clients["ec2"].describe_security_groups.return_value = {"SecurityGroups": []}
 
         # Configure S3
         self.mock_clients["s3"].list_buckets.return_value = {"Buckets": []}
@@ -200,6 +198,7 @@ class TestCheckerPerformance(unittest.TestCase):
     @patch("guardian.aws_client_provider.AWSClientProvider.get_client")
     def test_all_checkers_combined(self, mock_get_client):
         """All 8 checkers together should complete in < 3 seconds."""
+
         def get_client_side_effect(service, **kwargs):
             if service == "iam" and hasattr(self.mock_clients["iam"], "get_paginator"):
                 # Reconfigure IAM for policy analyzer

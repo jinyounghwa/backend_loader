@@ -53,7 +53,7 @@ class NotificationBuffer:
                 "status": "buffered",
                 "key": key,
                 "buffered_count": len(self.buffer[key]),
-                "action": "merged_with_pending_batch"
+                "action": "merged_with_pending_batch",
             }
 
         # batch_window 후 flush 예약
@@ -64,7 +64,7 @@ class NotificationBuffer:
             "status": "buffered",
             "key": key,
             "buffered_count": 1,
-            "action": "new_batch_scheduled"
+            "action": "new_batch_scheduled",
         }
 
     async def _flush_after_delay(self, key: str) -> None:
@@ -99,18 +99,9 @@ class NotificationBuffer:
         if key in self.pending_flushes:
             del self.pending_flushes[key]
 
-        return {
-            "status": "flushed",
-            "key": key,
-            "message_count": count,
-            "message": message
-        }
+        return {"status": "flushed", "key": key, "message_count": count, "message": message}
 
-    def _create_batched_message(
-        self,
-        events: List[Dict[str, Any]],
-        count: int
-    ) -> Dict[str, Any]:
+    def _create_batched_message(self, events: List[Dict[str, Any]], count: int) -> Dict[str, Any]:
         """
         여러 이벤트를 하나의 메시지로 병합
 
@@ -133,7 +124,7 @@ class NotificationBuffer:
             "last_event_time": events[-1].get("timestamp", datetime.now(timezone.utc).isoformat()),
             "summary": f"{count}개의 동일한 {events[0].get('severity')} 이벤트 감지",
             "events": events,
-            "merged_at": datetime.now(timezone.utc).isoformat()
+            "merged_at": datetime.now(timezone.utc).isoformat(),
         }
 
     async def force_flush_all(self) -> List[Dict[str, Any]]:
@@ -161,10 +152,11 @@ class NotificationBuffer:
             "total_events_merged": self.total_merged,
             "merge_efficiency": (
                 round((self.total_merged / self.total_events * 100), 1)
-                if self.total_events > 0 else 0
+                if self.total_events > 0
+                else 0
             ),
             "current_pending_keys": len(self.buffer),
-            "current_pending_events": sum(len(v) for v in self.buffer.values())
+            "current_pending_events": sum(len(v) for v in self.buffer.values()),
         }
 
     def get_buffer_contents(self) -> Dict[str, List[Dict[str, Any]]]:

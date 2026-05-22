@@ -35,7 +35,9 @@ class JSONFormatter(logging.Formatter):
         return json.dumps(log_data, ensure_ascii=False)
 
 
-def setup_logger(name: str, log_file: Optional[str] = None, level: int = logging.INFO) -> logging.Logger:
+def setup_logger(
+    name: str, log_file: Optional[str] = None, level: int = logging.INFO
+) -> logging.Logger:
     """Configure logger with both console and file handlers.
 
     Guard against duplicate handlers when called multiple times
@@ -70,7 +72,9 @@ def setup_logger(name: str, log_file: Optional[str] = None, level: int = logging
     return logger
 
 
-def log_check_result(logger: logging.Logger, check_type: str, status: str, detail: Optional[str] = None) -> None:
+def log_check_result(
+    logger: logging.Logger, check_type: str, status: str, detail: Optional[str] = None
+) -> None:
     logger.info(
         "%s: %s",
         check_type,

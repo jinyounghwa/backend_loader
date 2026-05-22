@@ -1,22 +1,21 @@
-"""
-WebSocket API Gateway 핸들러
+"""WebSocket API Gateway 핸들러
 $connect, $disconnect, $default 라우트 처리
 """
 
 import json
-from typing import Dict, Any
 from datetime import datetime, timezone
-
-# AWS Guardian 모듈
-import sys
 from pathlib import Path
-lambda_dir = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(lambda_dir))
+from typing import Any, Dict
 
-from guardian.responders.websocket_notifier import WebSocketNotifier
+import sys
+
+lambda_dir = str(Path(__file__).parent.parent.parent)
+if lambda_dir not in sys.path:
+    sys.path.insert(0, lambda_dir)
+
 from guardian.responders.connection_manager import ConnectionManager
 from guardian.responders.notification_buffer import NotificationBuffer
-
+from guardian.responders.websocket_notifier import WebSocketNotifier
 
 # 전역 인스턴스
 ws_notifier = WebSocketNotifier()
@@ -24,285 +23,155 @@ conn_manager = ConnectionManager(ttl_seconds=300)
 notification_buffer = NotificationBuffer(batch_window=10)
 
 
-async def handle_connect(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """
-    $connect 라우트 - 클라이언트 WebSocket 연결
+def _error_response(status_code: int, message: str) -> Dict[str, Any]:
+    """Build a standardised Lambda error response."""
+    return {"statusCode": status_code, "body": json.dumps({"error": message})}
 
-    Query parameters:
-        token: 인증 토큰
 
-    Returns:
-        {statusCode: 200/401, body: JSON}
-    """
+def _json_response(status_code: int, data: Dict[str, Any]) -> Dict[str, Any]:
+    """Build a standardised Lambda JSON response."""
+    return {"statusCode": status_code, "body": json.dumps(data)}
+
+
+def _get_connection_id(event: Dict[str, Any]) -> str:
+    """Extract connection ID from the API Gateway event."""
+    return (event.get("requestContext") or {}).get("connectionId", "")
+
+
+def _parse_body(event: Dict[str, Any]) -> Dict[str, Any]:
+    """Parse the request body, falling back to the event itself for direct invocations."""
+    body_str = event.get("body", "{}")
     try:
-        # 연결 ID와 토큰 추출
-        connection_id = event.get("requestContext", {}).get("connectionId")
+        return json.loads(body_str)
+    except (json.JSONDecodeError, TypeError):
+        return event
+
+
+async def handle_connect(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """$connect 라우트 - 클라이언트 WebSocket 연결."""
+    try:
+        connection_id = _get_connection_id(event)
         query_params = event.get("queryStringParameters") or {}
         auth_token = query_params.get("token")
 
         if not connection_id:
-            return {
-                "statusCode": 400,
-                "body": json.dumps({"error": "Missing connection ID"})
-            }
-
+            return _error_response(400, "Missing connection ID")
         if not auth_token:
-            return {
-                "statusCode": 401,
-                "body": json.dumps({"error": "Missing auth token"})
-            }
+            return _error_response(401, "Missing auth token")
 
-        # WebSocket 연결 수립
         ws_result = await ws_notifier.connect_client(connection_id, auth_token)
-
         if ws_result.get("status") == "unauthorized":
-            return {
-                "statusCode": 401,
-                "body": json.dumps(ws_result)
-            }
+            return _error_response(401, ws_result.get("error", "Unauthorized"))
 
-        # 연결 관리자에 등록
-        user_id = f"user-{connection_id[:8]}"  # 간단한 사용자 ID
-        await conn_manager.add_connection(connection_id, user_id, {
-            "source": "websocket",
-            "region": event.get("requestContext", {}).get("stage", "unknown")
-        })
+        user_id = f"user-{connection_id[:8]}"
+        await conn_manager.add_connection(
+            connection_id,
+            user_id,
+            {
+                "source": "websocket",
+                "region": (event.get("requestContext") or {}).get("stage", "unknown"),
+            },
+        )
 
-        return {
-            "statusCode": 200,
-            "body": json.dumps({
+        return _json_response(
+            200,
+            {
                 "status": "connected",
                 "connection_id": connection_id,
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            })
-        }
-
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
     except Exception as e:
-        return {
-            "statusCode": 500,
-            "body": json.dumps({"error": str(e)})
-        }
+        return _error_response(500, str(e))
 
 
 async def handle_disconnect(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """
-    $disconnect 라우트 - 클라이언트 WebSocket 연결 해제
-
-    Returns:
-        {statusCode: 200, body: JSON}
-    """
+    """$disconnect 라우트 - 클라이언트 WebSocket 연결 해제."""
     try:
-        connection_id = event.get("requestContext", {}).get("connectionId")
-
+        connection_id = _get_connection_id(event)
         if not connection_id:
-            return {
-                "statusCode": 400,
-                "body": json.dumps({"error": "Missing connection ID"})
-            }
+            return _error_response(400, "Missing connection ID")
 
-        # WebSocket 연결 해제
         await ws_notifier.disconnect_client(connection_id)
-
-        # 연결 관리자에서 제거
         result = await conn_manager.remove_connection(connection_id)
 
-        return {
-            "statusCode": 200,
-            "body": json.dumps({
+        return _json_response(
+            200,
+            {
                 "status": "disconnected",
                 "connection_id": connection_id,
-                "duration_seconds": result.get("duration_seconds", 0)
-            })
-        }
-
+                "duration_seconds": result.get("duration_seconds", 0),
+            },
+        )
     except Exception as e:
-        return {
-            "statusCode": 500,
-            "body": json.dumps({"error": str(e)})
-        }
+        return _error_response(500, str(e))
 
 
 async def handle_default(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """
-    $default 라우트 - 클라이언트로부터 수신한 메시지 처리
-
-    Message format:
-        {
-            "action": "subscribe" | "unsubscribe" | "ping",
-            "event_types": ["threat", "anomaly"],  // subscribe/unsubscribe용
-        }
-
-    Returns:
-        {statusCode: 200, body: JSON}
-    """
+    """$default 라우트 - 클라이언트로부터 수신한 메시지 처리."""
     try:
-        connection_id = event.get("requestContext", {}).get("connectionId")
-        body_str = event.get("body", "{}")
-
+        connection_id = _get_connection_id(event)
         if not connection_id:
-            return {
-                "statusCode": 400,
-                "body": json.dumps({"error": "Missing connection ID"})
-            }
+            return _error_response(400, "Missing connection ID")
 
-        # 메시지 파싱
+        body_str = event.get("body", "{}")
         try:
             message_body = json.loads(body_str)
         except json.JSONDecodeError:
-            return {
-                "statusCode": 400,
-                "body": json.dumps({"error": "Invalid JSON body"})
-            }
+            return _error_response(400, "Invalid JSON body")
 
-        # 하트비트 갱신
         await conn_manager.heartbeat(connection_id)
-
-        # 클라이언트 메시지 처리
         result = await ws_notifier.handle_client_message(connection_id, message_body)
-
-        # 메시지 카운트 증가
         await conn_manager.increment_message_count(connection_id)
 
-        return {
-            "statusCode": 200,
-            "body": json.dumps(result)
-        }
-
+        return _json_response(200, result)
     except Exception as e:
-        return {
-            "statusCode": 500,
-            "body": json.dumps({"error": str(e)})
-        }
+        return _error_response(500, str(e))
 
 
 async def handle_threat_broadcast(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """
-    위협 점수 브로드캐스트
-    Lambda 직접 호출용 엔드포인트
-
-    Body:
-        {
-            "threat_score": 7.5,
-            "severity": "HIGH"
-        }
-
-    Returns:
-        {statusCode: 200, body: JSON}
-    """
+    """위협 점수 브로드캐스트 — Lambda 직접 호출용 엔드포인트."""
     try:
-        # 요청 본문 파싱
-        body_str = event.get("body", "{}")
-        try:
-            body = json.loads(body_str)
-        except json.JSONDecodeError:
-            body = event  # 직접 호출의 경우
-
+        body = _parse_body(event)
         threat_score = body.get("threat_score", 0)
         severity = body.get("severity", "MEDIUM")
 
-        if not isinstance(threat_score, (int, float)) or threat_score < 0 or threat_score > 10:
-            return {
-                "statusCode": 400,
-                "body": json.dumps({"error": "Invalid threat_score (0-10)"})
-            }
+        if not isinstance(threat_score, (int, float)) or not (0 <= threat_score <= 10):
+            return _error_response(400, "Invalid threat_score (0-10)")
 
-        # 브로드캐스트
         result = await ws_notifier.broadcast_threat_update(threat_score, severity)
-
-        return {
-            "statusCode": 200,
-            "body": json.dumps(result)
-        }
-
+        return _json_response(200, result)
     except Exception as e:
-        return {
-            "statusCode": 500,
-            "body": json.dumps({"error": str(e)})
-        }
+        return _error_response(500, str(e))
 
 
 async def handle_anomaly_alert(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """
-    이상 탐지 알림 전송
-    Lambda 직접 호출용 엔드포인트
-
-    Body:
-        {
-            "connection_id": "conn-123",
-            "anomaly_type": "cost",
-            "details": {"daily_cost": 150.0, "threshold": 100.0}
-        }
-
-    Returns:
-        {statusCode: 200, body: JSON}
-    """
+    """이상 탐지 알림 전송 — Lambda 직접 호출용 엔드포인트."""
     try:
-        # 요청 본문 파싱
-        body_str = event.get("body", "{}")
-        try:
-            body = json.loads(body_str)
-        except json.JSONDecodeError:
-            body = event
-
+        body = _parse_body(event)
         connection_id = body.get("connection_id")
         anomaly_type = body.get("anomaly_type")
         details = body.get("details", {})
 
         if not connection_id:
-            return {
-                "statusCode": 400,
-                "body": json.dumps({"error": "Missing connection_id"})
-            }
-
+            return _error_response(400, "Missing connection_id")
         if not anomaly_type:
-            return {
-                "statusCode": 400,
-                "body": json.dumps({"error": "Missing anomaly_type"})
-            }
+            return _error_response(400, "Missing anomaly_type")
 
-        # 이상 탐지 알림 전송
-        result = await ws_notifier.send_anomaly_alert(
-            connection_id,
-            anomaly_type,
-            details
-        )
-
-        return {
-            "statusCode": 200,
-            "body": json.dumps(result)
-        }
-
+        result = await ws_notifier.send_anomaly_alert(connection_id, anomaly_type, details)
+        return _json_response(200, result)
     except Exception as e:
-        return {
-            "statusCode": 500,
-            "body": json.dumps({"error": str(e)})
-        }
+        return _error_response(500, str(e))
 
 
 async def handle_connection_stats(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """
-    연결 통계 조회
-    Lambda 직접 호출용 엔드포인트
-
-    Returns:
-        {statusCode: 200, body: JSON}
-    """
+    """연결 통계 조회 — Lambda 직접 호출용 엔드포인트."""
     try:
         stats = {
-            "ws_notifier": {
-                "active_connections": ws_notifier.get_active_connections()
-            },
+            "ws_notifier": {"active_connections": ws_notifier.get_active_connections()},
             "conn_manager": conn_manager.get_stats(),
-            "notification_buffer": notification_buffer.get_buffer_stats()
+            "notification_buffer": notification_buffer.get_buffer_stats(),
         }
-
-        return {
-            "statusCode": 200,
-            "body": json.dumps(stats)
-        }
-
+        return _json_response(200, stats)
     except Exception as e:
-        return {
-            "statusCode": 500,
-            "body": json.dumps({"error": str(e)})
-        }
+        return _error_response(500, str(e))

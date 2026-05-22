@@ -10,6 +10,7 @@ from pathlib import Path
 
 class CloudFormationLoader(yaml.SafeLoader):
     """CloudFormation 태그 처리"""
+
     pass
 
 
@@ -23,7 +24,7 @@ def cfn_constructor(loader, tag_suffix, node):
         return {tag_suffix[1:]: loader.construct_mapping(node)}
 
 
-CloudFormationLoader.add_multi_constructor('!', cfn_constructor)
+CloudFormationLoader.add_multi_constructor("!", cfn_constructor)
 
 
 class TestWebSocketTemplate(unittest.TestCase):
@@ -33,7 +34,7 @@ class TestWebSocketTemplate(unittest.TestCase):
     def setUpClass(cls):
         """템플릿 로드"""
         template_path = Path(__file__).parent.parent.parent / "sam" / "template.yaml"
-        with open(template_path, 'r') as f:
+        with open(template_path, "r") as f:
             cls.template = yaml.load(f, Loader=CloudFormationLoader)
 
     def test_template_structure(self):
@@ -76,7 +77,7 @@ class TestWebSocketTemplate(unittest.TestCase):
             "DefaultFunction",
             "BroadcastFunction",
             "AnomalyAlertFunction",
-            "ConnectionStatsFunction"
+            "ConnectionStatsFunction",
         ]
 
         for func_name in required_functions:
@@ -94,7 +95,7 @@ class TestWebSocketTemplate(unittest.TestCase):
             "ConnectFunctionPermission",
             "DisconnectFunctionPermission",
             "DefaultFunctionPermission",
-            "BroadcastFunctionPermission"
+            "BroadcastFunctionPermission",
         ]
 
         for perm_name in required_permissions:
@@ -110,7 +111,7 @@ class TestWebSocketTemplate(unittest.TestCase):
         required_integrations = [
             "ConnectIntegration",
             "DisconnectIntegration",
-            "DefaultIntegration"
+            "DefaultIntegration",
         ]
 
         for integ_name in required_integrations:
@@ -175,7 +176,9 @@ class TestWebSocketTemplate(unittest.TestCase):
 
         # Lambda 서비스 원칙
         statements = assume_role["Statement"]
-        self.assertTrue(any(s["Principal"]["Service"] == "lambda.amazonaws.com" for s in statements))
+        self.assertTrue(
+            any(s["Principal"]["Service"] == "lambda.amazonaws.com" for s in statements)
+        )
 
     def test_outputs(self):
         """출력 정의"""
@@ -186,7 +189,7 @@ class TestWebSocketTemplate(unittest.TestCase):
             "WebSocketApiEndpoint",
             "ConnectFunctionArn",
             "DisconnectFunctionArn",
-            "BroadcastFunctionArn"
+            "BroadcastFunctionArn",
         ]
 
         for output_name in required_outputs:
@@ -243,7 +246,7 @@ class TestSamConfig(unittest.TestCase):
 
     def test_samconfig_readable(self):
         """samconfig.toml 읽기 가능"""
-        with open(self.config_path, 'r') as f:
+        with open(self.config_path, "r") as f:
             content = f.read()
             self.assertGreater(len(content), 0)
 
@@ -254,7 +257,7 @@ class TestTemplateValidation(unittest.TestCase):
     def test_no_hardcoded_values(self):
         """하드코딩된 값 확인"""
         template_path = Path(__file__).parent.parent.parent / "sam" / "template.yaml"
-        with open(template_path, 'r') as f:
+        with open(template_path, "r") as f:
             content = f.read()  # Raw content for string checks
 
             # 일반적인 개발 계정 ID 없는지 확인
@@ -266,7 +269,7 @@ class TestTemplateValidation(unittest.TestCase):
     def test_parameter_usage(self):
         """파라미터가 리소스에서 사용되는지"""
         template_path = Path(__file__).parent.parent.parent / "sam" / "template.yaml"
-        with open(template_path, 'r') as f:
+        with open(template_path, "r") as f:
             content = f.read()  # Raw content for string checks
 
             # ProjectName, Environment 파라미터가 사용되는지 확인
@@ -276,19 +279,30 @@ class TestTemplateValidation(unittest.TestCase):
     def test_no_missing_permissions(self):
         """Lambda 권한이 모든 함수에 정의되어 있는지"""
         template_path = Path(__file__).parent.parent.parent / "sam" / "template.yaml"
-        with open(template_path, 'r') as f:
+        with open(template_path, "r") as f:
             template = yaml.load(f, Loader=CloudFormationLoader)
 
-            functions = [k for k, v in template.get("Resources", {}).items()
-                        if v.get("Type") == "AWS::Serverless::Function"]
+            functions = [
+                k
+                for k, v in template.get("Resources", {}).items()
+                if v.get("Type") == "AWS::Serverless::Function"
+            ]
 
             # 각 함수마다 권한이 정의되어 있는지 확인
             # (모든 함수가 API Gateway에서 호출되므로)
             for func in functions:
-                if func in ["ConnectFunction", "DisconnectFunction", "DefaultFunction", "BroadcastFunction"]:
+                if func in [
+                    "ConnectFunction",
+                    "DisconnectFunction",
+                    "DefaultFunction",
+                    "BroadcastFunction",
+                ]:
                     permission_name = f"{func}Permission"
-                    self.assertIn(permission_name, template.get("Resources", {}),
-                                 f"{func}에 대한 Lambda 권한 {permission_name} 없음")
+                    self.assertIn(
+                        permission_name,
+                        template.get("Resources", {}),
+                        f"{func}에 대한 Lambda 권한 {permission_name} 없음",
+                    )
 
 
 if __name__ == "__main__":

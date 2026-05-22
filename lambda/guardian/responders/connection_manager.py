@@ -21,10 +21,7 @@ class ConnectionManager:
         self.total_disconnections = 0
 
     async def add_connection(
-        self,
-        conn_id: str,
-        user_id: str,
-        metadata: Dict[str, Any] | None = None
+        self, conn_id: str, user_id: str, metadata: Dict[str, Any] | None = None
     ) -> Dict[str, Any]:
         """
         연결 추가
@@ -46,7 +43,7 @@ class ConnectionManager:
             "last_heartbeat": now,
             "heartbeat_count": 0,
             "message_count": 0,
-            "metadata": metadata or {}
+            "metadata": metadata or {},
         }
         self.total_connections += 1
 
@@ -54,7 +51,7 @@ class ConnectionManager:
             "status": "added",
             "conn_id": conn_id,
             "user_id": user_id,
-            "created_at": now.isoformat()
+            "created_at": now.isoformat(),
         }
 
     async def remove_connection(self, conn_id: str) -> Dict[str, Any]:
@@ -82,7 +79,7 @@ class ConnectionManager:
             "user_id": conn["user_id"],
             "duration_seconds": duration,
             "heartbeat_count": conn["heartbeat_count"],
-            "message_count": conn["message_count"]
+            "message_count": conn["message_count"],
         }
 
     async def heartbeat(self, conn_id: str) -> Dict[str, Any]:
@@ -106,7 +103,7 @@ class ConnectionManager:
             "status": "ok",
             "conn_id": conn_id,
             "last_heartbeat": now.isoformat(),
-            "heartbeat_count": self.connections[conn_id]["heartbeat_count"]
+            "heartbeat_count": self.connections[conn_id]["heartbeat_count"],
         }
 
     async def increment_message_count(self, conn_id: str) -> int:
@@ -187,7 +184,7 @@ class ConnectionManager:
             "is_alive": age <= self.ttl,
             "heartbeat_count": conn["heartbeat_count"],
             "message_count": conn["message_count"],
-            "metadata": conn["metadata"]
+            "metadata": conn["metadata"],
         }
 
     def get_all_connections(self) -> List[Dict[str, Any]]:
@@ -240,7 +237,7 @@ class ConnectionManager:
             "current_active": len(self.connections),
             "avg_connection_age_seconds": round(avg_age, 1),
             "max_connection_age_seconds": round(max_age, 1),
-            "ttl_seconds": self.ttl
+            "ttl_seconds": self.ttl,
         }
 
 
@@ -249,9 +246,7 @@ _connection_manager = ConnectionManager(ttl_seconds=300)
 
 
 async def add_connection(
-    conn_id: str,
-    user_id: str,
-    metadata: Dict[str, Any] | None = None
+    conn_id: str, user_id: str, metadata: Dict[str, Any] | None = None
 ) -> Dict[str, Any]:
     """연결 추가 (async)"""
     return await _connection_manager.add_connection(conn_id, user_id, metadata)

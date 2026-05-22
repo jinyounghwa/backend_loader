@@ -83,10 +83,12 @@ def lambda_handler(event: Dict[str, Any], context: Any = None) -> Dict[str, Any]
         logger.exception("Fatal error in lambda_handler [correlation_id=%s]: %s", correlation_id, e)
         return {
             "statusCode": 500,
-            "body": json.dumps({
-                "error": "Internal server error",
-                "correlation_id": correlation_id,
-            }),
+            "body": json.dumps(
+                {
+                    "error": "Internal server error",
+                    "correlation_id": correlation_id,
+                }
+            ),
         }
 
 

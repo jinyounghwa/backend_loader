@@ -36,9 +36,7 @@ class TestWebSocketNotifier(unittest.TestCase):
 
     def test_connect_client_success(self):
         """클라이언트 연결 성공"""
-        result = asyncio.run(
-            self.notifier.connect_client("conn-123", "valid_token")
-        )
+        result = asyncio.run(self.notifier.connect_client("conn-123", "valid_token"))
 
         self.assertEqual(result["status"], "connected")
         self.assertEqual(result["connection_id"], "conn-123")
@@ -46,9 +44,7 @@ class TestWebSocketNotifier(unittest.TestCase):
 
     def test_connect_client_invalid_token(self):
         """유효하지 않은 토큰으로 연결 실패"""
-        result = asyncio.run(
-            self.notifier.connect_client("conn-123", "invalid")
-        )
+        result = asyncio.run(self.notifier.connect_client("conn-123", "invalid"))
 
         self.assertEqual(result["status"], "unauthorized")
 
@@ -64,9 +60,7 @@ class TestWebSocketNotifier(unittest.TestCase):
         asyncio.run(self.notifier.connect_client("conn-1", "token1"))
         asyncio.run(self.notifier.connect_client("conn-2", "token2"))
 
-        result = asyncio.run(
-            self.notifier.broadcast_threat_update(7.5, "HIGH")
-        )
+        result = asyncio.run(self.notifier.broadcast_threat_update(7.5, "HIGH"))
 
         self.assertEqual(result["status"], "broadcasted")
         self.assertEqual(result["recipients"], 2)
@@ -79,9 +73,7 @@ class TestWebSocketNotifier(unittest.TestCase):
 
         result = asyncio.run(
             self.notifier.send_anomaly_alert(
-                "conn-123",
-                "cost",
-                {"daily_cost": 150.0, "threshold": 100.0}
+                "conn-123", "cost", {"daily_cost": 150.0, "threshold": 100.0}
             )
         )
 
@@ -93,8 +85,7 @@ class TestWebSocketNotifier(unittest.TestCase):
 
         result = asyncio.run(
             self.notifier.handle_client_message(
-                "conn-123",
-                {"action": "subscribe", "event_types": ["threat", "anomaly"]}
+                "conn-123", {"action": "subscribe", "event_types": ["threat", "anomaly"]}
             )
         )
 
@@ -118,11 +109,7 @@ class TestNotificationBuffer(unittest.TestCase):
     def test_add_single_event(self):
         """단일 이벤트 추가"""
         result = asyncio.run(
-            self.buffer.add_event({
-                "check_type": "EC2",
-                "severity": "HIGH",
-                "instance_id": "i-123"
-            })
+            self.buffer.add_event({"check_type": "EC2", "severity": "HIGH", "instance_id": "i-123"})
         )
 
         self.assertEqual(result["status"], "buffered")
@@ -133,11 +120,9 @@ class TestNotificationBuffer(unittest.TestCase):
         # 5개 동일 이벤트 추가
         for i in range(5):
             asyncio.run(
-                self.buffer.add_event({
-                    "check_type": "EC2",
-                    "severity": "HIGH",
-                    "instance_id": f"i-{i}"
-                })
+                self.buffer.add_event(
+                    {"check_type": "EC2", "severity": "HIGH", "instance_id": f"i-{i}"}
+                )
             )
 
         # 모두 같은 키로 배치됨
@@ -146,36 +131,18 @@ class TestNotificationBuffer(unittest.TestCase):
 
     def test_different_events_separate_batches(self):
         """서로 다른 이벤트는 별도 배치"""
-        asyncio.run(
-            self.buffer.add_event({
-                "check_type": "EC2",
-                "severity": "HIGH"
-            })
-        )
-        asyncio.run(
-            self.buffer.add_event({
-                "check_type": "S3",
-                "severity": "MEDIUM"
-            })
-        )
+        asyncio.run(self.buffer.add_event({"check_type": "EC2", "severity": "HIGH"}))
+        asyncio.run(self.buffer.add_event({"check_type": "S3", "severity": "MEDIUM"}))
 
         self.assertEqual(len(self.buffer.buffer), 2)
 
     def test_flush_key(self):
         """키별 flush"""
         asyncio.run(
-            self.buffer.add_event({
-                "check_type": "EC2",
-                "severity": "HIGH",
-                "instance_id": "i-1"
-            })
+            self.buffer.add_event({"check_type": "EC2", "severity": "HIGH", "instance_id": "i-1"})
         )
         asyncio.run(
-            self.buffer.add_event({
-                "check_type": "EC2",
-                "severity": "HIGH",
-                "instance_id": "i-2"
-            })
+            self.buffer.add_event({"check_type": "EC2", "severity": "HIGH", "instance_id": "i-2"})
         )
 
         result = asyncio.run(self.buffer.flush_key("EC2:HIGH"))
@@ -187,18 +154,8 @@ class TestNotificationBuffer(unittest.TestCase):
 
     def test_force_flush_all(self):
         """모든 버퍼 강제 flush"""
-        asyncio.run(
-            self.buffer.add_event({
-                "check_type": "EC2",
-                "severity": "HIGH"
-            })
-        )
-        asyncio.run(
-            self.buffer.add_event({
-                "check_type": "S3",
-                "severity": "MEDIUM"
-            })
-        )
+        asyncio.run(self.buffer.add_event({"check_type": "EC2", "severity": "HIGH"}))
+        asyncio.run(self.buffer.add_event({"check_type": "S3", "severity": "MEDIUM"}))
 
         messages = asyncio.run(self.buffer.force_flush_all())
 
@@ -208,12 +165,7 @@ class TestNotificationBuffer(unittest.TestCase):
     def test_get_buffer_stats(self):
         """버퍼 통계"""
         for _ in range(3):
-            asyncio.run(
-                self.buffer.add_event({
-                    "check_type": "EC2",
-                    "severity": "HIGH"
-                })
-            )
+            asyncio.run(self.buffer.add_event({"check_type": "EC2", "severity": "HIGH"}))
 
         stats = self.buffer.get_buffer_stats()
 
@@ -229,10 +181,7 @@ class TestPriorityNotificationQueue(unittest.TestCase):
 
     def test_enqueue_notification(self):
         """알림 큐 추가"""
-        result = self.queue.enqueue({
-            "severity": "HIGH",
-            "message": "Test alert"
-        })
+        result = self.queue.enqueue({"severity": "HIGH", "message": "Test alert"})
 
         self.assertEqual(result["status"], "enqueued")
         self.assertEqual(result["severity"], "HIGH")
@@ -258,10 +207,7 @@ class TestPriorityNotificationQueue(unittest.TestCase):
     def test_dequeue_batch(self):
         """배치 추출"""
         for i in range(5):
-            self.queue.enqueue({
-                "severity": "HIGH",
-                "id": i
-            })
+            self.queue.enqueue({"severity": "HIGH", "id": i})
 
         batch = self.queue.dequeue_batch(size=3)
 
@@ -298,9 +244,7 @@ class TestConnectionManager(unittest.TestCase):
 
     def test_add_connection(self):
         """연결 추가"""
-        result = asyncio.run(
-            self.manager.add_connection("conn-123", "user-456")
-        )
+        result = asyncio.run(self.manager.add_connection("conn-123", "user-456"))
 
         self.assertEqual(result["status"], "added")
         self.assertEqual(result["conn_id"], "conn-123")
