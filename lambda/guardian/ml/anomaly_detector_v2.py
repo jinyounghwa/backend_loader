@@ -3,9 +3,10 @@
 IsolationForest + 시계열 분석으로 정확도 92% 달성
 """
 
-import numpy as np
 from datetime import datetime, timezone
-from typing import Dict, List, Any
+from typing import Any, Dict, List
+
+import numpy as np
 from sklearn.ensemble import IsolationForest
 from sklearn.preprocessing import StandardScaler
 

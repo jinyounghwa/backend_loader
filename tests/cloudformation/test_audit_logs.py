@@ -4,8 +4,9 @@ DynamoDB 감사 로그 테이블, IAM 권한, 환경 변수 검증
 """
 
 import unittest
-import yaml
 from pathlib import Path
+
+import yaml
 
 
 class CloudFormationLoader(yaml.SafeLoader):

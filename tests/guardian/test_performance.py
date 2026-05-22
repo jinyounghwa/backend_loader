@@ -3,10 +3,9 @@
 import asyncio
 import time
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
-
 from guardian.cache.memory import InMemoryCache
 from guardian.cache.redis import RedisCache
 

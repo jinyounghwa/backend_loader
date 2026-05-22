@@ -3,19 +3,19 @@ Sprint 30: WebSocket 실시간 알림 & 알림 배칭 테스트
 WebSocketNotifier, NotificationBuffer, PriorityQueue, ConnectionManager
 """
 
-import os
 import asyncio
+import os
+import sys
 import unittest
 from pathlib import Path
-import sys
 
 os.environ["AWS_ENV"] = "localstack"
 
 lambda_dir = Path(__file__).parent.parent.parent / "lambda"
 sys.path.insert(0, str(lambda_dir))
 
-from guardian.responders.websocket_notifier import (
-    WebSocketNotifier,
+from guardian.responders.connection_manager import (
+    ConnectionManager,
 )
 from guardian.responders.notification_buffer import (
     NotificationBuffer,
@@ -23,8 +23,8 @@ from guardian.responders.notification_buffer import (
 from guardian.responders.priority_queue import (
     PriorityNotificationQueue,
 )
-from guardian.responders.connection_manager import (
-    ConnectionManager,
+from guardian.responders.websocket_notifier import (
+    WebSocketNotifier,
 )
 
 

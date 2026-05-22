@@ -5,7 +5,6 @@ import logging
 from typing import Any, Optional
 
 import redis
-
 from guardian.cache.base import CacheBackend
 from guardian.cache.memory import InMemoryCache
 

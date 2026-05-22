@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-
 from guardian.handler import lambda_handler
 
 logging.basicConfig(

@@ -9,12 +9,12 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
+from guardian.checkers.cloudtrail import CloudTrailChecker
 from guardian.checkers.cost import CostChecker
 from guardian.checkers.ec2 import EC2Checker
-from guardian.checkers.s3 import S3Checker
-from guardian.checkers.cloudtrail import CloudTrailChecker
-from guardian.checkers.iam import IAMChecker
 from guardian.checkers.guardduty import GuardDutyChecker
+from guardian.checkers.iam import IAMChecker
+from guardian.checkers.s3 import S3Checker
 
 
 class TestCostCheckerSync(unittest.TestCase):

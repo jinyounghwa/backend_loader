@@ -3,11 +3,11 @@ Sprint 29: 비용 분석 & 최적화 제안 테스트
 CostAnalyzer 및 OptimizationSuggester 검증
 """
 
-import os
 import asyncio
+import os
+import sys
 import unittest
 from pathlib import Path
-import sys
 
 os.environ["AWS_ENV"] = "localstack"
 

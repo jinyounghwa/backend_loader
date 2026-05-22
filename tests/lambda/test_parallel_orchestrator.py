@@ -4,12 +4,12 @@ ParallelOrchestrator 및 asyncio 기반 병렬 실행 검증
 """
 
 import asyncio
-import time
 import os
-import unittest
-from unittest.mock import Mock
-from pathlib import Path
 import sys
+import time
+import unittest
+from pathlib import Path
+from unittest.mock import Mock
 
 # Set localstack mode
 os.environ["AWS_ENV"] = "localstack"

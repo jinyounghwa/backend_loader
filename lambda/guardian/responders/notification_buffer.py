@@ -3,10 +3,10 @@
 동일 이벤트를 배칭 윈도우 내에서 병합하여 알림 폭증 방지
 """
 
-from typing import Dict, List, Any
-from datetime import datetime, timezone
-from collections import defaultdict
 import asyncio
+from collections import defaultdict
+from datetime import datetime, timezone
+from typing import Any, Dict, List
 
 
 class NotificationBuffer:

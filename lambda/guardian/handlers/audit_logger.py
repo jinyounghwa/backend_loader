@@ -4,9 +4,10 @@ Event logging utility for tracking WebSocket connections, messages, and broadcas
 """
 
 import os
-import boto3
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
+import boto3
 
 
 class AuditLogger:

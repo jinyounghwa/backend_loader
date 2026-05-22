@@ -10,7 +10,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import requests
-
 from guardian.aws_client_provider import AWSClientProvider
 from guardian.config import Config
 from guardian.responders.auto_remediation import (

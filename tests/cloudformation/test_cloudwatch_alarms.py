@@ -3,10 +3,11 @@ Sprint 31 Phase 2: CloudWatch 모니터링 & 대시보드 테스트
 CloudWatch Dashboard, Alarms, 메트릭 정의 검증
 """
 
-import unittest
-import yaml
 import json
+import unittest
 from pathlib import Path
+
+import yaml
 
 
 class CloudFormationLoader(yaml.SafeLoader):

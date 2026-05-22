@@ -4,8 +4,8 @@ import json
 import unittest
 from unittest.mock import MagicMock, patch
 
-from guardian.orchestrator import GuardianOrchestrator
 from guardian.checkers.base import CheckResult
+from guardian.orchestrator import GuardianOrchestrator
 from guardian.storage.dynamodb import DynamoDBStorage
 
 

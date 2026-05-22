@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional, Set
 
 import boto3
 from botocore.exceptions import ClientError
-
 from guardian.checkers.base import BaseChecker, CheckResult
 from guardian.config import Config
 

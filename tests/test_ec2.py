@@ -1,16 +1,14 @@
 """Tests for EC2 checker - LocalStack integration tests"""
 
+import os
 import time
 import unittest
 
 import boto3
+import pytest
 from guardian.checkers.ec2 import EC2Checker
 from guardian.config import Config
 from guardian.responders.aws_action_executor import AWSActionExecutor
-
-
-import os
-import pytest
 
 LOCALSTACK_AVAILABLE = os.getenv("LOCALSTACK_ENDPOINT") is not None
 

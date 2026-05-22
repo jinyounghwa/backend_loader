@@ -33,8 +33,9 @@ class LambdaHarness:
 
     def _check_environment(self):
         """Verify SAM template exists and Docker is running, otherwise skip test."""
-        import pytest
         import subprocess
+
+        import pytest
 
         # 1. Check if SAM template exists
         sam_path = self.project_root / self.sam_template

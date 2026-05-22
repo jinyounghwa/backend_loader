@@ -6,7 +6,7 @@ HTTP API Gateway handler for querying WebSocket audit logs
 import json
 import sys
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
 lambda_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(lambda_dir))

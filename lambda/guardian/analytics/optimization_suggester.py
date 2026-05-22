@@ -3,7 +3,7 @@
 미사용 리소스 식별, 오버프로비저닝 감지, Reserved Instance 추천
 """
 
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
 
 class OptimizationSuggester:

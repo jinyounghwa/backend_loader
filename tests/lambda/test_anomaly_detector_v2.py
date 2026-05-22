@@ -3,8 +3,9 @@ Sprint 28: 병렬 처리 & ML 고도화 - ML 이상 탐지 테스트
 AdvancedAnomalyDetector v2 정확도 및 기능 검증
 """
 
-import unittest
 import asyncio
+import unittest
+
 from guardian.ml.anomaly_detector_v2 import (
     AdvancedAnomalyDetector,
     detect_anomaly,

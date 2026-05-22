@@ -3,11 +3,10 @@ $connect, $disconnect, $default 라우트 처리
 """
 
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
-
-import sys
 
 lambda_dir = str(Path(__file__).parent.parent.parent)
 if lambda_dir not in sys.path:

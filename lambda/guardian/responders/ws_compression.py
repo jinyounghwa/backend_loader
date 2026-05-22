@@ -6,7 +6,7 @@ gzip 기반 메시지 압축으로 대역폭 절감
 import base64
 import gzip
 import json
-from typing import Dict, Any, Union
+from typing import Any, Dict, Union
 
 
 class WebSocketMessageCompressor:

@@ -7,7 +7,6 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from boto3.dynamodb.conditions import Attr, Key
-
 from guardian.aws_client_provider import AWSClientProvider
 from guardian.config import Config
 

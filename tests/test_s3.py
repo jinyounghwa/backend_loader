@@ -1,17 +1,15 @@
 """Tests for S3 checker - LocalStack integration tests"""
 
+import os
 import unittest
 from unittest.mock import MagicMock
 
 import boto3
+import pytest
 from guardian.aws_client_provider import AWSClientProvider
 from guardian.checkers.s3 import S3Checker
 from guardian.config import Config
 from guardian.responders.aws_action_executor import AWSActionExecutor
-
-
-import os
-import pytest
 
 LOCALSTACK_AVAILABLE = os.getenv("LOCALSTACK_ENDPOINT") is not None
 

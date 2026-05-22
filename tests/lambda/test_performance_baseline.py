@@ -1,12 +1,11 @@
 """Performance baseline tests for AWS Guardian checkers."""
 
 import os
+import sys
 import time
 import unittest
-from unittest.mock import Mock, patch
-
-import sys
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 # Set localstack mode to avoid real AWS calls
 os.environ["AWS_ENV"] = "localstack"
@@ -15,14 +14,14 @@ os.environ["AWS_ENV"] = "localstack"
 lambda_dir = Path(__file__).parent.parent.parent / "lambda"
 sys.path.insert(0, str(lambda_dir))
 
-from guardian.checkers.ec2 import EC2Checker
-from guardian.checkers.s3 import S3Checker
-from guardian.checkers.cost import CostChecker
-from guardian.checkers.iam import IAMChecker
 from guardian.checkers.cloudtrail import CloudTrailChecker
+from guardian.checkers.cost import CostChecker
+from guardian.checkers.ec2 import EC2Checker
 from guardian.checkers.guardduty import GuardDutyChecker
-from guardian.checkers.rds import RDSChecker
+from guardian.checkers.iam import IAMChecker
 from guardian.checkers.iam_policy_analyzer import IAMPolicyAnalyzer
+from guardian.checkers.rds import RDSChecker
+from guardian.checkers.s3 import S3Checker
 
 
 class TestCheckerPerformance(unittest.TestCase):

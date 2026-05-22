@@ -4,8 +4,9 @@ SAM 템플릿 구조, 리소스 정의, 출력값 검증
 """
 
 import unittest
-import yaml
 from pathlib import Path
+
+import yaml
 
 
 class CloudFormationLoader(yaml.SafeLoader):

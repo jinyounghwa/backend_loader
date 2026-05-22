@@ -2,12 +2,12 @@
 Sprint 30 Phase 2: WebSocket 핸들러 & 메시지 압축 테스트
 """
 
-import os
 import asyncio
-import unittest
 import json
-from pathlib import Path
+import os
 import sys
+import unittest
+from pathlib import Path
 
 os.environ["AWS_ENV"] = "localstack"
 
@@ -15,12 +15,12 @@ lambda_dir = Path(__file__).parent.parent.parent / "lambda"
 sys.path.insert(0, str(lambda_dir))
 
 from guardian.handlers.websocket_handler import (
-    handle_connect,
-    handle_disconnect,
-    handle_default,
-    handle_threat_broadcast,
     handle_anomaly_alert,
+    handle_connect,
     handle_connection_stats,
+    handle_default,
+    handle_disconnect,
+    handle_threat_broadcast,
 )
 from guardian.responders.ws_compression import (
     WebSocketMessageCompressor,
