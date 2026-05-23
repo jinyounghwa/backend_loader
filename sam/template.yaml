@@ -498,6 +498,41 @@ Resources:
           Value: RuleTemplateStorage
 
   # ==========================================
+  # DynamoDB Table for Rule Deployments (Sprint 35)
+  # ==========================================
+  RuleDeploymentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-rule-deployments'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: rule_id
+          AttributeType: S
+        - AttributeName: deployment_id
+          AttributeType: S
+        - AttributeName: deployment_date
+          AttributeType: S
+      KeySchema:
+        - AttributeName: rule_id
+          KeyType: HASH
+        - AttributeName: deployment_id
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: DeploymentDateIndex
+          KeySchema:
+            - AttributeName: deployment_date
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: RuleDeploymentTracking
+
+  # ==========================================
   # SNS Topic for Alerts
   # ==========================================
   WebSocketAlertsTopic:
@@ -870,6 +905,18 @@ Outputs:
     Value: !GetAtt RuleTemplateTable.Arn
     Export:
       Name: !Sub '${ProjectName}-RuleTemplateTableArn'
+
+  RuleDeploymentsTableName:
+    Description: Rule Deployments Table Name
+    Value: !Ref RuleDeploymentsTable
+    Export:
+      Name: !Sub '${ProjectName}-RuleDeploymentsTable'
+
+  RuleDeploymentsTableArn:
+    Description: Rule Deployments Table ARN
+    Value: !GetAtt RuleDeploymentsTable.Arn
+    Export:
+      Name: !Sub '${ProjectName}-RuleDeploymentsTableArn'
 
   ValidationApiEndpoint:
     Description: Rule Validation API Endpoint
