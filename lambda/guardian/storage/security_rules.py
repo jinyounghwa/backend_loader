@@ -24,6 +24,8 @@ class SecurityRule:
         priority: int,
         account_id: Optional[str] = None,
         enabled: bool = True,
+        template_id: Optional[str] = None,
+        template_version: int = 1,
         created_at: Optional[datetime] = None,
         updated_at: Optional[datetime] = None,
     ):
@@ -34,12 +36,14 @@ class SecurityRule:
         self.priority = priority
         self.account_id = account_id
         self.enabled = enabled
+        self.template_id = template_id
+        self.template_version = template_version
         self.created_at = created_at or datetime.utcnow()
         self.updated_at = updated_at or datetime.utcnow()
 
     def to_dynamodb_item(self) -> Dict[str, Any]:
         """Convert rule to DynamoDB item format"""
-        return {
+        item = {
             "rule_id": self.rule_id,
             "rule_type": self.rule_type,
             "condition": json.dumps(self.condition),
@@ -50,6 +54,10 @@ class SecurityRule:
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
         }
+        if self.template_id:
+            item["template_id"] = self.template_id
+            item["template_version"] = self.template_version
+        return item
 
     @staticmethod
     def from_dynamodb_item(item: Dict[str, Any]) -> "SecurityRule":
@@ -62,6 +70,8 @@ class SecurityRule:
             priority=item["priority"],
             account_id=item.get("account_id") if item.get("account_id") != "all" else None,
             enabled=item.get("enabled", True),
+            template_id=item.get("template_id"),
+            template_version=item.get("template_version", 1),
             created_at=datetime.fromisoformat(item["created_at"]),
             updated_at=datetime.fromisoformat(item["updated_at"]),
         )
@@ -198,3 +208,39 @@ class SecurityRuleRepository:
             return [SecurityRule.from_dynamodb_item(item) for item in items]
         except ClientError as e:
             raise RuntimeError(f"Failed to list all rules: {e}")
+
+    def create_from_template(
+        self,
+        template_id: str,
+        custom_condition: Dict[str, Any],
+        account_id: str,
+        priority: int = 5,
+    ) -> SecurityRule:
+        """Create a rule from a template"""
+        from rule_template import TemplateRepository
+
+        try:
+            # Get template
+            template_repo = TemplateRepository(self.table.table_name.replace("security-rules", "rule-templates"))
+            template = template_repo.get_template(template_id)
+            if not template:
+                raise ValueError(f"Template {template_id} not found")
+
+            # Create rule from template
+            rule = SecurityRule(
+                rule_id=str(uuid.uuid4()),
+                rule_type=template.rule_type,
+                condition=custom_condition,
+                action=template.example_action,
+                priority=priority,
+                account_id=account_id,
+                enabled=False,  # Require validation before enabling
+                template_id=template_id,
+                template_version=template.version,
+            )
+
+            # Save rule
+            self.create_rule(rule)
+            return rule
+        except Exception as e:
+            raise RuntimeError(f"Failed to create rule from template: {e}")

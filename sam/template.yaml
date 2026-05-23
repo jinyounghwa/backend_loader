@@ -463,6 +463,41 @@ Resources:
           Value: SecurityRulesStorage
 
   # ==========================================
+  # DynamoDB Table for Rule Templates
+  # ==========================================
+  RuleTemplateTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-rule-templates'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: template_id
+          AttributeType: S
+        - AttributeName: template_name
+          AttributeType: S
+        - AttributeName: version
+          AttributeType: N
+      KeySchema:
+        - AttributeName: template_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: TemplateNameIndex
+          KeySchema:
+            - AttributeName: template_name
+              KeyType: HASH
+            - AttributeName: version
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: RuleTemplateStorage
+
+  # ==========================================
   # SNS Topic for Alerts
   # ==========================================
   WebSocketAlertsTopic:
@@ -750,3 +785,15 @@ Outputs:
     Value: !GetAtt SecurityRulesTable.Arn
     Export:
       Name: !Sub '${ProjectName}-SecurityRulesTableArn'
+
+  RuleTemplateTableName:
+    Description: Rule Template Table Name
+    Value: !Ref RuleTemplateTable
+    Export:
+      Name: !Sub '${ProjectName}-RuleTemplateTable'
+
+  RuleTemplateTableArn:
+    Description: Rule Template Table ARN
+    Value: !GetAtt RuleTemplateTable.Arn
+    Export:
+      Name: !Sub '${ProjectName}-RuleTemplateTableArn'
