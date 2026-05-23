@@ -152,39 +152,53 @@ class AdvancedRemediationExecutor:
 
             region = action.get('parameters', {}).get('region', 'us-east-1')
 
-            # For now, these are placeholder implementations
-            # In production, they would call RDS API methods
             if action_type == 'RDS_SNAPSHOT':
-                logger.info(f"Creating snapshot of RDS instance {db_instance_id}")
+                success = self.aws_executor.create_rds_snapshot(db_instance_id, region)
                 return AdvancedRemediationResult(
                     action_type=action_type,
-                    success=True,
+                    success=success,
                     target=db_instance_id,
-                    message=f"Snapshot creation initiated for {db_instance_id}",
+                    message=f"{'Successfully created' if success else 'Failed to create'} snapshot for {db_instance_id}",
                     timestamp=timestamp,
                     rollback_metadata={"db_instance_id": db_instance_id, "region": region}
                 )
 
             elif action_type == 'RDS_DISABLE_PUBLIC':
-                logger.info(f"Disabling public accessibility for {db_instance_id}")
+                success = self.aws_executor.disable_rds_public_access(db_instance_id, region)
                 return AdvancedRemediationResult(
                     action_type=action_type,
-                    success=True,
+                    success=success,
                     target=db_instance_id,
-                    message=f"Public accessibility disabled for {db_instance_id}",
+                    message=f"{'Successfully disabled' if success else 'Failed to disable'} public access for {db_instance_id}",
                     timestamp=timestamp,
                     rollback_metadata={"db_instance_id": db_instance_id, "region": region}
                 )
 
-            elif action_type in ['RDS_ENCRYPT_ENABLE', 'RDS_BACKUP_ENABLE']:
-                logger.info(f"Executing {action_type} for {db_instance_id}")
+            elif action_type == 'RDS_ENCRYPT_ENABLE':
+                success = self.aws_executor.enable_rds_encryption(db_instance_id, region)
                 return AdvancedRemediationResult(
                     action_type=action_type,
-                    success=True,
+                    success=success,
                     target=db_instance_id,
-                    message=f"{action_type} executed for {db_instance_id}",
+                    message=f"{'Successfully enabled' if success else 'Failed to enable'} encryption for {db_instance_id}",
                     timestamp=timestamp,
                     rollback_metadata={"db_instance_id": db_instance_id, "region": region}
+                )
+
+            elif action_type == 'RDS_BACKUP_ENABLE':
+                backup_retention = action.get('parameters', {}).get('backup_retention_days', 7)
+                success = self.aws_executor.enable_rds_backups(db_instance_id, backup_retention, region)
+                return AdvancedRemediationResult(
+                    action_type=action_type,
+                    success=success,
+                    target=db_instance_id,
+                    message=f"{'Successfully enabled' if success else 'Failed to enable'} backups for {db_instance_id}",
+                    timestamp=timestamp,
+                    rollback_metadata={
+                        "db_instance_id": db_instance_id,
+                        "backup_retention_days": backup_retention,
+                        "region": region
+                    }
                 )
 
         except Exception as e:

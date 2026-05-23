@@ -239,8 +239,10 @@ class TestAdvancedRemediationExecutor:
 
     # RDS Remediation Tests
 
-    def test_rds_snapshot_success(self, executor, sample_rds_threat):
+    def test_rds_snapshot_success(self, executor, mock_aws_executor, sample_rds_threat):
         """Test successful RDS snapshot creation"""
+        mock_aws_executor.create_rds_snapshot.return_value = True
+
         action = {
             "type": "RDS_SNAPSHOT",
             "parameters": {"region": "us-east-1"}
@@ -252,10 +254,29 @@ class TestAdvancedRemediationExecutor:
         assert result.action_type == "RDS_SNAPSHOT"
         assert result.target == "prod-database"
         assert result.success is True
-        assert "Snapshot creation initiated" in result.message
+        assert "Successfully created" in result.message
+        assert result.rollback_metadata["db_instance_id"] == "prod-database"
+        mock_aws_executor.create_rds_snapshot.assert_called_once_with("prod-database", "us-east-1")
 
-    def test_rds_disable_public_success(self, executor, sample_rds_threat):
+    def test_rds_snapshot_failure(self, executor, mock_aws_executor, sample_rds_threat):
+        """Test failed RDS snapshot creation"""
+        mock_aws_executor.create_rds_snapshot.return_value = False
+
+        action = {
+            "type": "RDS_SNAPSHOT",
+            "parameters": {"region": "us-east-1"}
+        }
+
+        result = executor.execute_rds_remediation(action, sample_rds_threat)
+
+        assert result is not None
+        assert result.success is False
+        assert "Failed to create" in result.message
+
+    def test_rds_disable_public_success(self, executor, mock_aws_executor, sample_rds_threat):
         """Test successful RDS public access disable"""
+        mock_aws_executor.disable_rds_public_access.return_value = True
+
         action = {
             "type": "RDS_DISABLE_PUBLIC",
             "parameters": {"region": "us-east-1"}
@@ -266,10 +287,28 @@ class TestAdvancedRemediationExecutor:
         assert result is not None
         assert result.action_type == "RDS_DISABLE_PUBLIC"
         assert result.success is True
-        assert "Public accessibility disabled" in result.message
+        assert "Successfully disabled" in result.message
+        mock_aws_executor.disable_rds_public_access.assert_called_once_with("prod-database", "us-east-1")
 
-    def test_rds_encrypt_enable_success(self, executor, sample_rds_threat):
+    def test_rds_disable_public_failure(self, executor, mock_aws_executor, sample_rds_threat):
+        """Test failed RDS public access disable"""
+        mock_aws_executor.disable_rds_public_access.return_value = False
+
+        action = {
+            "type": "RDS_DISABLE_PUBLIC",
+            "parameters": {"region": "us-east-1"}
+        }
+
+        result = executor.execute_rds_remediation(action, sample_rds_threat)
+
+        assert result is not None
+        assert result.success is False
+        assert "Failed to disable" in result.message
+
+    def test_rds_encrypt_enable_success(self, executor, mock_aws_executor, sample_rds_threat):
         """Test successful RDS encryption enable"""
+        mock_aws_executor.enable_rds_encryption.return_value = True
+
         action = {
             "type": "RDS_ENCRYPT_ENABLE",
             "parameters": {"region": "us-east-1"}
@@ -280,9 +319,65 @@ class TestAdvancedRemediationExecutor:
         assert result is not None
         assert result.action_type == "RDS_ENCRYPT_ENABLE"
         assert result.success is True
+        assert "Successfully enabled" in result.message
+        mock_aws_executor.enable_rds_encryption.assert_called_once_with("prod-database", "us-east-1")
 
-    def test_rds_backup_enable_success(self, executor, sample_rds_threat):
+    def test_rds_encrypt_enable_failure(self, executor, mock_aws_executor, sample_rds_threat):
+        """Test failed RDS encryption enable"""
+        mock_aws_executor.enable_rds_encryption.return_value = False
+
+        action = {
+            "type": "RDS_ENCRYPT_ENABLE",
+            "parameters": {"region": "us-east-1"}
+        }
+
+        result = executor.execute_rds_remediation(action, sample_rds_threat)
+
+        assert result is not None
+        assert result.success is False
+        assert "Failed to enable" in result.message
+
+    def test_rds_backup_enable_success(self, executor, mock_aws_executor, sample_rds_threat):
         """Test successful RDS backup enable"""
+        mock_aws_executor.enable_rds_backups.return_value = True
+
+        action = {
+            "type": "RDS_BACKUP_ENABLE",
+            "parameters": {
+                "region": "us-east-1",
+                "backup_retention_days": 14
+            }
+        }
+
+        result = executor.execute_rds_remediation(action, sample_rds_threat)
+
+        assert result is not None
+        assert result.action_type == "RDS_BACKUP_ENABLE"
+        assert result.success is True
+        assert "Successfully enabled" in result.message
+        assert result.rollback_metadata["backup_retention_days"] == 14
+        mock_aws_executor.enable_rds_backups.assert_called_once_with("prod-database", 14, "us-east-1")
+
+    def test_rds_backup_enable_default_retention(self, executor, mock_aws_executor, sample_rds_threat):
+        """Test RDS backup enable with default retention"""
+        mock_aws_executor.enable_rds_backups.return_value = True
+
+        action = {
+            "type": "RDS_BACKUP_ENABLE",
+            "parameters": {"region": "us-east-1"}  # No backup_retention_days specified
+        }
+
+        result = executor.execute_rds_remediation(action, sample_rds_threat)
+
+        assert result is not None
+        assert result.success is True
+        # Should use default of 7 days
+        mock_aws_executor.enable_rds_backups.assert_called_once_with("prod-database", 7, "us-east-1")
+
+    def test_rds_backup_enable_failure(self, executor, mock_aws_executor, sample_rds_threat):
+        """Test failed RDS backup enable"""
+        mock_aws_executor.enable_rds_backups.return_value = False
+
         action = {
             "type": "RDS_BACKUP_ENABLE",
             "parameters": {"region": "us-east-1"}
@@ -291,8 +386,8 @@ class TestAdvancedRemediationExecutor:
         result = executor.execute_rds_remediation(action, sample_rds_threat)
 
         assert result is not None
-        assert result.action_type == "RDS_BACKUP_ENABLE"
-        assert result.success is True
+        assert result.success is False
+        assert "Failed to enable" in result.message
 
     def test_rds_extract_instance_id(self, executor):
         """Test extracting RDS instance ID from threat"""

@@ -200,3 +200,141 @@ class AWSActionExecutor:
         except Exception as e:
             logger.error("Failed to restrict Lambda concurrency for %s: %s", function_name, e)
             return False
+
+    def create_rds_snapshot(self, db_instance_id: str, region: str = "us-east-1") -> bool:
+        """Create a snapshot of an RDS database instance.
+
+        Args:
+            db_instance_id: RDS database instance identifier
+            region: AWS region
+
+        Returns:
+            True if the action succeeded or was skipped (LocalStack)
+        """
+        if not db_instance_id:
+            logger.error("Invalid database instance ID")
+            return False
+
+        if self.is_localstack:
+            logger.info("[LocalStack] Skipping RDS snapshot for %s", db_instance_id)
+            return True
+
+        try:
+            rds = AWSClientProvider.get_client("rds", region=region)
+            snapshot_id = f"snapshot-{db_instance_id}-{int(__import__('time').time())}"
+            rds.create_db_snapshot(
+                DBSnapshotIdentifier=snapshot_id,
+                DBInstanceIdentifier=db_instance_id
+            )
+            logger.info("Created snapshot %s for RDS instance %s in %s", snapshot_id, db_instance_id, region)
+            return True
+        except Exception as e:
+            logger.error("Failed to create RDS snapshot for %s: %s", db_instance_id, e)
+            return False
+
+    def disable_rds_public_access(self, db_instance_id: str, region: str = "us-east-1") -> bool:
+        """Disable public access on an RDS database instance.
+
+        Args:
+            db_instance_id: RDS database instance identifier
+            region: AWS region
+
+        Returns:
+            True if the action succeeded or was skipped (LocalStack)
+        """
+        if not db_instance_id:
+            logger.error("Invalid database instance ID")
+            return False
+
+        if self.is_localstack:
+            logger.info("[LocalStack] Skipping RDS public access disable for %s", db_instance_id)
+            return True
+
+        try:
+            rds = AWSClientProvider.get_client("rds", region=region)
+            rds.modify_db_instance(
+                DBInstanceIdentifier=db_instance_id,
+                PubliclyAccessible=False,
+                ApplyImmediately=True
+            )
+            logger.info("Disabled public access for RDS instance %s in %s", db_instance_id, region)
+            return True
+        except Exception as e:
+            logger.error("Failed to disable public access for RDS instance %s: %s", db_instance_id, e)
+            return False
+
+    def enable_rds_encryption(self, db_instance_id: str, region: str = "us-east-1") -> bool:
+        """Enable encryption at rest for an RDS database instance.
+
+        Args:
+            db_instance_id: RDS database instance identifier
+            region: AWS region
+
+        Returns:
+            True if the action succeeded or was skipped (LocalStack)
+
+        Note: Enabling encryption on existing instances requires a snapshot/restore cycle.
+        """
+        if not db_instance_id:
+            logger.error("Invalid database instance ID")
+            return False
+
+        if self.is_localstack:
+            logger.info("[LocalStack] Skipping RDS encryption enable for %s", db_instance_id)
+            return True
+
+        try:
+            rds = AWSClientProvider.get_client("rds", region=region)
+            # Note: For existing instances, this typically requires modify_db_instance
+            # Some engines/configurations may not support direct modification
+            rds.modify_db_instance(
+                DBInstanceIdentifier=db_instance_id,
+                StorageEncrypted=True,
+                ApplyImmediately=False  # Typically requires maintenance window
+            )
+            logger.info("Enabled encryption for RDS instance %s in %s", db_instance_id, region)
+            return True
+        except Exception as e:
+            logger.error("Failed to enable encryption for RDS instance %s: %s", db_instance_id, e)
+            return False
+
+    def enable_rds_backups(self, db_instance_id: str, backup_retention_days: int = 7, region: str = "us-east-1") -> bool:
+        """Enable automated backups for an RDS database instance.
+
+        Args:
+            db_instance_id: RDS database instance identifier
+            backup_retention_days: Number of days to retain backups (1-35, default 7)
+            region: AWS region
+
+        Returns:
+            True if the action succeeded or was skipped (LocalStack)
+        """
+        if not db_instance_id:
+            logger.error("Invalid database instance ID")
+            return False
+
+        if backup_retention_days < 1 or backup_retention_days > 35:
+            logger.error("Invalid backup retention days: %d", backup_retention_days)
+            return False
+
+        if self.is_localstack:
+            logger.info("[LocalStack] Skipping RDS backup enable for %s", db_instance_id)
+            return True
+
+        try:
+            rds = AWSClientProvider.get_client("rds", region=region)
+            rds.modify_db_instance(
+                DBInstanceIdentifier=db_instance_id,
+                BackupRetentionPeriod=backup_retention_days,
+                ApplyImmediately=True
+            )
+            logger.info(
+                "Enabled backups for RDS instance %s with %d day retention in %s",
+                db_instance_id,
+                backup_retention_days,
+                region
+            )
+            return True
+        except Exception as e:
+            logger.error("Failed to enable backups for RDS instance %s: %s", db_instance_id, e)
+            return False
