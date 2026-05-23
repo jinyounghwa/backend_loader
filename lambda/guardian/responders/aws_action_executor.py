@@ -89,3 +89,114 @@ class AWSActionExecutor:
         except Exception as e:
             logger.error("Failed to block public access for %s: %s", bucket_name, e)
             return False
+
+    def disable_lambda_function(self, function_name: str, region: str = "us-east-1") -> bool:
+        """Disable a Lambda function by setting concurrency to 0.
+
+        Args:
+            function_name: Lambda function name or ARN
+            region: AWS region where the function is deployed
+
+        Returns:
+            True if the action succeeded or was skipped (LocalStack)
+        """
+        if not function_name:
+            logger.error("Invalid function name")
+            return False
+
+        if self.is_localstack:
+            logger.info("[LocalStack] Skipping Lambda disable for %s", function_name)
+            return True
+
+        try:
+            lambda_client = AWSClientProvider.get_client("lambda", region=region)
+            lambda_client.put_function_concurrency(
+                FunctionName=function_name,
+                ReservedConcurrentExecutions=0
+            )
+            logger.info("Disabled Lambda function %s in %s", function_name, region)
+            return True
+        except Exception as e:
+            logger.error("Failed to disable Lambda function %s: %s", function_name, e)
+            return False
+
+    def remove_lambda_layer(self, function_name: str, layer_arn: str, region: str = "us-east-1") -> bool:
+        """Remove a Lambda layer from a function.
+
+        Args:
+            function_name: Lambda function name or ARN
+            layer_arn: ARN of the layer to remove
+            region: AWS region
+
+        Returns:
+            True if the action succeeded
+        """
+        if not function_name or not layer_arn:
+            logger.error("Invalid function name or layer ARN")
+            return False
+
+        if self.is_localstack:
+            logger.info("[LocalStack] Skipping Lambda layer removal for %s", function_name)
+            return True
+
+        try:
+            lambda_client = AWSClientProvider.get_client("lambda", region=region)
+
+            # Get current function config
+            response = lambda_client.get_function_configuration(FunctionName=function_name)
+            current_layers = response.get("Layers", [])
+
+            # Filter out the layer to remove
+            new_layers = [l["Arn"] for l in current_layers if l["Arn"] != layer_arn]
+
+            # Update function with new layers
+            lambda_client.update_function_configuration(
+                FunctionName=function_name,
+                Layers=new_layers
+            )
+            logger.info("Removed layer %s from function %s", layer_arn, function_name)
+            return True
+        except Exception as e:
+            logger.error("Failed to remove Lambda layer %s: %s", layer_arn, e)
+            return False
+
+    def restrict_lambda_concurrency(
+        self,
+        function_name: str,
+        max_concurrency: int = 1,
+        region: str = "us-east-1"
+    ) -> bool:
+        """Restrict Lambda function concurrency.
+
+        Args:
+            function_name: Lambda function name or ARN
+            max_concurrency: Maximum concurrent executions (0-999, default 1)
+            region: AWS region
+
+        Returns:
+            True if the action succeeded
+        """
+        if max_concurrency < 0 or max_concurrency > 999:
+            logger.error("Invalid concurrency value: %d", max_concurrency)
+            return False
+
+        if self.is_localstack:
+            logger.info("[LocalStack] Skipping Lambda concurrency restriction for %s", function_name)
+            return True
+
+        try:
+            lambda_client = AWSClientProvider.get_client("lambda", region=region)
+            lambda_client.put_function_concurrency(
+                FunctionName=function_name,
+                ReservedConcurrentExecutions=max_concurrency
+            )
+            logger.info(
+                "Restricted Lambda function %s concurrency to %d in %s",
+                function_name,
+                max_concurrency,
+                region
+            )
+            return True
+        except Exception as e:
+            logger.error("Failed to restrict Lambda concurrency for %s: %s", function_name, e)
+            return False
