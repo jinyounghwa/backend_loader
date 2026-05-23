@@ -1,244 +1,231 @@
-/**
- * Sprint 33 Phase 4: Rules UI Tests
- *
- * Tests for rule management React components.
- * Covers RulesList, RuleEditor, and AlertHistory components.
- */
+/**Sprint 34 Phase 4: Rule Management UI Tests
+
+Tests for rule management UI components:
+- RulesList display and actions
+- RuleEditor modal for create/update
+- AlertHistory timeline display
+- AuditLogsDashboard tab switching
+*/
 
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import '@testing-library/jest-dom';
+import { RulesList } from '@/components/Dashboard/RulesList';
+import { RuleEditor } from '@/components/Dashboard/RuleEditor';
+import { AlertHistory } from '@/components/Dashboard/AlertHistory';
+import { AuditLogsDashboard } from '@/components/Dashboard/AuditLogsDashboard';
 
-// Mock useSecurityRules hook
-const mockUseSecurityRules = jest.fn();
-jest.mock('@/lib/hooks/useSecurityRules', () => ({
-  useSecurityRules: () => mockUseSecurityRules(),
+// Mock SWR hook
+jest.mock('swr', () => ({
+  __esModule: true,
+  default: (key: string) => ({
+    data: null,
+    error: null,
+    isLoading: false,
+    mutate: jest.fn(),
+  }),
 }));
 
-describe('Security Rules UI Components', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+// Mock useSecurityRules hook
+jest.mock('@/lib/hooks/useSecurityRules', () => ({
+  useSecurityRules: () => ({
+    rules: [
+      {
+        rule_id: 'rule-1',
+        rule_type: 'connection_spike',
+        condition: { threshold: 10, window_minutes: 5 },
+        action: { notify: ['telegram'] },
+        priority: 5,
+        enabled: true,
+        account_id: 'acc-1',
+      },
+    ],
+    isLoading: false,
+    error: null,
+    createRule: jest.fn(),
+    updateRule: jest.fn(),
+    deleteRule: jest.fn(),
+    mutate: jest.fn(),
+  }),
+}));
 
+describe('Phase 4: Rule Management UI', () => {
   describe('RulesList Component', () => {
-    test('renders empty state when no rules exist', () => {
-      mockUseSecurityRules.mockReturnValue({
-        rules: [],
-        isLoading: false,
-        error: null,
-        updateRule: jest.fn(),
-        deleteRule: jest.fn(),
-        createRule: jest.fn(),
-        mutate: jest.fn(),
-      });
+    test('renders rules table with columns', () => {
+      render(<RulesList />);
 
-      // In a real test, we would import and render RulesList
-      // render(<RulesList />);
-      // expect(screen.getByText(/등록된 규칙이 없습니다/i)).toBeInTheDocument();
-
-      // For now, just verify the mock is set up correctly
-      expect(mockUseSecurityRules()).toHaveProperty('rules');
+      expect(screen.getByText('규칙 ID')).toBeInTheDocument();
+      expect(screen.getByText('규칙 타입')).toBeInTheDocument();
+      expect(screen.getByText('우선순위')).toBeInTheDocument();
+      expect(screen.getByText('활성화')).toBeInTheDocument();
     });
 
-    test('renders rules list with data', () => {
-      const mockRules = [
-        {
-          rule_id: 'rule-1',
-          rule_type: 'connection_spike',
-          condition: { threshold: 10, window_minutes: 5 },
-          action: { notify: ['telegram'] },
-          priority: 8,
-          account_id: '123456789',
-          enabled: true,
-          created_at: '2026-05-23T10:00:00',
-          updated_at: '2026-05-23T10:00:00',
-        },
-        {
-          rule_id: 'rule-2',
-          rule_type: 'auth_failure',
-          condition: { threshold: 5 },
-          action: { notify: ['discord'] },
-          priority: 7,
-          account_id: null,
-          enabled: false,
-          created_at: '2026-05-23T10:01:00',
-          updated_at: '2026-05-23T10:01:00',
-        },
-      ];
+    test('displays rule in table with correct data', () => {
+      render(<RulesList />);
 
-      mockUseSecurityRules.mockReturnValue({
-        rules: mockRules,
-        isLoading: false,
-        error: null,
-        updateRule: jest.fn(),
-        deleteRule: jest.fn(),
-        createRule: jest.fn(),
-        mutate: jest.fn(),
-      });
-
-      const result = mockUseSecurityRules();
-      expect(result.rules).toHaveLength(2);
-      expect(result.rules[0].priority).toBe(8);
-      expect(result.rules[1].enabled).toBe(false);
+      expect(screen.getByText('rule-1')).toBeInTheDocument();
+      expect(screen.getByText('connection_spike')).toBeInTheDocument();
+      expect(screen.getByText('5')).toBeInTheDocument();
     });
 
-    test('handles rule deletion', async () => {
-      const deleteRuleMock = jest.fn().mockResolvedValue(undefined);
-      mockUseSecurityRules.mockReturnValue({
-        rules: [],
-        isLoading: false,
-        error: null,
-        updateRule: jest.fn(),
-        deleteRule: deleteRuleMock,
-        createRule: jest.fn(),
-        mutate: jest.fn(),
-      });
+    test('shows action buttons for each rule', () => {
+      render(<RulesList />);
 
-      const result = mockUseSecurityRules();
-      await result.deleteRule('rule-1');
+      const editButtons = screen.getAllByRole('button', { name: /수정|edit/i });
+      const deleteButtons = screen.getAllByRole('button', { name: /삭제|delete/i });
 
-      expect(deleteRuleMock).toHaveBeenCalledWith('rule-1');
-    });
-
-    test('handles rule enable/disable toggle', async () => {
-      const updateRuleMock = jest.fn().mockResolvedValue({
-        enabled: false,
-      });
-      mockUseSecurityRules.mockReturnValue({
-        rules: [],
-        isLoading: false,
-        error: null,
-        updateRule: updateRuleMock,
-        deleteRule: jest.fn(),
-        createRule: jest.fn(),
-        mutate: jest.fn(),
-      });
-
-      const result = mockUseSecurityRules();
-      await result.updateRule('rule-1', { enabled: false });
-
-      expect(updateRuleMock).toHaveBeenCalledWith('rule-1', { enabled: false });
+      expect(editButtons.length).toBeGreaterThan(0);
+      expect(deleteButtons.length).toBeGreaterThan(0);
     });
   });
 
   describe('RuleEditor Component', () => {
-    test('creates new rule with form submission', async () => {
-      const createRuleMock = jest.fn().mockResolvedValue({
-        rule_id: 'rule-new',
-        rule_type: 'connection_spike',
-      });
-      mockUseSecurityRules.mockReturnValue({
-        rules: [],
-        isLoading: false,
-        error: null,
-        updateRule: jest.fn(),
-        deleteRule: jest.fn(),
-        createRule: createRuleMock,
-        mutate: jest.fn(),
-      });
+    test('renders modal when isOpen is true', () => {
+      render(
+        <RuleEditor
+          isOpen={true}
+          onClose={jest.fn()}
+        />
+      );
 
-      const result = mockUseSecurityRules();
-      const newRule = {
-        rule_type: 'connection_spike' as const,
-        condition: { threshold: 15, window_minutes: 10 },
-        action: { notify: ['telegram', 'discord'] },
-        priority: 9,
-        account_id: undefined,
-        enabled: true,
-      };
-
-      await result.createRule(newRule);
-
-      expect(createRuleMock).toHaveBeenCalledWith(newRule);
+      expect(screen.getByText(/규칙 생성|Create Rule/i)).toBeInTheDocument();
     });
 
-    test('updates existing rule', async () => {
-      const updateRuleMock = jest.fn().mockResolvedValue({
-        rule_id: 'rule-1',
-        priority: 10,
-      });
-      mockUseSecurityRules.mockReturnValue({
-        rules: [],
-        isLoading: false,
-        error: null,
-        updateRule: updateRuleMock,
-        deleteRule: jest.fn(),
-        createRule: jest.fn(),
-        mutate: jest.fn(),
-      });
+    test('does not render modal when isOpen is false', () => {
+      const { container } = render(
+        <RuleEditor
+          isOpen={false}
+          onClose={jest.fn()}
+        />
+      );
 
-      const result = mockUseSecurityRules();
-      await result.updateRule('rule-1', { priority: 10 });
+      const modal = container.querySelector('[role="dialog"]');
+      expect(modal).not.toBeInTheDocument();
+    });
 
-      expect(updateRuleMock).toHaveBeenCalledWith('rule-1', { priority: 10 });
+    test('closes modal when close button clicked', () => {
+      const onClose = jest.fn();
+      render(
+        <RuleEditor
+          isOpen={true}
+          onClose={onClose}
+        />
+      );
+
+      const closeButton = screen.getByRole('button', { name: /닫기|close/i });
+      fireEvent.click(closeButton);
+
+      expect(onClose).toHaveBeenCalled();
+    });
+
+    test('shows rule type options in dropdown', () => {
+      render(
+        <RuleEditor
+          isOpen={true}
+          onClose={jest.fn()}
+        />
+      );
+
+      const ruleTypeSelect = screen.getByDisplayValue(/connection_spike|규칙 타입/i);
+      expect(ruleTypeSelect).toBeInTheDocument();
     });
   });
 
   describe('AlertHistory Component', () => {
-    test('renders empty alert history', () => {
-      // Empty state is handled by the component
-      expect(true).toBe(true);
-    });
-
-    test('displays alert severity correctly', () => {
-      const severities = [
-        { severity: 10, emoji: '🚨' },
-        { severity: 8, emoji: '⚠️' },
-        { severity: 5, emoji: '⚡' },
-        { severity: 2, emoji: 'ℹ️' },
+    test('renders alert timeline with alerts', () => {
+      const mockAlerts = [
+        {
+          alert_id: 'alert-1',
+          rule_id: 'rule-1',
+          severity: 9,
+          message: 'Critical threat detected',
+          timestamp: '2026-05-23T10:00:00Z',
+          account_id: 'acc-1',
+          status: 'sent',
+        },
       ];
 
-      // In a real test, we would verify the emoji display
-      expect(severities.length).toBe(4);
+      render(<AlertHistory alerts={mockAlerts} />);
+
+      expect(screen.getByText('Critical threat detected')).toBeInTheDocument();
+    });
+
+    test('displays severity indicator with correct emoji', () => {
+      const mockAlerts = [
+        {
+          alert_id: 'alert-1',
+          rule_id: 'rule-1',
+          severity: 9,
+          message: 'Critical alert',
+          timestamp: '2026-05-23T10:00:00Z',
+          account_id: 'acc-1',
+          status: 'sent',
+        },
+      ];
+
+      render(<AlertHistory alerts={mockAlerts} />);
+
+      expect(screen.getByText(/🚨/)).toBeInTheDocument();
+    });
+
+    test('shows alert status indicator', () => {
+      const mockAlerts = [
+        {
+          alert_id: 'alert-1',
+          rule_id: 'rule-1',
+          severity: 5,
+          message: 'Test alert',
+          timestamp: '2026-05-23T10:00:00Z',
+          account_id: 'acc-1',
+          status: 'sent',
+        },
+      ];
+
+      render(<AlertHistory alerts={mockAlerts} />);
+
+      const statusElements = screen.getAllByRole('img', { hidden: true });
+      expect(statusElements.length).toBeGreaterThan(0);
     });
   });
 
-  describe('API Integration Tests', () => {
-    test('api route handles GET requests for rules list', () => {
-      // Mock API response
-      const mockApiResponse = {
-        rules: [
-          {
-            rule_id: 'rule-1',
-            rule_type: 'connection_spike',
-            priority: 8,
-            enabled: true,
-          },
-        ],
-        count: 1,
-      };
+  describe('AuditLogsDashboard Tab Switching', () => {
+    test('renders both log and rules tabs', () => {
+      render(<AuditLogsDashboard />);
 
-      expect(mockApiResponse.rules).toHaveLength(1);
-      expect(mockApiResponse.count).toBe(1);
+      expect(screen.getByRole('button', { name: '감시 로그' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '규칙 관리' })).toBeInTheDocument();
     });
 
-    test('api route handles POST requests for rule creation', () => {
-      const mockPostData = {
-        rule_type: 'connection_spike',
-        condition: { threshold: 10, window_minutes: 5 },
-        action: { notify: ['telegram'] },
-        priority: 8,
-      };
+    test('shows logs tab content by default', () => {
+      render(<AuditLogsDashboard />);
 
-      expect(mockPostData).toHaveProperty('rule_type');
-      expect(mockPostData).toHaveProperty('priority');
+      expect(screen.getByText(/감시 로그/)).toBeInTheDocument();
     });
 
-    test('api route handles PUT requests for rule updates', () => {
-      const mockUpdateData = {
-        priority: 9,
-        enabled: false,
-      };
+    test('switches to rules tab when clicked', async () => {
+      render(<AuditLogsDashboard />);
 
-      expect(mockUpdateData.priority).toBe(9);
-      expect(mockUpdateData.enabled).toBe(false);
+      const rulesTab = screen.getByRole('button', { name: '규칙 관리' });
+      fireEvent.click(rulesTab);
+
+      await waitFor(() => {
+        expect(screen.getByText(/\+ 규칙 추가/)).toBeInTheDocument();
+      });
     });
 
-    test('api route handles DELETE requests', () => {
-      // DELETE request should return 200 with empty body
-      const mockDeleteResponse = {};
-      expect(Object.keys(mockDeleteResponse).length).toBe(0);
+    test('shows "add rule" button only on rules tab', async () => {
+      render(<AuditLogsDashboard />);
+
+      let addButton = screen.queryByText(/\+ 규칙 추가/);
+      expect(addButton).not.toBeInTheDocument();
+
+      const rulesTab = screen.getByRole('button', { name: '규칙 관리' });
+      fireEvent.click(rulesTab);
+
+      await waitFor(() => {
+        addButton = screen.getByText(/\+ 규칙 추가/);
+        expect(addButton).toBeInTheDocument();
+      });
     });
   });
 });
