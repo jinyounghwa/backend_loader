@@ -209,6 +209,33 @@ class SecurityRuleRepository:
         except ClientError as e:
             raise RuntimeError(f"Failed to list all rules: {e}")
 
+    def list_active_rules(self, account_id: Optional[str] = None) -> List[SecurityRule]:
+        """List all rules with ACTIVE deployment (for real-time evaluation)"""
+        try:
+            from rule_deployment import RuleDeploymentRepository
+        except ImportError:
+            from .rule_deployment import RuleDeploymentRepository
+
+        try:
+            # Get deployment repo
+            deployment_table = self.table.table_name.replace("security-rules", "rule-deployments")
+            deployment_repo = RuleDeploymentRepository(deployment_table)
+
+            # Get all rules for account
+            rules = self.list_rules_by_account(account_id, enabled_only=True)
+
+            # Filter for rules with active deployments
+            active_rules = []
+            for rule in rules:
+                deployment = deployment_repo.get_active_deployment(rule.rule_id)
+                if deployment and deployment.status == "ACTIVE":
+                    active_rules.append(rule)
+
+            return active_rules
+        except Exception as e:
+            print(f"Error listing active rules: {e}")
+            return []
+
     def create_from_template(
         self,
         template_id: str,

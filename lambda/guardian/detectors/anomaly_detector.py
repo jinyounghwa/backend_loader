@@ -2,6 +2,7 @@
 
 Detects security threats based on configurable rules and audit log patterns.
 Evaluates rules against recent events and generates threat alerts.
+Sprint 36: Integrated with deployment system - only ACTIVE rules are evaluated.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -25,12 +26,13 @@ class Threat:
 
 
 class AnomalyDetector:
-    """Detects anomalies in audit logs based on security rules"""
+    """Detects anomalies in audit logs based on security rules (only ACTIVE deployed rules)"""
 
-    def __init__(self, rules_table_name: str, audit_logs_table_name: str):
+    def __init__(self, rules_table_name: str, audit_logs_table_name: str, deployments_table_name: Optional[str] = None):
         self.dynamodb = boto3.resource("dynamodb")
         self.rules_table = self.dynamodb.Table(rules_table_name)
         self.audit_logs_table = self.dynamodb.Table(audit_logs_table_name)
+        self.deployments_table_name = deployments_table_name
 
     def detect_anomalies(
         self,
@@ -38,7 +40,8 @@ class AnomalyDetector:
         lookback_minutes: int = 60,
     ) -> List[Threat]:
         """
-        Detect anomalies for account(s) using enabled rules.
+        Detect anomalies for account(s) using ACTIVE (deployed) rules.
+        Only rules with ACTIVE deployment status are evaluated.
         Args:
             account_id: Specific account to check (None = all accounts)
             lookback_minutes: How far back to look in audit logs
@@ -65,29 +68,65 @@ class AnomalyDetector:
             return []
 
     def _get_enabled_rules(self, account_id: Optional[str]) -> List[Dict[str, Any]]:
-        """Get all enabled rules for an account"""
+        """Get all ACTIVE (deployed) rules for an account"""
         try:
-            if account_id:
-                # Query rules for specific account
-                response = self.rules_table.query(
-                    IndexName="AccountIdIndex",
-                    KeyConditionExpression="account_id = :aid",
-                    ExpressionAttributeValues={":aid": account_id},
-                )
-            else:
-                # Get rules for 'all' accounts
-                response = self.rules_table.query(
-                    IndexName="AccountIdIndex",
-                    KeyConditionExpression="account_id = :aid",
-                    ExpressionAttributeValues={":aid": "all"},
-                )
+            # If deployments table is configured, filter by ACTIVE deployment status
+            if self.deployments_table_name:
+                try:
+                    from storage.rule_deployment import RuleDeploymentRepository
+                except ImportError:
+                    from ..storage.rule_deployment import RuleDeploymentRepository
 
-            rules = response.get("Items", [])
-            # Filter for enabled rules
-            return [rule for rule in rules if rule.get("enabled", True)]
+                # Get base enabled rules
+                if account_id:
+                    response = self.rules_table.query(
+                        IndexName="AccountIdIndex",
+                        KeyConditionExpression="account_id = :aid",
+                        ExpressionAttributeValues={":aid": account_id},
+                    )
+                else:
+                    response = self.rules_table.query(
+                        IndexName="AccountIdIndex",
+                        KeyConditionExpression="account_id = :aid",
+                        ExpressionAttributeValues={":aid": "all"},
+                    )
+
+                rules = response.get("Items", [])
+                enabled_rules = [rule for rule in rules if rule.get("enabled", True)]
+
+                # Filter for ACTIVE deployments only
+                deployment_repo = RuleDeploymentRepository(self.deployments_table_name)
+                active_rules = []
+
+                for rule in enabled_rules:
+                    deployment = deployment_repo.get_active_deployment(rule["rule_id"])
+                    if deployment and deployment.status == "ACTIVE":
+                        active_rules.append(rule)
+
+                return active_rules
+            else:
+                # Fallback: return enabled rules without deployment check (for backward compatibility)
+                if account_id:
+                    response = self.rules_table.query(
+                        IndexName="AccountIdIndex",
+                        KeyConditionExpression="account_id = :aid",
+                        ExpressionAttributeValues={":aid": account_id},
+                    )
+                else:
+                    response = self.rules_table.query(
+                        IndexName="AccountIdIndex",
+                        KeyConditionExpression="account_id = :aid",
+                        ExpressionAttributeValues={":aid": "all"},
+                    )
+
+                rules = response.get("Items", [])
+                return [rule for rule in rules if rule.get("enabled", True)]
 
         except ClientError as e:
-            print(f"Error getting rules: {e}")
+            print(f"Error getting enabled rules: {e}")
+            return []
+        except Exception as e:
+            print(f"Error checking deployment status: {e}")
             return []
 
     def _evaluate_rule(
