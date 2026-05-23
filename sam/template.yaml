@@ -100,6 +100,21 @@ Resources:
                   - dynamodb:ListStreams
                   - dynamodb:ListShards
                 Resource: !GetAtt WebSocketAuditLogsTable.StreamArn
+        - PolicyName: SecurityRulesPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource:
+                  - !GetAtt SecurityRulesTable.Arn
+                  - !Sub '${SecurityRulesTable.Arn}/index/*'
 
   # ==========================================
   # Lambda Functions
@@ -403,6 +418,51 @@ Resources:
           Value: !Ref Environment
 
   # ==========================================
+  # Security Rules Table (Sprint 33 Phase 1)
+  # ==========================================
+  SecurityRulesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-security-rules'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: rule_id
+          AttributeType: S
+        - AttributeName: rule_type
+          AttributeType: S
+        - AttributeName: priority
+          AttributeType: N
+        - AttributeName: account_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: rule_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: RuleTypeIndex
+          KeySchema:
+            - AttributeName: rule_type
+              KeyType: HASH
+            - AttributeName: priority
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: AccountIdIndex
+          KeySchema:
+            - AttributeName: account_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: SecurityRulesStorage
+
+  # ==========================================
   # SNS Topic for Alerts
   # ==========================================
   WebSocketAlertsTopic:
@@ -678,3 +738,15 @@ Outputs:
     Value: !GetAtt StreamProcessorFunction.Arn
     Export:
       Name: !Sub '${ProjectName}-StreamProcessorFunctionArn'
+
+  SecurityRulesTableName:
+    Description: Security Rules Table Name
+    Value: !Ref SecurityRulesTable
+    Export:
+      Name: !Sub '${ProjectName}-SecurityRulesTable'
+
+  SecurityRulesTableArn:
+    Description: Security Rules Table ARN
+    Value: !GetAtt SecurityRulesTable.Arn
+    Export:
+      Name: !Sub '${ProjectName}-SecurityRulesTableArn'
