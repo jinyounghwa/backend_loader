@@ -4,7 +4,7 @@ Detects security threats based on configurable rules and audit log patterns.
 Evaluates rules against recent events and generates threat alerts.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 import boto3
@@ -138,7 +138,7 @@ class AnomalyDetector:
     ) -> List[Dict[str, Any]]:
         """Get recent audit logs for specified account"""
         try:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc).replace(tzinfo=None)
             start_time = (now - timedelta(minutes=lookback_minutes)).isoformat()
             end_time = now.isoformat()
 
@@ -194,7 +194,7 @@ class AnomalyDetector:
         ]
 
         # Count events in recent window
-        window_start = datetime.utcnow() - timedelta(minutes=window_minutes)
+        window_start = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=window_minutes)
         recent_connects = [
             log
             for log in connect_events
@@ -204,11 +204,11 @@ class AnomalyDetector:
 
         if len(recent_connects) >= threshold:
             return Threat(
-                threat_id=f"spike-{rule['rule_id']}-{datetime.utcnow().timestamp()}",
+                threat_id=f"spike-{rule['rule_id']}-{datetime.now(timezone.utc).timestamp()}",
                 rule_id=rule["rule_id"],
                 severity=rule.get("priority", 5),
                 account_id=account_id,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
                 message=f"Connection spike detected: {len(recent_connects)} connections in {window_minutes} minutes (threshold: {threshold})",
                 evidence=recent_connects[:5],  # Top 5 for evidence
             )
@@ -237,11 +237,11 @@ class AnomalyDetector:
 
         if len(auth_failures) >= threshold:
             return Threat(
-                threat_id=f"auth-{rule['rule_id']}-{datetime.utcnow().timestamp()}",
+                threat_id=f"auth-{rule['rule_id']}-{datetime.now(timezone.utc).timestamp()}",
                 rule_id=rule["rule_id"],
                 severity=rule.get("priority", 7),
                 account_id=account_id,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
                 message=f"High authentication failure rate: {len(auth_failures)} failures (threshold: {threshold})",
                 evidence=auth_failures[:5],
             )
@@ -269,11 +269,11 @@ class AnomalyDetector:
 
         if unknown_region_events:
             return Threat(
-                threat_id=f"region-{rule['rule_id']}-{datetime.utcnow().timestamp()}",
+                threat_id=f"region-{rule['rule_id']}-{datetime.now(timezone.utc).timestamp()}",
                 rule_id=rule["rule_id"],
                 severity=rule.get("priority", 6),
                 account_id=account_id,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
                 message=f"Operations detected from unknown regions: {len(unknown_region_events)} events",
                 evidence=unknown_region_events[:5],
             )
@@ -301,11 +301,11 @@ class AnomalyDetector:
 
         if public_bucket_events:
             return Threat(
-                threat_id=f"bucket-{rule['rule_id']}-{datetime.utcnow().timestamp()}",
+                threat_id=f"bucket-{rule['rule_id']}-{datetime.now(timezone.utc).timestamp()}",
                 rule_id=rule["rule_id"],
                 severity=rule.get("priority", 9),
                 account_id=account_id,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
                 message=f"Public bucket access detected: {len(public_bucket_events)} events",
                 evidence=public_bucket_events[:5],
             )

@@ -6,7 +6,7 @@ Uses NotificationBuffer for batching and AlertHistory for audit trail.
 
 import asyncio
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 import boto3
 from botocore.exceptions import ClientError
@@ -147,7 +147,7 @@ class AlertHandler:
                 "timestamp": alert.get("timestamp"),
                 "message": alert.get("message"),
                 "status": "sent" if success else "failed",
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             }
 
             table.put_item(Item=item)

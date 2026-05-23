@@ -4,7 +4,7 @@ Event logging utility for tracking WebSocket connections, messages, and broadcas
 """
 
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 import boto3
@@ -12,8 +12,17 @@ import boto3
 
 class AuditLogger:
     """WebSocket event audit logging to DynamoDB"""
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(AuditLogger, cls).__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
 
     def __init__(self):
+        if getattr(self, "_initialized", False):
+            return
         self.dynamodb = boto3.resource("dynamodb")
         self.table_name = os.getenv("AUDIT_LOGS_TABLE")
         self.enabled = os.getenv("AUDIT_LOGS_ENABLED", "true").lower() == "true"
@@ -23,10 +32,11 @@ class AuditLogger:
             self.table = self.dynamodb.Table(self.table_name)
         else:
             self.table = None
+        self._initialized = True
 
     def _get_expiration_timestamp(self) -> int:
         """Get Unix timestamp for TTL expiration (90 days from now)"""
-        expiration = datetime.utcnow() + timedelta(days=self.ttl_days)
+        expiration = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=self.ttl_days)
         return int(expiration.timestamp())
 
     def _put_item(self, connection_id: str, timestamp: str, event_data: Dict[str, Any], account_id: str = "current") -> bool:
@@ -58,7 +68,7 @@ class AuditLogger:
     ) -> bool:
         """Log $connect event"""
         logger = AuditLogger()
-        timestamp = datetime.utcnow().isoformat() + "Z"
+        timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
         event_data = {
             "event_type": "$connect",
             "user_id": user_id or "anonymous",
@@ -77,7 +87,7 @@ class AuditLogger:
     ) -> bool:
         """Log $disconnect event"""
         logger = AuditLogger()
-        timestamp = datetime.utcnow().isoformat() + "Z"
+        timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
         event_data = {
             "event_type": "$disconnect",
             "user_id": user_id or "anonymous",
@@ -97,7 +107,7 @@ class AuditLogger:
     ) -> bool:
         """Log message processing event"""
         logger = AuditLogger()
-        timestamp = datetime.utcnow().isoformat() + "Z"
+        timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
         event_data = {
             "event_type": "message",
             "user_id": user_id or "anonymous",
@@ -118,7 +128,7 @@ class AuditLogger:
     ) -> bool:
         """Log threat broadcast event"""
         logger = AuditLogger()
-        timestamp = datetime.utcnow().isoformat() + "Z"
+        timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
         event_data = {
             "event_type": "broadcast",
             "user_id": user_id or "system",

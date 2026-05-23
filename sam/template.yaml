@@ -690,6 +690,79 @@ Resources:
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${AuditApiGateway}/*'
 
   # ==========================================
+  # Rule Validation API (HTTP API Gateway)
+  # ==========================================
+  ValidationApiGateway:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub '${ProjectName}-validation-api'
+      ProtocolType: HTTP
+      Description: Rule Validation API
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+
+  ValidationApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref ValidationApiGateway
+      StageName: !Ref Environment
+      AutoDeploy: true
+      LoggingLevel: INFO
+      DataTraceEnabled: true
+
+  ValidateRuleIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ValidationApiGateway
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub 'arn:aws:apigatewayv2:${AWS::Region}:lambda:path/2015-03-31/functions/${ValidationFunction.Arn}/invocations'
+      PayloadFormatVersion: '2.0'
+
+  ValidateRuleRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ValidationApiGateway
+      RouteKey: 'POST /validate'
+      Target: !Sub 'integrations/${ValidateRuleIntegration}'
+      AuthorizationType: NONE
+
+  TestRunRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ValidationApiGateway
+      RouteKey: 'POST /test-run'
+      Target: !Sub 'integrations/${ValidateRuleIntegration}'
+      AuthorizationType: NONE
+
+  ValidationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-validation'
+      CodeUri: ../lambda
+      Handler: guardian/handlers/validation_handler.lambda_handler
+      Runtime: python3.12
+      Role: !GetAtt WebSocketLambdaRole.Arn
+      Environment:
+        Variables:
+          RULE_TEMPLATE_TABLE: !Ref RuleTemplateTable
+          SECURITY_RULES_TABLE: !Ref SecurityRulesTable
+          AUDIT_LOGS_TABLE: !Ref WebSocketAuditLogsTable
+      Tags:
+        - Key: Function
+          Value: Validation
+
+  ValidationFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ValidationFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ValidationApiGateway}/*'
+
+  # ==========================================
   # Outputs
   # ==========================================
 
@@ -797,3 +870,15 @@ Outputs:
     Value: !GetAtt RuleTemplateTable.Arn
     Export:
       Name: !Sub '${ProjectName}-RuleTemplateTableArn'
+
+  ValidationApiEndpoint:
+    Description: Rule Validation API Endpoint
+    Value: !Sub 'https://${ValidationApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${ProjectName}-ValidationApiEndpoint'
+
+  ValidationFunctionArn:
+    Description: Validation Lambda Function ARN
+    Value: !GetAtt ValidationFunction.Arn
+    Export:
+      Name: !Sub '${ProjectName}-ValidationFunctionArn'
