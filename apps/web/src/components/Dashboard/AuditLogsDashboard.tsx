@@ -5,6 +5,7 @@ import { useAuditLogs } from '@/lib/hooks/useAuditLogs';
 import { useAuditLogStream } from '@/lib/hooks/useAuditLogStream';
 import { AuditLogsFilter } from './AuditLogsFilter';
 import { AuditLogsTimeline } from './AuditLogsTimeline';
+import { AuditStatsCard } from './AuditStatsCard';
 import { ChevronLeft, ChevronRight, Radio } from 'lucide-react';
 
 interface AuditLogsDashboardProps {
@@ -135,6 +136,14 @@ export function AuditLogsDashboard({ connectionId }: AuditLogsDashboardProps) {
 
       {/* 필터 섹션 */}
       <AuditLogsFilter value={filters} onChange={setFilters} accounts={accounts} />
+
+      {/* 통계 및 분석 */}
+      <AuditStatsCard
+        accountId={filters.accountId}
+        connectionId={connectionId}
+        startTime={filters.startTime}
+        endTime={filters.endTime}
+      />
 
       {/* 타임라인 섹션 */}
       <AuditLogsTimeline logs={logs} isLoading={isLoading} />
