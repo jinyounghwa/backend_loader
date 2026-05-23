@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuditLogs } from '@/lib/hooks/useAuditLogs';
 import { AuditLogsFilter } from './AuditLogsFilter';
 import { AuditLogsTimeline } from './AuditLogsTimeline';
@@ -10,8 +10,21 @@ interface AuditLogsDashboardProps {
   connectionId?: string;
 }
 
-export function AuditLogsDashboard({ connectionId = 'all' }: AuditLogsDashboardProps) {
-  const [filters, setFilters] = useState({
+interface Account {
+  id: string;
+  name: string;
+}
+
+export function AuditLogsDashboard({ connectionId }: AuditLogsDashboardProps) {
+  const [filters, setFilters] = useState<{
+    accountId?: string;
+    startTime: string;
+    endTime: string;
+    eventType: string;
+    offset: number;
+    limit: number;
+  }>({
+    accountId: undefined,
     startTime: '',
     endTime: '',
     eventType: '',
@@ -19,7 +32,36 @@ export function AuditLogsDashboard({ connectionId = 'all' }: AuditLogsDashboardP
     limit: 50,
   });
 
-  const { logs, total, hasMore, isLoading } = useAuditLogs(connectionId, filters);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(true);
+
+  // 계정 목록 로드
+  useEffect(() => {
+    const fetchAccounts = async () => {
+      try {
+        const res = await fetch('/api/guardian/accounts');
+        const data = await res.json();
+        setAccounts(data.accounts || []);
+      } catch (error) {
+        console.error('Failed to fetch accounts:', error);
+        setAccounts([]);
+      } finally {
+        setLoadingAccounts(false);
+      }
+    };
+
+    fetchAccounts();
+  }, []);
+
+  const { logs, total, hasMore, isLoading } = useAuditLogs({
+    accountId: filters.accountId,
+    connectionId: connectionId || undefined,
+    startTime: filters.startTime,
+    endTime: filters.endTime,
+    eventType: filters.eventType,
+    limit: filters.limit,
+    offset: filters.offset,
+  });
 
   const currentPage = Math.floor(filters.offset / filters.limit) + 1;
   const totalPages = Math.ceil(total / filters.limit);
@@ -58,7 +100,7 @@ export function AuditLogsDashboard({ connectionId = 'all' }: AuditLogsDashboardP
       </div>
 
       {/* 필터 섹션 */}
-      <AuditLogsFilter value={filters} onChange={setFilters} />
+      <AuditLogsFilter value={filters} onChange={setFilters} accounts={accounts} />
 
       {/* 타임라인 섹션 */}
       <AuditLogsTimeline logs={logs} isLoading={isLoading} />

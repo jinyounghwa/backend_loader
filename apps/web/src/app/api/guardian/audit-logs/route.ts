@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 export interface AuditLog {
   connection_id: string;
+  account_id: string;
   timestamp: string;
   event_type: '$connect' | '$disconnect' | 'message' | 'broadcast';
   user_id?: string;
@@ -31,6 +32,7 @@ export async function GET(request: Request) {
 
   try {
     const { searchParams } = new URL(request.url);
+    const accountId = searchParams.get('account_id');
     const connectionId = searchParams.get('connection_id');
     const startTime = searchParams.get('start_time');
     const endTime = searchParams.get('end_time');
@@ -38,9 +40,9 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    if (!connectionId) {
+    if (!accountId && !connectionId) {
       return NextResponse.json(
-        { error: 'Missing required parameter: connection_id' },
+        { error: 'Missing required parameter: account_id or connection_id' },
         { status: 400 }
       );
     }
@@ -56,7 +58,8 @@ export async function GET(request: Request) {
 
     // Build query parameters for backend HTTP API
     const queryParams = new URLSearchParams({
-      connection_id: connectionId,
+      ...(accountId && { account_id: accountId }),
+      ...(connectionId && { connection_id: connectionId }),
       ...(startTime && { start_time: startTime }),
       ...(endTime && { end_time: endTime }),
       ...(eventType && { event_type: eventType }),

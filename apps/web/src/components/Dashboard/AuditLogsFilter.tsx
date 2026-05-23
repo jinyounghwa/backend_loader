@@ -1,19 +1,25 @@
 'use client';
 
-interface AuditLogsFilterProps {
-  value: {
-    startTime: string;
-    endTime: string;
-    eventType: string;
-    offset: number;
-    limit: number;
-  };
-  onChange: (
-    filters: AuditLogsFilterProps['value']
-  ) => void;
+interface FilterValue {
+  accountId?: string;
+  startTime: string;
+  endTime: string;
+  eventType: string;
+  offset: number;
+  limit: number;
 }
 
-export function AuditLogsFilter({ value, onChange }: AuditLogsFilterProps) {
+interface AuditLogsFilterProps {
+  value: FilterValue;
+  onChange: (filters: FilterValue) => void;
+  accounts?: Array<{ id: string; name: string }>;
+}
+
+export function AuditLogsFilter({ value, onChange, accounts = [] }: AuditLogsFilterProps) {
+  const handleAccountChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    onChange({ ...value, accountId: e.target.value || undefined, offset: 0 });
+  };
+
   const handleStartTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onChange({ ...value, startTime: e.target.value, offset: 0 });
   };
@@ -32,6 +38,7 @@ export function AuditLogsFilter({ value, onChange }: AuditLogsFilterProps) {
 
   const handleClear = () => {
     onChange({
+      accountId: undefined,
       startTime: '',
       endTime: '',
       eventType: '',
@@ -52,7 +59,25 @@ export function AuditLogsFilter({ value, onChange }: AuditLogsFilterProps) {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">
+            AWS 계정
+          </label>
+          <select
+            value={value.accountId || ''}
+            onChange={handleAccountChange}
+            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+          >
+            <option value="">모든 계정</option>
+            {accounts.map((acc) => (
+              <option key={acc.id} value={acc.id}>
+                {acc.name} ({acc.id})
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
             시작 시간

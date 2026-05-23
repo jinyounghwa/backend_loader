@@ -29,7 +29,7 @@ class AuditLogger:
         expiration = datetime.utcnow() + timedelta(days=self.ttl_days)
         return int(expiration.timestamp())
 
-    def _put_item(self, connection_id: str, timestamp: str, event_data: Dict[str, Any]) -> bool:
+    def _put_item(self, connection_id: str, timestamp: str, event_data: Dict[str, Any], account_id: str = "current") -> bool:
         """Put audit log item into DynamoDB"""
         if not self.table:
             return False
@@ -38,6 +38,7 @@ class AuditLogger:
             item = {
                 "connection_id": connection_id,
                 "timestamp": timestamp,
+                "account_id": account_id,
                 "expiration_time": self._get_expiration_timestamp(),
                 **event_data,
             }
@@ -51,6 +52,7 @@ class AuditLogger:
     def log_connect(
         connection_id: str,
         user_id: Optional[str] = None,
+        account_id: str = "current",
         status: str = "success",
         details: Optional[Dict[str, Any]] = None,
     ) -> bool:
@@ -63,12 +65,13 @@ class AuditLogger:
             "status": status,
             "details": details or {},
         }
-        return logger._put_item(connection_id, timestamp, event_data)
+        return logger._put_item(connection_id, timestamp, event_data, account_id)
 
     @staticmethod
     def log_disconnect(
         connection_id: str,
         user_id: Optional[str] = None,
+        account_id: str = "current",
         status: str = "success",
         details: Optional[Dict[str, Any]] = None,
     ) -> bool:
@@ -81,13 +84,14 @@ class AuditLogger:
             "status": status,
             "details": details or {},
         }
-        return logger._put_item(connection_id, timestamp, event_data)
+        return logger._put_item(connection_id, timestamp, event_data, account_id)
 
     @staticmethod
     def log_message(
         connection_id: str,
         user_id: Optional[str] = None,
         message_type: str = "unknown",
+        account_id: str = "current",
         status: str = "success",
         details: Optional[Dict[str, Any]] = None,
     ) -> bool:
@@ -101,13 +105,14 @@ class AuditLogger:
             "status": status,
             "details": details or {},
         }
-        return logger._put_item(connection_id, timestamp, event_data)
+        return logger._put_item(connection_id, timestamp, event_data, account_id)
 
     @staticmethod
     def log_broadcast(
         connection_id: str,
         user_id: Optional[str] = None,
         threat_score: int = 0,
+        account_id: str = "current",
         status: str = "success",
         details: Optional[Dict[str, Any]] = None,
     ) -> bool:
@@ -121,7 +126,7 @@ class AuditLogger:
             "status": status,
             "details": details or {},
         }
-        return logger._put_item(connection_id, timestamp, event_data)
+        return logger._put_item(connection_id, timestamp, event_data, account_id)
 
     @staticmethod
     def query_connection_logs(connection_id: str) -> list:
@@ -142,29 +147,56 @@ class AuditLogger:
 
     @staticmethod
     def query_with_filters(
-        connection_id: str,
+        connection_id: Optional[str] = None,
+        account_id: Optional[str] = None,
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
         event_type: Optional[str] = None,
     ) -> list:
-        """Query audit logs with filtering by time range and event type"""
-        logs = AuditLogger.query_connection_logs(connection_id)
-
-        if not logs:
+        """Query audit logs with filtering by connection/account, time range, and event type"""
+        logger = AuditLogger()
+        if not logger.table:
             return []
 
-        filtered_logs = logs
+        try:
+            # Query by account_id using GSI
+            if account_id and account_id != "all":
+                response = logger.table.query(
+                    IndexName="AccountIdTimestampIndex",
+                    KeyConditionExpression="account_id = :aid AND #ts BETWEEN :start AND :end",
+                    ExpressionAttributeNames={"#ts": "timestamp"},
+                    ExpressionAttributeValues={
+                        ":aid": account_id,
+                        ":start": start_time or "1970-01-01T00:00:00Z",
+                        ":end": end_time or "2099-12-31T23:59:59Z",
+                    },
+                )
+                logs = response.get("Items", [])
+            # Query by connection_id (primary key)
+            elif connection_id and connection_id != "all":
+                logs = AuditLogger.query_connection_logs(connection_id)
+            else:
+                # Return empty for now (full scan not implemented)
+                return []
 
-        # Filter by start_time (ISO 8601 string comparison)
-        if start_time:
-            filtered_logs = [log for log in filtered_logs if log.get("timestamp", "") >= start_time]
+            if not logs:
+                return []
 
-        # Filter by end_time (ISO 8601 string comparison)
-        if end_time:
-            filtered_logs = [log for log in filtered_logs if log.get("timestamp", "") <= end_time]
+            filtered_logs = logs
 
-        # Filter by event_type
-        if event_type:
-            filtered_logs = [log for log in filtered_logs if log.get("event_type") == event_type]
+            # Filter by start_time (ISO 8601 string comparison)
+            if start_time:
+                filtered_logs = [log for log in filtered_logs if log.get("timestamp", "") >= start_time]
 
-        return filtered_logs
+            # Filter by end_time (ISO 8601 string comparison)
+            if end_time:
+                filtered_logs = [log for log in filtered_logs if log.get("timestamp", "") <= end_time]
+
+            # Filter by event_type
+            if event_type:
+                filtered_logs = [log for log in filtered_logs if log.get("event_type") == event_type]
+
+            return filtered_logs
+        except Exception as e:
+            print(f"Error querying audit logs with filters: {e}")
+            return []

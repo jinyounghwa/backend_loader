@@ -329,11 +329,22 @@ Resources:
           AttributeType: S
         - AttributeName: timestamp
           AttributeType: S
+        - AttributeName: account_id
+          AttributeType: S
       KeySchema:
         - AttributeName: connection_id
           KeyType: HASH
         - AttributeName: timestamp
           KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: AccountIdTimestampIndex
+          KeySchema:
+            - AttributeName: account_id
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
       TimeToLiveSpecification:
         AttributeName: expiration_time
         Enabled: true
