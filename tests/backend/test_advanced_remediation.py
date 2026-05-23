@@ -433,8 +433,10 @@ class TestAdvancedRemediationExecutor:
 
     # VPC Remediation Tests
 
-    def test_vpc_isolate_success(self, executor):
+    def test_vpc_isolate_success(self, executor, mock_aws_executor):
         """Test successful VPC isolation"""
+        mock_aws_executor.isolate_resource_in_vpc.return_value = True
+
         threat = Threat(
             threat_id="threat-vpc",
             rule_id="rule-vpc",
@@ -449,7 +451,8 @@ class TestAdvancedRemediationExecutor:
             "type": "VPC_ISOLATE",
             "parameters": {
                 "resource_id": "i-1234567890abcdef0",
-                "target_vpc": "vpc-isolated"
+                "target_vpc": "vpc-isolated",
+                "region": "us-east-1"
             }
         }
 
@@ -458,11 +461,71 @@ class TestAdvancedRemediationExecutor:
         assert result is not None
         assert result.action_type == "VPC_ISOLATE"
         assert result.success is True
-        assert "isolated to VPC" in result.message
+        assert "Successfully isolated" in result.message
         assert result.rollback_metadata["resource_id"] == "i-1234567890abcdef0"
+        mock_aws_executor.isolate_resource_in_vpc.assert_called_once_with(
+            "i-1234567890abcdef0", "vpc-isolated", "us-east-1"
+        )
 
-    def test_route_remove_success(self, executor):
+    def test_vpc_isolate_failure(self, executor, mock_aws_executor):
+        """Test failed VPC isolation"""
+        mock_aws_executor.isolate_resource_in_vpc.return_value = False
+
+        threat = Threat(
+            threat_id="threat-vpc-fail",
+            rule_id="rule-vpc-fail",
+            severity=8,
+            account_id="test-account",
+            timestamp=datetime.now(timezone.utc),
+            message="VPC threat",
+            evidence=[]
+        )
+
+        action = {
+            "type": "VPC_ISOLATE",
+            "parameters": {
+                "resource_id": "i-bad",
+                "target_vpc": "vpc-nonexistent",
+                "region": "us-east-1"
+            }
+        }
+
+        result = executor.execute_vpc_remediation(action, threat)
+
+        assert result is not None
+        assert result.success is False
+        assert "Failed to isolate" in result.message
+
+    def test_vpc_isolate_missing_parameters(self, executor):
+        """Test VPC isolation with missing parameters"""
+        threat = Threat(
+            threat_id="threat-vpc-empty",
+            rule_id="rule-vpc-empty",
+            severity=7,
+            account_id="test-account",
+            timestamp=datetime.now(timezone.utc),
+            message="VPC threat",
+            evidence=[]
+        )
+
+        action = {
+            "type": "VPC_ISOLATE",
+            "parameters": {
+                "resource_id": "i-123"
+                # Missing target_vpc
+            }
+        }
+
+        result = executor.execute_vpc_remediation(action, threat)
+
+        assert result is not None
+        assert result.success is False
+        assert "required" in result.message
+
+    def test_route_remove_success(self, executor, mock_aws_executor):
         """Test successful route removal"""
+        mock_aws_executor.remove_route_from_table.return_value = True
+
         threat = Threat(
             threat_id="threat-route",
             rule_id="rule-route",
@@ -477,7 +540,8 @@ class TestAdvancedRemediationExecutor:
             "type": "ROUTE_REMOVE",
             "parameters": {
                 "route_table_id": "rtb-12345",
-                "destination_cidr": "0.0.0.0/0"
+                "destination_cidr": "0.0.0.0/0",
+                "region": "us-east-1"
             }
         }
 
@@ -486,10 +550,44 @@ class TestAdvancedRemediationExecutor:
         assert result is not None
         assert result.action_type == "ROUTE_REMOVE"
         assert result.success is True
-        assert "removed from" in result.message
+        assert "Successfully removed" in result.message
+        mock_aws_executor.remove_route_from_table.assert_called_once_with(
+            "rtb-12345", "0.0.0.0/0", "us-east-1"
+        )
 
-    def test_nacl_restrict_success(self, executor):
+    def test_route_remove_failure(self, executor, mock_aws_executor):
+        """Test failed route removal"""
+        mock_aws_executor.remove_route_from_table.return_value = False
+
+        threat = Threat(
+            threat_id="threat-route-fail",
+            rule_id="rule-route-fail",
+            severity=8,
+            account_id="test-account",
+            timestamp=datetime.now(timezone.utc),
+            message="Route threat",
+            evidence=[]
+        )
+
+        action = {
+            "type": "ROUTE_REMOVE",
+            "parameters": {
+                "route_table_id": "rtb-bad",
+                "destination_cidr": "10.0.0.0/8",
+                "region": "us-east-1"
+            }
+        }
+
+        result = executor.execute_vpc_remediation(action, threat)
+
+        assert result is not None
+        assert result.success is False
+        assert "Failed to remove" in result.message
+
+    def test_nacl_restrict_success(self, executor, mock_aws_executor):
         """Test successful NACL restriction"""
+        mock_aws_executor.restrict_nacl_access.return_value = True
+
         threat = Threat(
             threat_id="threat-nacl",
             rule_id="rule-nacl",
@@ -503,7 +601,8 @@ class TestAdvancedRemediationExecutor:
         action = {
             "type": "NACL_RESTRICT",
             "parameters": {
-                "nacl_id": "acl-12345"
+                "nacl_id": "acl-12345",
+                "region": "us-east-1"
             }
         }
 
@@ -512,10 +611,41 @@ class TestAdvancedRemediationExecutor:
         assert result is not None
         assert result.action_type == "NACL_RESTRICT"
         assert result.success is True
-        assert "restricted" in result.message
+        assert "Successfully restricted" in result.message
+        mock_aws_executor.restrict_nacl_access.assert_called_once_with("acl-12345", "us-east-1")
 
-    def test_elb_deregister_success(self, executor):
+    def test_nacl_restrict_failure(self, executor, mock_aws_executor):
+        """Test failed NACL restriction"""
+        mock_aws_executor.restrict_nacl_access.return_value = False
+
+        threat = Threat(
+            threat_id="threat-nacl-fail",
+            rule_id="rule-nacl-fail",
+            severity=8,
+            account_id="test-account",
+            timestamp=datetime.now(timezone.utc),
+            message="NACL threat",
+            evidence=[]
+        )
+
+        action = {
+            "type": "NACL_RESTRICT",
+            "parameters": {
+                "nacl_id": "acl-bad",
+                "region": "us-east-1"
+            }
+        }
+
+        result = executor.execute_vpc_remediation(action, threat)
+
+        assert result is not None
+        assert result.success is False
+        assert "Failed to restrict" in result.message
+
+    def test_elb_deregister_success(self, executor, mock_aws_executor):
         """Test successful ELB target deregistration"""
+        mock_aws_executor.deregister_target_from_load_balancer.return_value = True
+
         threat = Threat(
             threat_id="threat-elb",
             rule_id="rule-elb",
@@ -530,7 +660,9 @@ class TestAdvancedRemediationExecutor:
             "type": "ELB_DEREGISTER",
             "parameters": {
                 "load_balancer_arn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/my-alb/1234567890abcdef",
-                "target_id": "i-1234567890abcdef0"
+                "target_id": "i-1234567890abcdef0",
+                "target_port": 80,
+                "region": "us-east-1"
             }
         }
 
@@ -539,7 +671,42 @@ class TestAdvancedRemediationExecutor:
         assert result is not None
         assert result.action_type == "ELB_DEREGISTER"
         assert result.success is True
-        assert "deregistered from load balancer" in result.message
+        assert "Successfully deregistered" in result.message
+        mock_aws_executor.deregister_target_from_load_balancer.assert_called_once_with(
+            "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/my-alb/1234567890abcdef",
+            "i-1234567890abcdef0",
+            80,
+            "us-east-1"
+        )
+
+    def test_elb_deregister_failure(self, executor, mock_aws_executor):
+        """Test failed ELB target deregistration"""
+        mock_aws_executor.deregister_target_from_load_balancer.return_value = False
+
+        threat = Threat(
+            threat_id="threat-elb-fail",
+            rule_id="rule-elb-fail",
+            severity=8,
+            account_id="test-account",
+            timestamp=datetime.now(timezone.utc),
+            message="ELB threat",
+            evidence=[]
+        )
+
+        action = {
+            "type": "ELB_DEREGISTER",
+            "parameters": {
+                "load_balancer_arn": "arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/bad/1234567890abcdef",
+                "target_id": "i-bad",
+                "region": "us-east-1"
+            }
+        }
+
+        result = executor.execute_vpc_remediation(action, threat)
+
+        assert result is not None
+        assert result.success is False
+        assert "Failed to deregister" in result.message
 
     # Error Handling Tests
 

@@ -338,3 +338,217 @@ class AWSActionExecutor:
         except Exception as e:
             logger.error("Failed to enable backups for RDS instance %s: %s", db_instance_id, e)
             return False
+
+    def isolate_resource_in_vpc(
+        self,
+        resource_id: str,
+        target_vpc_id: str,
+        region: str = "us-east-1"
+    ) -> bool:
+        """Isolate a resource by moving it to a target VPC.
+
+        Args:
+            resource_id: EC2 instance ID or ENI ID to isolate
+            target_vpc_id: Target VPC ID for isolation
+            region: AWS region
+
+        Returns:
+            True if the action succeeded or was skipped (LocalStack)
+
+        Note: This is typically done by modifying security groups or network interfaces.
+        """
+        if not resource_id or not target_vpc_id:
+            logger.error("Invalid resource ID or target VPC ID")
+            return False
+
+        if self.is_localstack:
+            logger.info("[LocalStack] Skipping VPC isolation for %s to %s", resource_id, target_vpc_id)
+            return True
+
+        try:
+            ec2 = AWSClientProvider.get_client("ec2", region=region)
+            # Strategy: Create isolation security group in target VPC and attach to instance
+            # First, ensure resource is in the target VPC by checking its current state
+            instances = ec2.describe_instances(InstanceIds=[resource_id])
+            instance = instances["Reservations"][0]["Instances"][0]
+            current_vpc = instance.get("VpcId")
+
+            if current_vpc == target_vpc_id:
+                logger.info("Resource %s already in target VPC %s", resource_id, target_vpc_id)
+                return True
+
+            # Create or get isolation security group in target VPC
+            # For now, we'll modify security groups to achieve isolation
+            isolation_sg = None
+            sgs = ec2.describe_security_groups(
+                Filters=[
+                    {"Name": "vpc-id", "Values": [target_vpc_id]},
+                    {"Name": "group-name", "Values": ["isolation-sg"]}
+                ]
+            )
+            if sgs["SecurityGroups"]:
+                isolation_sg = sgs["SecurityGroups"][0]
+            else:
+                # Create isolation SG with no ingress rules
+                sg_response = ec2.create_security_group(
+                    GroupName="isolation-sg",
+                    Description="Security group for resource isolation",
+                    VpcId=target_vpc_id
+                )
+                isolation_sg = sg_response
+
+            # Modify instance security groups to only use isolation SG
+            if isolation_sg:
+                ec2.modify_instance_attribute(
+                    InstanceId=resource_id,
+                    Groups=[isolation_sg["GroupId"]]
+                )
+                logger.info(
+                    "Isolated resource %s to VPC %s with security group %s",
+                    resource_id,
+                    target_vpc_id,
+                    isolation_sg["GroupId"]
+                )
+                return True
+
+            return False
+        except Exception as e:
+            logger.error("Failed to isolate resource %s to VPC %s: %s", resource_id, target_vpc_id, e)
+            return False
+
+    def remove_route_from_table(
+        self,
+        route_table_id: str,
+        destination_cidr: str,
+        region: str = "us-east-1"
+    ) -> bool:
+        """Remove a route from a routing table.
+
+        Args:
+            route_table_id: Route table ID
+            destination_cidr: CIDR block to remove (e.g., 0.0.0.0/0)
+            region: AWS region
+
+        Returns:
+            True if the action succeeded or was skipped (LocalStack)
+        """
+        if not route_table_id or not destination_cidr:
+            logger.error("Invalid route table ID or destination CIDR")
+            return False
+
+        if self.is_localstack:
+            logger.info("[LocalStack] Skipping route removal for %s from %s", destination_cidr, route_table_id)
+            return True
+
+        try:
+            ec2 = AWSClientProvider.get_client("ec2", region=region)
+            ec2.delete_route(
+                RouteTableId=route_table_id,
+                DestinationCidrBlock=destination_cidr
+            )
+            logger.info("Removed route %s from table %s", destination_cidr, route_table_id)
+            return True
+        except Exception as e:
+            logger.error("Failed to remove route from %s: %s", route_table_id, e)
+            return False
+
+    def restrict_nacl_access(
+        self,
+        nacl_id: str,
+        region: str = "us-east-1"
+    ) -> bool:
+        """Restrict a Network ACL by removing ingress rules.
+
+        Args:
+            nacl_id: Network ACL ID
+            region: AWS region
+
+        Returns:
+            True if the action succeeded or was skipped (LocalStack)
+        """
+        if not nacl_id:
+            logger.error("Invalid NACL ID")
+            return False
+
+        if self.is_localstack:
+            logger.info("[LocalStack] Skipping NACL restriction for %s", nacl_id)
+            return True
+
+        try:
+            ec2 = AWSClientProvider.get_client("ec2", region=region)
+            # Get all ingress rules for the NACL
+            nacls = ec2.describe_network_acls(NetworkAclIds=[nacl_id])
+            if not nacls["NetworkAcls"]:
+                logger.error("NACL not found: %s", nacl_id)
+                return False
+
+            nacl = nacls["NetworkAcls"][0]
+            # Remove all non-deny ingress rules (except rule 32767 which is default deny)
+            for entry in nacl.get("Entries", []):
+                if entry.get("Egress") is False and entry.get("RuleNumber", 32767) < 32767:
+                    try:
+                        ec2.delete_network_acl_entry(
+                            NetworkAclId=nacl_id,
+                            RuleNumber=entry["RuleNumber"],
+                            Egress=False
+                        )
+                        logger.info("Removed NACL rule %d from %s", entry["RuleNumber"], nacl_id)
+                    except Exception as rule_error:
+                        logger.warning("Failed to remove rule %d: %s", entry["RuleNumber"], rule_error)
+
+            logger.info("Restricted NACL %s", nacl_id)
+            return True
+        except Exception as e:
+            logger.error("Failed to restrict NACL %s: %s", nacl_id, e)
+            return False
+
+    def deregister_target_from_load_balancer(
+        self,
+        load_balancer_arn: str,
+        target_id: str,
+        target_port: int = 80,
+        region: str = "us-east-1"
+    ) -> bool:
+        """Deregister a target from a load balancer.
+
+        Args:
+            load_balancer_arn: Load balancer ARN
+            target_id: Target instance ID or IP address
+            target_port: Target port (default 80)
+            region: AWS region
+
+        Returns:
+            True if the action succeeded or was skipped (LocalStack)
+        """
+        if not load_balancer_arn or not target_id:
+            logger.error("Invalid load balancer ARN or target ID")
+            return False
+
+        if self.is_localstack:
+            logger.info("[LocalStack] Skipping target deregistration from %s", load_balancer_arn)
+            return True
+
+        try:
+            elb = AWSClientProvider.get_client("elbv2", region=region)
+            # Get all target groups for the load balancer
+            tg_response = elb.describe_target_groups(LoadBalancerArn=load_balancer_arn)
+
+            for target_group in tg_response.get("TargetGroups", []):
+                try:
+                    elb.deregister_targets(
+                        TargetGroupArn=target_group["TargetGroupArn"],
+                        Targets=[{"Id": target_id, "Port": target_port}]
+                    )
+                    logger.info(
+                        "Deregistered target %s from load balancer %s",
+                        target_id,
+                        load_balancer_arn
+                    )
+                except Exception as tg_error:
+                    # Target might not be in this group, continue to next
+                    logger.debug("Target not found in group %s: %s", target_group["TargetGroupArn"], tg_error)
+
+            return True
+        except Exception as e:
+            logger.error("Failed to deregister target from load balancer: %s", e)
+            return False

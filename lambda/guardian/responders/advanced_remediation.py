@@ -227,57 +227,100 @@ class AdvancedRemediationExecutor:
 
         try:
             params = action.get('parameters', {})
+            region = params.get('region', 'us-east-1')
 
             if action_type == 'VPC_ISOLATE':
                 resource_id = params.get('resource_id')
                 target_vpc = params.get('target_vpc')
+                if not resource_id or not target_vpc:
+                    return AdvancedRemediationResult(
+                        action_type=action_type,
+                        success=False,
+                        target='unknown',
+                        message='Resource ID and target VPC required',
+                        timestamp=timestamp
+                    )
+                success = self.aws_executor.isolate_resource_in_vpc(resource_id, target_vpc, region)
                 return AdvancedRemediationResult(
                     action_type=action_type,
-                    success=True,
+                    success=success,
                     target=f"{resource_id}→{target_vpc}",
-                    message=f"Resource {resource_id} isolated to VPC {target_vpc}",
+                    message=f"{'Successfully isolated' if success else 'Failed to isolate'} {resource_id} to VPC {target_vpc}",
                     timestamp=timestamp,
-                    rollback_metadata={"resource_id": resource_id, "target_vpc": target_vpc}
+                    rollback_metadata={"resource_id": resource_id, "target_vpc": target_vpc, "region": region}
                 )
 
             elif action_type == 'ROUTE_REMOVE':
                 route_table_id = params.get('route_table_id')
                 destination_cidr = params.get('destination_cidr')
+                if not route_table_id or not destination_cidr:
+                    return AdvancedRemediationResult(
+                        action_type=action_type,
+                        success=False,
+                        target='unknown',
+                        message='Route table ID and destination CIDR required',
+                        timestamp=timestamp
+                    )
+                success = self.aws_executor.remove_route_from_table(route_table_id, destination_cidr, region)
                 return AdvancedRemediationResult(
                     action_type=action_type,
-                    success=True,
+                    success=success,
                     target=f"{route_table_id}/{destination_cidr}",
-                    message=f"Route {destination_cidr} removed from {route_table_id}",
+                    message=f"{'Successfully removed' if success else 'Failed to remove'} route {destination_cidr} from {route_table_id}",
                     timestamp=timestamp,
                     rollback_metadata={
                         "route_table_id": route_table_id,
-                        "destination_cidr": destination_cidr
+                        "destination_cidr": destination_cidr,
+                        "region": region
                     }
                 )
 
             elif action_type == 'NACL_RESTRICT':
                 nacl_id = params.get('nacl_id')
+                if not nacl_id:
+                    return AdvancedRemediationResult(
+                        action_type=action_type,
+                        success=False,
+                        target='unknown',
+                        message='NACL ID required',
+                        timestamp=timestamp
+                    )
+                success = self.aws_executor.restrict_nacl_access(nacl_id, region)
                 return AdvancedRemediationResult(
                     action_type=action_type,
-                    success=True,
+                    success=success,
                     target=nacl_id,
-                    message=f"NACL {nacl_id} restricted",
+                    message=f"{'Successfully restricted' if success else 'Failed to restrict'} NACL {nacl_id}",
                     timestamp=timestamp,
-                    rollback_metadata={"nacl_id": nacl_id}
+                    rollback_metadata={"nacl_id": nacl_id, "region": region}
                 )
 
             elif action_type == 'ELB_DEREGISTER':
                 load_balancer_arn = params.get('load_balancer_arn')
                 target_id = params.get('target_id')
+                target_port = params.get('target_port', 80)
+                if not load_balancer_arn or not target_id:
+                    return AdvancedRemediationResult(
+                        action_type=action_type,
+                        success=False,
+                        target='unknown',
+                        message='Load balancer ARN and target ID required',
+                        timestamp=timestamp
+                    )
+                success = self.aws_executor.deregister_target_from_load_balancer(
+                    load_balancer_arn, target_id, target_port, region
+                )
                 return AdvancedRemediationResult(
                     action_type=action_type,
-                    success=True,
+                    success=success,
                     target=f"{load_balancer_arn}/{target_id}",
-                    message=f"Target {target_id} deregistered from load balancer",
+                    message=f"{'Successfully deregistered' if success else 'Failed to deregister'} target {target_id} from load balancer",
                     timestamp=timestamp,
                     rollback_metadata={
                         "load_balancer_arn": load_balancer_arn,
-                        "target_id": target_id
+                        "target_id": target_id,
+                        "target_port": target_port,
+                        "region": region
                     }
                 )
 
