@@ -88,6 +88,18 @@ Resources:
                   - dynamodb:Query
                   - dynamodb:GetItem
                 Resource: !GetAtt WebSocketAuditLogsTable.Arn
+        - PolicyName: DynamoDBStreamsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetRecords
+                  - dynamodb:GetShardIterator
+                  - dynamodb:DescribeStream
+                  - dynamodb:ListStreams
+                  - dynamodb:ListShards
+                Resource: !GetAtt WebSocketAuditLogsTable.StreamArn
 
   # ==========================================
   # Lambda Functions
@@ -199,6 +211,40 @@ Resources:
       Tags:
         - Key: Function
           Value: ConnectionStats
+
+  # DynamoDB Stream Processor
+  StreamProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-stream-processor'
+      CodeUri: ../lambda
+      Handler: guardian/handlers/stream_processor.handle_stream_event
+      Runtime: python3.12
+      Role: !GetAtt WebSocketLambdaRole.Arn
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          WEBSOCKET_API_ID: !Ref GuardianWebSocketApi
+          WEBSOCKET_API_ENDPOINT: !Sub '${GuardianWebSocketApi}.execute-api.${AWS::Region}.amazonaws.com'
+          AUDIT_LOGS_TABLE: !Ref WebSocketAuditLogsTable
+      Tags:
+        - Key: Function
+          Value: StreamProcessor
+
+  # EventSourceMapping: DynamoDB Stream -> Lambda
+  StreamProcessorEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt WebSocketAuditLogsTable.StreamArn
+      FunctionName: !Ref StreamProcessorFunction
+      Enabled: true
+      BatchSize: 10
+      BatchWindow: 5
+      StartingPosition: LATEST
+      MaximumRetryAttempts: 2
+      FunctionResponseTypes:
+        - ReportBatchItemFailures
 
   # ==========================================
   # Lambda Permissions
@@ -345,6 +391,8 @@ Resources:
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
       TimeToLiveSpecification:
         AttributeName: expiration_time
         Enabled: true
@@ -618,3 +666,15 @@ Outputs:
     Value: !Sub 'https://${AuditApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/audit-logs'
     Export:
       Name: !Sub '${ProjectName}-AuditApiEndpoint'
+
+  AuditLogsStreamArn:
+    Description: WebSocket Audit Logs DynamoDB Stream ARN
+    Value: !GetAtt WebSocketAuditLogsTable.StreamArn
+    Export:
+      Name: !Sub '${ProjectName}-AuditLogsStreamArn'
+
+  StreamProcessorFunctionArn:
+    Description: Stream Processor Lambda Function ARN
+    Value: !GetAtt StreamProcessorFunction.Arn
+    Export:
+      Name: !Sub '${ProjectName}-StreamProcessorFunctionArn'

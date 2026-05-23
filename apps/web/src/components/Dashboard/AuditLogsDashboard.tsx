@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuditLogs } from '@/lib/hooks/useAuditLogs';
+import { useAuditLogStream } from '@/lib/hooks/useAuditLogStream';
 import { AuditLogsFilter } from './AuditLogsFilter';
 import { AuditLogsTimeline } from './AuditLogsTimeline';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Radio } from 'lucide-react';
 
 interface AuditLogsDashboardProps {
   connectionId?: string;
@@ -34,6 +35,7 @@ export function AuditLogsDashboard({ connectionId }: AuditLogsDashboardProps) {
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
+  const [streamConnected, setStreamConnected] = useState(false);
 
   // 계정 목록 로드
   useEffect(() => {
@@ -53,6 +55,13 @@ export function AuditLogsDashboard({ connectionId }: AuditLogsDashboardProps) {
     fetchAccounts();
   }, []);
 
+  // 실시간 스트림 이벤트 핸들러
+  const handleNewLog = useCallback(() => {
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('auditLogAdded'));
+    }, 100);
+  }, []);
+
   const { logs, total, hasMore, isLoading } = useAuditLogs({
     accountId: filters.accountId,
     connectionId: connectionId || undefined,
@@ -62,6 +71,21 @@ export function AuditLogsDashboard({ connectionId }: AuditLogsDashboardProps) {
     limit: filters.limit,
     offset: filters.offset,
   });
+
+  // 실시간 스트림 연결
+  const { isConnected } = useAuditLogStream({
+    accountId: filters.accountId,
+    connectionId: connectionId,
+    onNewLog: handleNewLog,
+    onError: (error) => {
+      console.error('Stream error:', error);
+      setStreamConnected(false);
+    },
+  });
+
+  useEffect(() => {
+    setStreamConnected(isConnected);
+  }, [isConnected]);
 
   const currentPage = Math.floor(filters.offset / filters.limit) + 1;
   const totalPages = Math.ceil(total / filters.limit);
@@ -93,7 +117,17 @@ export function AuditLogsDashboard({ connectionId }: AuditLogsDashboardProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-white">감시 로그</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-2xl font-bold text-white">감시 로그</h2>
+          <div className="flex items-center gap-1">
+            <Radio
+              className={`w-4 h-4 ${streamConnected ? 'fill-green-500 text-green-500' : 'text-gray-500'}`}
+            />
+            <span className="text-xs text-gray-400">
+              {streamConnected ? '실시간 연결' : '폴링 모드'}
+            </span>
+          </div>
+        </div>
         <div className="text-sm text-gray-400">
           총 <span className="font-bold text-white">{total}</span>건
         </div>
@@ -158,7 +192,9 @@ export function AuditLogsDashboard({ connectionId }: AuditLogsDashboardProps) {
 
       {/* 새로고침 정보 */}
       <div className="text-xs text-gray-500 text-center">
-        자동 새로고침: 60초 주기
+        {streamConnected
+          ? '실시간 이벤트 수신 중 (폴링: 30초)'
+          : '자동 새로고침: 30초 주기'}
       </div>
     </div>
   );
