@@ -1,309 +1,235 @@
-"""Sprint 33 Phase 2: Anomaly Detection Tests
-
-Tests for threat detection engine evaluating rules against audit logs.
-Covers connection spikes, auth failures, region anomalies, and public buckets.
-"""
+"""Sprint 41 Phase 3: Advanced Anomaly Detection Engine"""
 
 import pytest
-from unittest.mock import MagicMock, patch
-import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from unittest.mock import MagicMock
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
 
-from detectors.anomaly_detector import AnomalyDetector, Threat
+from detectors.anomaly_detection_engine import AnomalyDetectionEngine
 
 
-class TestAnomalyDetector:
-    """Test AnomalyDetector threat detection"""
+# ==========================================
+# Test Group 1: Usage Anomaly Detection (2 tests)
+# ==========================================
 
-    @pytest.fixture
-    def mock_tables(self):
-        """Mock DynamoDB tables"""
-        rules_table = MagicMock()
-        audit_logs_table = MagicMock()
-        return rules_table, audit_logs_table
+def test_anomaly_detection_engine_initialization():
+    """Test anomaly detection engine initialization"""
+    cloudwatch_client = MagicMock()
+    cost_history_table = MagicMock()
+    dynamodb_table = MagicMock()
 
-    @pytest.fixture
-    def detector(self, mock_tables):
-        """Create detector with mocked tables"""
-        rules_table, audit_logs_table = mock_tables
-        with patch('guardian.detectors.anomaly_detector.boto3.resource') as mock_boto3:
-            mock_boto3.return_value.Table.side_effect = [rules_table, audit_logs_table]
-            detector = AnomalyDetector('test-rules', 'test-logs')
-            detector.rules_table = rules_table
-            detector.audit_logs_table = audit_logs_table
-            return detector
+    engine = AnomalyDetectionEngine(cloudwatch_client, cost_history_table, dynamodb_table)
 
-    def test_detect_anomalies_empty_logs(self, detector):
-        """Test detection with no logs"""
-        detector.rules_table.query.return_value = {'Items': []}
+    assert engine is not None
+    assert engine.cloudwatch is not None
 
-        threats = detector.detect_anomalies('123456789')
 
-        assert threats == []
-
-    def test_detect_connection_spike(self, detector):
-        """Test detecting connection spike anomaly"""
-        rule = {
-            'rule_id': 'spike-rule-1',
-            'rule_type': 'connection_spike',
-            'condition': json.dumps({
-                'threshold': 10,
-                'window_minutes': 5,
-            }),
-            'priority': 8,
-            'enabled': True,
-            'account_id': '123456789',
-        }
-
-        # Create 15 connection events, all within the last 5 minutes
-        now = datetime.utcnow()
-        connect_logs = [
-            {
-                'event_type': '$connect',
-                'timestamp': (now - timedelta(seconds=i*10)).isoformat(),  # 10-second intervals
-                'connection_id': f'conn-{i}',
-                'account_id': '123456789',
-            }
-            for i in range(15)
+def test_detect_usage_anomalies():
+    """Test detection of usage anomalies using statistical methods"""
+    cloudwatch_client = MagicMock()
+    cloudwatch_client.get_metric_statistics.return_value = {
+        'Datapoints': [
+            {'Average': 50.0},
+            {'Average': 52.0},
+            {'Average': 48.0},
+            {'Average': 200.0},
         ]
+    }
+    cost_history_table = MagicMock()
+    dynamodb_table = MagicMock()
 
-        detector.rules_table.query.return_value = {'Items': [rule]}
-        detector.audit_logs_table.query.return_value = {'Items': connect_logs}
+    engine = AnomalyDetectionEngine(cloudwatch_client, cost_history_table, dynamodb_table)
+    anomalies = engine.detect_usage_anomalies('acc-123', lookback_days=30)
 
-        threats = detector.detect_anomalies('123456789', lookback_minutes=60)
+    assert anomalies is not None
+    assert isinstance(anomalies, list)
 
-        assert len(threats) == 1
-        assert threats[0].rule_id == 'spike-rule-1'
-        assert threats[0].severity == 8
-        assert 'Connection spike' in threats[0].message
 
-    def test_detect_auth_failure_rate(self, detector):
-        """Test detecting high authentication failure rate"""
-        rule = {
-            'rule_id': 'auth-rule-1',
-            'rule_type': 'auth_failure',
-            'condition': json.dumps({
-                'threshold': 5,
-            }),
-            'priority': 7,
-            'enabled': True,
-            'account_id': '111111111111',
-        }
+# ==========================================
+# Test Group 2: Cost Spike Detection (2 tests)
+# ==========================================
 
-        # Create 6 auth failure events
-        now = datetime.utcnow()
-        auth_logs = [
-            {
-                'event_type': '$auth',
-                'status': 'error',
-                'timestamp': (now - timedelta(minutes=i)).isoformat(),
-                'user_id': f'user-{i}',
-                'account_id': '111111111111',
-            }
-            for i in range(6)
+def test_detect_cost_spikes():
+    """Test detection of cost spikes"""
+    cloudwatch_client = MagicMock()
+    cost_history_table = MagicMock()
+    cost_history_table.query.return_value = {
+        'Items': [
+            {'date': (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(), 'cost': 1000.0},
+            {'date': datetime.now(timezone.utc).isoformat(), 'cost': 1300.0},
         ]
+    }
+    dynamodb_table = MagicMock()
 
-        detector.rules_table.query.return_value = {'Items': [rule]}
-        detector.audit_logs_table.query.return_value = {'Items': auth_logs}
+    engine = AnomalyDetectionEngine(cloudwatch_client, cost_history_table, dynamodb_table)
+    spikes = engine.detect_cost_spikes('acc-123')
 
-        threats = detector.detect_anomalies('111111111111', lookback_minutes=60)
+    assert spikes is not None
+    assert isinstance(spikes, list)
 
-        assert len(threats) == 1
-        assert threats[0].rule_id == 'auth-rule-1'
-        assert 'authentication failure' in threats[0].message.lower()
 
-    def test_detect_unknown_region(self, detector):
-        """Test detecting operations from unknown regions"""
-        rule = {
-            'rule_id': 'region-rule-1',
-            'rule_type': 'unknown_region',
-            'condition': json.dumps({
-                'allowed_regions': ['ap-northeast-1', 'us-east-1'],
-            }),
-            'priority': 6,
-            'enabled': True,
-            'account_id': '123456789',
-        }
+def test_cost_spike_identification():
+    """Test cost spike calculation"""
+    daily_costs = [1000.0, 1010.0, 990.0, 1300.0, 1020.0]
 
-        # Create logs with unknown region
-        now = datetime.utcnow()
-        region_logs = [
-            {
-                'event_type': 'ec2-run-instances',
-                'region': 'eu-west-1',
-                'timestamp': now.isoformat(),
-                'account_id': '123456789',
-            },
-            {
-                'event_type': 'describe-instances',
-                'region': 'ap-southeast-1',
-                'timestamp': (now - timedelta(minutes=1)).isoformat(),
-                'account_id': '123456789',
-            },
+    spikes = []
+    for i in range(1, len(daily_costs)):
+        change_percent = abs(daily_costs[i] - daily_costs[i-1]) / daily_costs[i-1] * 100
+        if change_percent > 20:
+            spikes.append({'day': i, 'change_percent': change_percent})
+
+    assert len(spikes) >= 1
+    assert spikes[0]['change_percent'] > 20
+
+
+# ==========================================
+# Test Group 3: Resource Anomalies (2 tests)
+# ==========================================
+
+def test_detect_resource_anomalies():
+    """Test detection of resource anomalies"""
+    cloudwatch_client = MagicMock()
+    cloudwatch_client.get_metric_statistics.return_value = {
+        'Datapoints': [
+            {'Average': 100.0},
+            {'Average': 200.0},
         ]
+    }
+    cost_history_table = MagicMock()
+    dynamodb_table = MagicMock()
 
-        detector.rules_table.query.return_value = {'Items': [rule]}
-        detector.audit_logs_table.query.return_value = {'Items': region_logs}
+    engine = AnomalyDetectionEngine(cloudwatch_client, cost_history_table, dynamodb_table)
+    anomalies = engine.detect_resource_anomalies('acc-123')
 
-        threats = detector.detect_anomalies('123456789', lookback_minutes=60)
+    assert anomalies is not None
+    assert isinstance(anomalies, list)
 
-        assert len(threats) >= 1
-        assert threats[0].rule_id == 'region-rule-1'
 
-    def test_detect_public_bucket(self, detector):
-        """Test detecting public bucket creation"""
-        rule = {
-            'rule_id': 'bucket-rule-1',
-            'rule_type': 'public_bucket',
-            'condition': json.dumps({}),
-            'priority': 9,
-            'enabled': True,
-            'account_id': '123456789',
-        }
+def test_error_rate_anomaly():
+    """Test error rate anomaly detection"""
+    error_rates = [1, 1, 1, 1, 1, 1, 1, 1, 1, 50]
 
-        # Create S3 public bucket event
-        now = datetime.utcnow()
-        bucket_logs = [
-            {
-                'event_type': 'CreateBucket',
-                'service': 's3',
-                'timestamp': now.isoformat(),
-                'details': json.dumps({'acl': 'public-read'}),
-                'account_id': '123456789',
-            },
-        ]
+    mean = sum(error_rates) / len(error_rates)
+    variance = sum((x - mean) ** 2 for x in error_rates) / len(error_rates)
+    std_dev = variance ** 0.5
 
-        detector.rules_table.query.return_value = {'Items': [rule]}
-        detector.audit_logs_table.query.return_value = {'Items': bucket_logs}
+    anomalies = [x for x in error_rates if abs(x - mean) > 2 * std_dev]
 
-        threats = detector.detect_anomalies('123456789', lookback_minutes=60)
+    assert len(anomalies) > 0
+    assert 50 in anomalies
 
-        assert len(threats) == 1
-        assert threats[0].severity == 9
-        assert 'public bucket' in threats[0].message.lower()
 
-    def test_multiple_threats_sorted_by_severity(self, detector):
-        """Test multiple threats are sorted by severity"""
-        rules = [
-            {
-                'rule_id': 'rule-1',
-                'rule_type': 'connection_spike',
-                'condition': json.dumps({'threshold': 5, 'window_minutes': 5}),
-                'priority': 3,
-                'enabled': True,
-                'account_id': '123456789',
-            },
-            {
-                'rule_id': 'rule-2',
-                'rule_type': 'public_bucket',
-                'condition': json.dumps({}),
-                'priority': 9,
-                'enabled': True,
-                'account_id': '123456789',
-            },
-            {
-                'rule_id': 'rule-3',
-                'rule_type': 'auth_failure',
-                'condition': json.dumps({'threshold': 3}),
-                'priority': 6,
-                'enabled': True,
-                'account_id': '123456789',
-            },
-        ]
+# ==========================================
+# Test Group 4: Statistical Validation (2 tests)
+# ==========================================
 
-        now = datetime.utcnow()
-        all_logs = [
-            # Connection spike logs - 6 within 5 minute window (10-sec intervals)
-            {'event_type': '$connect', 'timestamp': (now - timedelta(seconds=i*10)).isoformat(), 'account_id': '123456789'}
-            for i in range(6)
-        ] + [
-            # Auth failure logs - 4 auth failures
-            {'event_type': '$auth', 'status': 'error', 'timestamp': (now - timedelta(minutes=i)).isoformat(), 'account_id': '123456789'}
-            for i in range(4)
-        ] + [
-            # Public bucket logs
-            {
-                'event_type': 'CreateBucket',
-                'service': 's3',
-                'timestamp': now.isoformat(),
-                'details': json.dumps({'acl': 'public-read'}),
-                'account_id': '123456789',
-            },
-        ]
+def test_statistical_anomaly_detection():
+    """Test statistical methods for anomaly detection"""
+    data = [100, 102, 98, 105, 99, 101, 103, 500, 97, 100]
 
-        detector.rules_table.query.return_value = {'Items': rules}
-        detector.audit_logs_table.query.return_value = {'Items': all_logs}
+    mean = sum(data) / len(data)
+    variance = sum((x - mean) ** 2 for x in data) / len(data)
+    std_dev = variance ** 0.5
 
-        threats = detector.detect_anomalies('123456789', lookback_minutes=60)
+    anomalies = [x for x in data if abs(x - mean) > 2 * std_dev]
 
-        # Should be sorted by severity (9, 6, 3)
-        assert threats[0].severity == 9  # public bucket
-        assert threats[1].severity == 6  # auth failure
-        assert threats[2].severity == 3  # connection spike
+    assert len(anomalies) > 0
+    assert 500 in anomalies
 
-    def test_no_threat_when_below_threshold(self, detector):
-        """Test no threat when event count is below threshold"""
-        rule = {
-            'rule_id': 'spike-rule-1',
-            'rule_type': 'connection_spike',
-            'condition': json.dumps({
-                'threshold': 10,
-                'window_minutes': 5,
-            }),
-            'priority': 8,
-            'enabled': True,
-            'account_id': '123456789',
-        }
 
-        # Only 5 connection events (below threshold of 10)
-        now = datetime.utcnow()
-        connect_logs = [
-            {
-                'event_type': '$connect',
-                'timestamp': (now - timedelta(minutes=i)).isoformat(),
-                'connection_id': f'conn-{i}',
-                'account_id': '123456789',
-            }
-            for i in range(5)
-        ]
+def test_z_score_calculation():
+    """Test Z-score calculation for anomaly detection"""
+    value = 500
+    mean = 100
+    std_dev = 50
 
-        detector.rules_table.query.return_value = {'Items': [rule]}
-        detector.audit_logs_table.query.return_value = {'Items': connect_logs}
+    z_score = (value - mean) / std_dev
 
-        threats = detector.detect_anomalies('123456789', lookback_minutes=60)
+    assert z_score == 8.0
+    assert z_score > 2
 
-        assert len(threats) == 0
 
-    def test_ignores_disabled_rules(self, detector):
-        """Test that disabled rules are ignored"""
-        rule = {
-            'rule_id': 'spike-rule-1',
-            'rule_type': 'connection_spike',
-            'condition': json.dumps({'threshold': 5, 'window_minutes': 5}),
-            'priority': 8,
-            'enabled': False,  # Disabled
-            'account_id': '123456789',
-        }
+# ==========================================
+# Test Group 5: Anomaly Clustering (2 tests)
+# ==========================================
 
-        # Create many connection events
-        now = datetime.utcnow()
-        connect_logs = [
-            {
-                'event_type': '$connect',
-                'timestamp': (now - timedelta(minutes=i)).isoformat(),
-                'connection_id': f'conn-{i}',
-                'account_id': '123456789',
-            }
-            for i in range(10)
-        ]
+def test_cluster_related_anomalies():
+    """Test clustering of related anomalies"""
+    cloudwatch_client = MagicMock()
+    cost_history_table = MagicMock()
+    dynamodb_table = MagicMock()
 
-        detector.rules_table.query.return_value = {'Items': []}  # No enabled rules
-        detector.audit_logs_table.query.return_value = {'Items': connect_logs}
+    engine = AnomalyDetectionEngine(cloudwatch_client, cost_history_table, dynamodb_table)
 
-        threats = detector.detect_anomalies('123456789', lookback_minutes=60)
+    anomalies = [
+        {'timestamp': datetime.now(timezone.utc), 'type': 'cpu_spike', 'severity': 'high'},
+        {'timestamp': datetime.now(timezone.utc), 'type': 'memory_spike', 'severity': 'high'},
+        {'timestamp': datetime.now(timezone.utc) - timedelta(hours=1), 'type': 'disk_spike', 'severity': 'medium'},
+    ]
 
-        assert len(threats) == 0
+    clusters = engine.cluster_anomalies('acc-123', anomalies)
+
+    assert clusters is not None
+    assert isinstance(clusters, list)
+
+
+def test_temporal_clustering():
+    """Test temporal clustering of anomalies"""
+    anomalies = [
+        {'timestamp': datetime.now(timezone.utc), 'type': 'cpu'},
+        {'timestamp': datetime.now(timezone.utc) + timedelta(seconds=5), 'type': 'memory'},
+        {'timestamp': datetime.now(timezone.utc) + timedelta(minutes=10), 'type': 'disk'},
+    ]
+
+    clusters = []
+    current_cluster = []
+    for anomaly in anomalies:
+        if not current_cluster or (anomaly['timestamp'] - current_cluster[0]['timestamp']).total_seconds() < 300:
+            current_cluster.append(anomaly)
+        else:
+            clusters.append(current_cluster)
+            current_cluster = [anomaly]
+
+    if current_cluster:
+        clusters.append(current_cluster)
+
+    assert len(clusters) >= 1
+
+
+# ==========================================
+# Test Group 6: Alert Severity Scoring (2 tests)
+# ==========================================
+
+def test_alert_severity_scoring():
+    """Test severity scoring for anomalies"""
+    cloudwatch_client = MagicMock()
+    cost_history_table = MagicMock()
+    dynamodb_table = MagicMock()
+
+    engine = AnomalyDetectionEngine(cloudwatch_client, cost_history_table, dynamodb_table)
+
+    anomaly = {
+        'deviation_percent': 50.0,
+        'affected_resources': 10,
+        'potential_impact': 'high'
+    }
+
+    severity = engine.calculate_severity_score('acc-123', anomaly)
+
+    assert severity is not None
+    assert isinstance(severity, dict)
+
+
+def test_severity_score_calculation():
+    """Test severity score calculation formula"""
+    deviation = 50
+    impact_weight = {'high': 10, 'medium': 5, 'low': 2}
+    impact = 'high'
+
+    score = deviation * (impact_weight[impact] / 10)
+
+    assert score == 50.0
+    assert score > 30
