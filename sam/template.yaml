@@ -798,6 +798,186 @@ Resources:
       SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ValidationApiGateway}/*'
 
   # ==========================================
+  # IAM Role for Rule Evaluation Lambda (Phase 1)
+  # ==========================================
+  RuleEvaluationLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-rule-evaluation-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SecurityRulesPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource:
+                  - !GetAtt SecurityRulesTable.Arn
+                  - !Sub '${SecurityRulesTable.Arn}/index/*'
+        - PolicyName: ResponseAuditPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt WebSocketAuditLogsTable.Arn
+                  - !Sub '${WebSocketAuditLogsTable.Arn}/index/*'
+        - PolicyName: CloudWatchMetrics
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: '*'
+
+  # ==========================================
+  # Rule Evaluation Lambda (Phase 1, Sprint 38)
+  # ==========================================
+  RuleEvaluationLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-rule-evaluation'
+      CodeUri: ../lambda
+      Handler: guardian/handlers/rule_evaluation_handler.lambda_handler
+      Runtime: python3.12
+      Role: !GetAtt RuleEvaluationLambdaRole.Arn
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          SECURITY_RULES_TABLE: !Ref SecurityRulesTable
+          AUDIT_LOGS_TABLE: !Ref WebSocketAuditLogsTable
+          RULE_DEPLOYMENTS_TABLE: !Ref RuleDeploymentsTable
+          CLOUDWATCH_NAMESPACE: 'aws-guardian/rule-evaluation'
+      Tags:
+        - Key: Function
+          Value: RuleEvaluation
+        - Key: Sprint
+          Value: Sprint38-Phase1
+
+  # EventBridge Permission for Lambda (1 minute schedule)
+  RuleEvaluation1MinutePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref RuleEvaluationLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt RuleEvaluationSchedule1Minute.Arn
+
+  # EventBridge Permission for Lambda (5 minute schedule)
+  RuleEvaluation5MinutePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref RuleEvaluationLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt RuleEvaluationSchedule5Minutes.Arn
+
+  # EventBridge Permission for Lambda (1 hour schedule)
+  RuleEvaluation1HourPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref RuleEvaluationLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt RuleEvaluationSchedule1Hour.Arn
+
+  # ==========================================
+  # EventBridge Rules for Real-time Rule Evaluation
+  # ==========================================
+
+  # 1 Minute Schedule
+  RuleEvaluationSchedule1Minute:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${ProjectName}-rule-evaluation-1min'
+      Description: Evaluate active security rules every 1 minute
+      ScheduleExpression: 'rate(1 minute)'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt RuleEvaluationLambda.Arn
+          RoleArn: !GetAtt EventBridgeRole.Arn
+          Input: !Sub |
+            {
+              "schedule": "rate(1 minute)",
+              "detail-type": "Rule Evaluation Schedule"
+            }
+
+  # 5 Minute Schedule
+  RuleEvaluationSchedule5Minutes:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${ProjectName}-rule-evaluation-5min'
+      Description: Evaluate active security rules every 5 minutes
+      ScheduleExpression: 'rate(5 minutes)'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt RuleEvaluationLambda.Arn
+          RoleArn: !GetAtt EventBridgeRole.Arn
+          Input: !Sub |
+            {
+              "schedule": "rate(5 minutes)",
+              "detail-type": "Rule Evaluation Schedule"
+            }
+
+  # 1 Hour Schedule
+  RuleEvaluationSchedule1Hour:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${ProjectName}-rule-evaluation-1hour'
+      Description: Evaluate active security rules every 1 hour
+      ScheduleExpression: 'rate(1 hour)'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt RuleEvaluationLambda.Arn
+          RoleArn: !GetAtt EventBridgeRole.Arn
+          Input: !Sub |
+            {
+              "schedule": "rate(1 hour)",
+              "detail-type": "Rule Evaluation Schedule"
+            }
+
+  # ==========================================
+  # IAM Role for EventBridge
+  # ==========================================
+  EventBridgeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-eventbridge-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeLambda
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt RuleEvaluationLambda.Arn
+
+  # ==========================================
   # Outputs
   # ==========================================
 
