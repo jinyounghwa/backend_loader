@@ -4,6 +4,99 @@
 
 ---
 
+## 탄생 배경
+
+### 문제: Vibe Coding + AI 세션 단절
+
+대규모 프로젝트를 AI(Claude)와 협업할 때 발생하는 문제들:
+
+**1. 세션 단절 문제**
+- Claude의 컨텍스트 윈도우는 약 200K 토큰 (충분하지만 제한적)
+- 장시간 개발 후 컨텍스트가 압축되면 이전 결정사항을 잃음
+- 같은 실수를 반복하거나 아키텍처 일관성이 깨짐
+- 프로젝트 진행률을 파악하기 어려움
+
+**2. Vibe Coding의 한계**
+- 기분 따라 개발하면 구조가 산탄총처럼 흩어짐
+- 테스트 없이 진행하면 나중에 대규모 버그 수정 필요
+- 어떤 기능이 완성되었는지 불명확함
+- 팀원(또는 미래의 자신)이 이해하기 어려움
+
+**3. 결과**
+```
+┌─────────────────────────────────┐
+│ 큰 기능 설계                     │
+│ (흐릿함, 테스트 없음)           │
+└────────────┬────────────────────┘
+             │
+    ┌────────▼───────┬──────────┬──────────┐
+    │ 부분 구현      │ 부분 구현│ 부분 구현│
+    │ (일관성 없음)  │(누락)    │(버그)    │
+    └────────┬───────┴──────────┴──────────┘
+             │
+    ┌────────▼──────────────┐
+    │ 나중에 대규모 수정     │
+    │ (시간 낭비, 스트레스) │
+    └───────────────────────┘
+```
+
+---
+
+## SGD의 해결책
+
+### Core Idea: Sprint Gate (스프린트 게이트)
+
+각 Phase 완료 시 **"모든 테스트 PASS"** = 이전 상태로 복구 가능
+
+```
+Phase 1 (15 tests ✅)
+    ↓
+    [Git Commit + Snapshot]
+    ↓
+Phase 2 (10 tests ✅)  
+    ↓
+    [Git Commit + Snapshot]
+    ↓
+Phase 3 (8 tests ✅)
+    ↓
+    [Git Commit + Snapshot]
+```
+
+**핵심:**
+- 각 Phase는 **원자적(atomic)** - 완전히 작동하거나 아예 없거나
+- 세션이 끊겨도 마지막 성공한 Phase부터 재개 가능
+- 테스트 = 신뢰도 증명서
+
+---
+
+## SDD와의 차이
+
+| 항목 | SDD (Structured Design Dev) | SGD (Sprint-Guided Dev) |
+|------|---------------------------|------------------------|
+| **방향** | 위에서 아래로 (하향식) | 양방향 루프 (설계 ↔ 검증) |
+| **테스트** | 사후 검증 | 사전 정의, 지속적 검증 |
+| **커밋** | 기능 완성 시 | 각 Phase 완료 시 |
+| **세션 단절** | 컨텍스트 손실 심각 | 복구 지점이 많음 (안전) |
+| **AI 협업** | 어려움 (메모리 필요) | 용이 (Phase별 독립) |
+| **1인 개발** | 가능하지만 힘듦 | 최적화됨 |
+
+**예시:**
+
+SDD는:
+```
+전체 설계 (50 페이지) → 구현 (3주) → 테스트 (2주) → 버그 수정 (?)
+```
+
+SGD는:
+```
+Sprint 계획 (1시간) → Phase 1 (2시간 + 테스트) ✅
+                  → Phase 2 (3시간 + 테스트) ✅
+                  → Phase 3 (2시간 + 테스트) ✅
+                  → 누적 검증 + 커밋
+```
+
+---
+
 ## 개요
 
 **SGD (Sprint-Guided Development)**는 대규모 소프트웨어 프로젝트를 구조화된 스프린트로 나누어 체계적으로 개발하는 방법론입니다.
@@ -125,6 +218,194 @@ Performance:
 Cumulative: [prev] + [new] = [total] tests
 
 Co-Authored-By: [Your Name] <noreply@[domain]>
+```
+
+---
+
+## 문서 템플릿 (프로젝트 구성)
+
+### 필수 파일 3가지
+
+#### 1. CLAUDE.md (프로젝트 개요)
+
+```markdown
+# AWS Guardian System
+
+> 간단한 설명 (1줄)
+
+## 개요
+- 배포 방식: AWS Lambda
+- 주요 기능: ...
+- 기술 스택: Python, DynamoDB, EventBridge
+
+## 디렉토리 구조
+```
+
+**목적:**
+- AI와 협업할 때 프로젝트 이해도 높이기
+- 새로운 팀원 온보딩
+- 핵심 설계 결정 문서화
+
+#### 2. SKILL.md (메타 방법론)
+
+```markdown
+# SGD 적용 현황
+
+## Sprint 구조
+- Sprint 35: 규칙 테스트 (22 tests) ✅
+- Sprint 36: 배포 시스템 (36 tests) ✅
+- Sprint 37: 자동 대응 확장 (56 tests) ✅
+- Sprint 38: 실시간 평가 (39 tests +)
+
+## Phase 체크리스트
+- [ ] 계획 수립
+- [ ] Phase 구현 + 테스트
+- [ ] 모든 테스트 PASS
+- [ ] Git commit
+```
+
+**목적:**
+- 전체 프로젝트 진행률 추적
+- 다음 Phase 예측 가능
+- 팀/협업자와 상태 공유
+
+#### 3. SPRINT_XX_PLAN.md (상세 계획)
+
+```markdown
+# Sprint 38: 실시간 규칙 평가 및 성능 최적화
+
+## 현황
+- 이전 스프린트: 263 tests
+- 누적: 263 tests
+
+## 목표
+- Phase 1: 실시간 규칙 평가 (23 tests)
+- Phase 2: 성능 최적화 (16 tests)
+- Phase 3: 비용 관리 (8 tests)
+- Phase 4: 대시보드 UI (12 tests)
+- Phase 5: 다중 계정 (10 tests)
+
+## 파일 목록
+| Phase | 파일 | 설명 |
+|-------|------|------|
+| 1 | handlers/rule_evaluation_handler.py | EventBridge 핸들러 |
+| 2 | storage/rule_cache.py | TTL 캐시 |
+
+## 구현 전략
+[각 Phase별 구체적 전략]
+```
+
+**목적:**
+- 각 Sprint의 완전한 로드맵
+- 구현할 파일 목록 (메모리 용량 절약)
+- AI 협업자가 이전 컨텍스트 없이도 이해 가능
+
+---
+
+## 1인 개발자를 위한 실전 예시
+
+### Case Study: AWS Guardian (1인 개발)
+
+**상황:**
+- 프로젝트: AWS 계정 자동 감시 시스템
+- 개발자: 1명
+- 크기: 중대형 (263+ tests, 76,000+ lines)
+- AI 협업: Claude와 함께 (세션 단절 빈번)
+
+### 실제 진행 과정
+
+**Sprint 35: 규칙 테스트 및 배포 시스템**
+
+```
+Day 1 (1시간 - 계획)
+├─ SPRINT_35_PLAN.md 작성
+├─ Phase 1-4 분해
+├─ 파일 목록 명시
+└─ 예상 시간: 22 tests
+
+Day 1-2 (3시간 - Phase 1 구현)
+├─ 핵심 클래스 작성
+│  └─ TestExecutor: 샘플 로그로 규칙 테스트
+├─ 포괄적 테스트 작성
+│  └─ 9개 테스트 (6 백엔드 + 3 프론트엔드)
+├─ 모든 테스트 PASS 확인
+│  └─ pytest tests/backend/test_rule_testing.py -v ✅
+└─ Git Commit
+   └─ feat: Sprint 35 Phase 1 - Rule Dry-Run Testing (9 tests)
+
+Day 2 (2시간 - Phase 2 구현)
+├─ RuleDeploymentRepository 구현
+├─ 배포 API 엔드포인트 작성
+├─ 5개 테스트 모두 PASS
+└─ Git Commit
+   └─ feat: Sprint 35 Phase 2 - Rule Deployment System (5 tests)
+
+[마찬가지로 Phase 3, 4 진행]
+
+Result: 22 tests ✅
+```
+
+### 세션 단절 시나리오
+
+**상황:** Phase 3 중간에 Claude 세션이 끊김
+
+```
+[Phase 1 ✅ - Git Commit] ← 안전한 체크포인트
+[Phase 2 ✅ - Git Commit] ← 안전한 체크포인트
+[Phase 3 진행 중... 세션 단절!]
+
+재개 방법:
+1. SPRINT_35_PLAN.md 읽기 (전체 컨텍스트)
+2. git log --oneline (완료된 Phase 확인)
+3. Phase 3 구현 재개
+   └─ "지난번 완료: Phase 1, 2 (15 tests)"
+   └─ "지금 하는 것: Phase 3 (4 tests)"
+```
+
+### AI 협업 팁
+
+**Good Practice:**
+```markdown
+현황:
+- 완료: Sprint 35 Phase 1-2 (14 tests)
+- 진행: Sprint 35 Phase 3 (진도 50%)
+- 계획: SPRINT_35_PLAN.md 참고
+
+방금 작성한 코드:
+[테스트 코드 일부]
+
+다음 할 일:
+- Phase 3 나머지 구현
+- 모든 테스트 PASS 확인
+```
+
+**Bad Practice (컨텍스트 낭비):**
+```
+지금까지의 전체 코드를 보여주기
+모든 파일의 이력을 설명하기
+테스트 없이 구현 진행
+```
+
+### 실제 타이밍 계획
+
+```
+Sprint 35 (총 4시간, 22 tests)
+├─ 1시간: 계획 (SPRINT_35_PLAN.md)
+├─ 30분: Phase 1 구현
+├─ 30분: Phase 1 테스트
+├─ Git Commit
+├─ 30분: Phase 2 구현
+├─ 30분: Phase 2 테스트
+├─ Git Commit
+├─ [마찬가지로 Phase 3, 4]
+└─ 최종: git log로 검증 (모든 커밋이 메타데이터)
+
+Sprint 36 (다음 스프린트)
+├─ 이전: 263 tests
+├─ 이번: 36 tests 추가
+└─ 누적: 299 tests
+
+[보이는 진행률 = 객관적 성과]
 ```
 
 ---
