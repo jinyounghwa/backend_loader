@@ -232,7 +232,7 @@ def test_cache_statistics_tracking():
 
     stats = cache.get_statistics()
     assert stats.hits == 3
-    assert stats.misses == 1
+    assert stats.misses == 2  # First load + load after invalidate
     assert stats.evictions == 1
 
 

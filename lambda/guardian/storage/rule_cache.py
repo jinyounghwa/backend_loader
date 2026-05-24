@@ -75,37 +75,36 @@ class RuleCache:
 
     def refresh(self) -> List[Dict[str, Any]]:
         """
-        규칙 캐시 새로고침
+        규칙 캐시 새로고침 (lock을 이미 획득한 상태에서 호출됨)
 
         DB에서 활성 규칙을 로드하여 캐시 갱신
 
         Returns:
             갱신된 활성 규칙 목록
         """
-        with self.lock:
-            refresh_start = time.time()
+        refresh_start = time.time()
 
-            try:
-                # DB에서 활성 규칙 로드
-                rules = self.rules_repo.list_active_rules()
+        try:
+            # DB에서 활성 규칙 로드
+            rules = self.rules_repo.list_active_rules()
 
-                # 캐시 업데이트
-                self.cache['active_rules'] = rules
-                self.cache['timestamp'] = time.time()
+            # 캐시 업데이트
+            self.cache['active_rules'] = rules
+            self.cache['timestamp'] = time.time()
 
-                refresh_duration_ms = (time.time() - refresh_start) * 1000
-                self.stats.last_refresh_time = self.cache['timestamp']
-                self.stats.last_refresh_duration_ms = refresh_duration_ms
+            refresh_duration_ms = (time.time() - refresh_start) * 1000
+            self.stats.last_refresh_time = self.cache['timestamp']
+            self.stats.last_refresh_duration_ms = refresh_duration_ms
 
-                logger.info(
-                    f"Cache refreshed: {len(rules)} rules loaded in {refresh_duration_ms:.1f}ms"
-                )
+            logger.info(
+                f"Cache refreshed: {len(rules)} rules loaded in {refresh_duration_ms:.1f}ms"
+            )
 
-                return rules
+            return rules
 
-            except Exception as e:
-                logger.error(f"Cache refresh failed: {str(e)}")
-                raise
+        except Exception as e:
+            logger.error(f"Cache refresh failed: {str(e)}")
+            raise
 
     def invalidate(self):
         """캐시 강제 무효화"""
