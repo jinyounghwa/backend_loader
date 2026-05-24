@@ -1,5 +1,9 @@
-"""Cost optimization module"""
+"""Query Performance Optimization Modules"""
 
-from .cost_optimizer import CostOptimizer, OptimizationRecommendation
+from .query_cache import QueryCache
+from .performance_optimizer import PerformanceOptimizer
 
-__all__ = ['CostOptimizer', 'OptimizationRecommendation']
+__all__ = [
+    'QueryCache',
+    'PerformanceOptimizer',
+]
