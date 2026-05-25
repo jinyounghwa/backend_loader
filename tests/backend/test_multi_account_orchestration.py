@@ -1,229 +1,264 @@
-"""Sprint 48 Phase 3: Multi-Account Orchestration Tests (8 tests)"""
+"""Sprint 53 Phase 1: Multi-Account Orchestration Tests (8 tests)"""
 
 import sys
 from pathlib import Path
 import pytest
-from unittest.mock import Mock
 
 lambda_path = Path(__file__).parent.parent.parent / "lambda"
 sys.path.insert(0, str(lambda_path))
 
-from guardian.orchestrators.multi_account import MultiAccountOrchestrator
+from guardian.services.multi_account_threat_aggregator import MultiAccountThreatAggregator
+from guardian.orchestrators.multi_account_orchestrator import MultiAccountRemediationOrchestrator
+from guardian.policies.account_policy_manager import AccountPolicyManager
+from guardian.services.threat_detection_service import ThreatDetectionService
+from guardian.executors.auto_remediation_executor import AutoRemediationExecutor
+from guardian.orchestrators.remediation_orchestrator import RemediationOrchestrator
+from guardian.engines.smart_remediation_engine import SmartRemediationEngine
 
 
-class TestMultiAccountOrchestration:
-    """Cross-account AWS operations and threat correlation."""
+class MockAnomalyDetector:
+    def __init__(self, threats=None):
+        self.threats = threats or []
 
-    def test_account_registration(self):
-        """✅ Register multiple AWS accounts for cross-account operations."""
-        mock_audit = Mock()
-        orchestrator = MultiAccountOrchestrator(mock_audit)
+    def detect_anomalies(self, account_id=None, lookback_minutes=60):
+        if account_id:
+            return [t for t in self.threats if t.get('account_id') == account_id]
+        return self.threats
 
-        # Register multiple accounts
-        result1 = orchestrator.register_account(
-            '111111111111',
-            'arn:aws:iam::111111111111:role/CrossAccountRole',
-            'us-east-1'
-        )
 
-        result2 = orchestrator.register_account(
-            '222222222222',
-            'arn:aws:iam::222222222222:role/CrossAccountRole',
-            'us-west-2'
-        )
+class TestMultiAccountThreatAggregator:
 
-        # Verify registration
-        assert result1['status'] == 'registered'
-        assert result1['account_id'] == '111111111111'
-        assert result2['status'] == 'registered'
-        assert '111111111111' in orchestrator.account_registry
-        assert '222222222222' in orchestrator.account_registry
+    def test_register_account(self):
+        """✅ Register threat service for account."""
+        aggregator = MultiAccountThreatAggregator()
 
-    def test_assume_role_in_target_account(self):
-        """✅ Assume role in target account using STS."""
-        mock_audit = Mock()
-        orchestrator = MultiAccountOrchestrator(mock_audit)
+        detector = MockAnomalyDetector(threats=[])
+        service = ThreatDetectionService(anomaly_detector=detector, smart_engine=None)
 
-        # Register account first
-        orchestrator.register_account(
-            '111111111111',
-            'arn:aws:iam::111111111111:role/CrossAccountRole'
-        )
+        aggregator.register_account('acc-123', service)
 
-        # Assume role
-        creds = orchestrator.assume_role('111111111111', session_duration_seconds=3600)
+        assert 'acc-123' in aggregator.threat_services
+        assert aggregator.threat_services['acc-123'] == service
 
-        assert creds['status'] == 'success'
-        assert creds['account_id'] == '111111111111'
-        assert 'access_key_id' in creds
-        assert 'secret_access_key' in creds
-        assert 'session_token' in creds
-        assert 'expiration' in creds
-
-    def test_assume_role_unregistered_account(self):
-        """✅ Handle assume role for unregistered account."""
-        mock_audit = Mock()
-        orchestrator = MultiAccountOrchestrator(mock_audit)
-
-        # Try to assume role in unregistered account
-        creds = orchestrator.assume_role('999999999999')
-
-        assert creds['status'] == 'failed'
-        assert 'not registered' in creds.get('error', '').lower()
-
-    def test_parallel_remediation_execution(self):
-        """✅ Execute remediation in parallel across multiple accounts."""
-        mock_audit = Mock()
-        orchestrator = MultiAccountOrchestrator(mock_audit, max_workers=3)
-
-        # Register accounts
-        for i, account_id in enumerate(['111111111111', '222222222222', '333333333333']):
-            orchestrator.register_account(
-                account_id,
-                f'arn:aws:iam::{account_id}:role/CrossAccountRole',
-                f'us-east-{i+1}'
-            )
-
-        # Create threats for remediation
-        threats = [
+    def test_detect_threats_all_accounts(self):
+        """✅ Detect threats across all accounts."""
+        detector1 = MockAnomalyDetector(threats=[
             {
-                'threat_id': f'THREAT-MA-{i:03d}',
+                'threat_id': 'threat-acc1',
+                'threat_type': 'Unauthorized EC2',
+                'severity': 8,
+                'account_id': 'acc-123',
+                'evidence': [],
+                'affected_resources': [{'resource_id': 'i-001', 'resource_type': 'ec2'}],
+            },
+        ])
+
+        detector2 = MockAnomalyDetector(threats=[
+            {
+                'threat_id': 'threat-acc2',
+                'threat_type': 'Public Bucket',
+                'severity': 7,
+                'account_id': 'acc-456',
+                'evidence': [],
+                'affected_resources': [{'resource_id': 'bucket-001', 'resource_type': 's3'}],
+            },
+        ])
+
+        service1 = ThreatDetectionService(anomaly_detector=detector1, smart_engine=None)
+        service2 = ThreatDetectionService(anomaly_detector=detector2, smart_engine=None)
+
+        aggregator = MultiAccountThreatAggregator()
+        aggregator.register_account('acc-123', service1)
+        aggregator.register_account('acc-456', service2)
+
+        threats = aggregator.detect_threats_all_accounts()
+
+        assert len(threats) == 2
+        assert any(t.get('account_id') == 'acc-123' for t in threats)
+        assert any(t.get('account_id') == 'acc-456' for t in threats)
+
+    def test_get_threats_by_account(self):
+        """✅ Get account-specific threats."""
+        detector = MockAnomalyDetector(threats=[
+            {
+                'threat_id': 'threat-1',
+                'threat_type': 'Unauthorized EC2',
+                'severity': 8,
+                'account_id': 'acc-123',
+                'evidence': [],
+                'affected_resources': [{'resource_id': 'i-001', 'resource_type': 'ec2'}],
+            },
+            {
+                'threat_id': 'threat-2',
+                'threat_type': 'Public Bucket',
+                'severity': 7,
+                'account_id': 'acc-123',
+                'evidence': [],
+                'affected_resources': [{'resource_id': 'bucket-001', 'resource_type': 's3'}],
+            },
+            {
+                'threat_id': 'threat-3',
                 'threat_type': 'Unauthorized Access',
-                'severity': 7 + (i % 3),
-                'affected_resources': 1 + (i % 2),
-                'remediation_type': 'ec2_stop'
-            }
-            for i in range(5)
-        ]
+                'severity': 6,
+                'account_id': 'acc-456',
+                'evidence': [],
+                'affected_resources': [{'resource_id': 'role-001', 'resource_type': 'iam'}],
+            },
+        ])
 
-        # Execute parallel remediation
-        results = orchestrator.execute_parallel_remediation(threats)
+        service = ThreatDetectionService(anomaly_detector=detector, smart_engine=None)
+        aggregator = MultiAccountThreatAggregator()
+        aggregator.register_account('acc-123', service)
+        aggregator.register_account('acc-456', service)
 
-        assert results['total_threats'] == 5
-        assert results['total_accounts'] == 3
-        assert results['successful_remediations'] >= 0
-        assert results['execution_time_seconds'] >= 0
-        assert len(results['results_by_account']) == 3
+        aggregator.detect_threats_all_accounts()
 
-    def test_cross_account_threat_correlation(self):
-        """✅ Correlate threats across multiple accounts to identify coordinated attacks."""
-        mock_audit = Mock()
-        orchestrator = MultiAccountOrchestrator(mock_audit)
+        acc_123_threats = aggregator.get_threats_by_account('acc-123')
 
-        # Threats from multiple accounts with same signature
-        threats_by_account = {
-            '111111111111': [
-                {
-                    'threat_id': 'THREAT-001',
-                    'threat_signature': 'apt-group-lazarus',
-                    'threat_type': 'Initial Access',
-                    'severity': 9
-                },
-                {
-                    'threat_id': 'THREAT-002',
-                    'threat_signature': 'apt-group-lazarus',
-                    'threat_type': 'Lateral Movement',
-                    'severity': 8
-                }
-            ],
-            '222222222222': [
-                {
-                    'threat_id': 'THREAT-003',
-                    'threat_signature': 'apt-group-lazarus',
-                    'threat_type': 'Data Exfiltration',
-                    'severity': 10
-                }
-            ],
-            '333333333333': [
-                {
-                    'threat_id': 'THREAT-004',
-                    'threat_signature': 'unrelated-threat',
-                    'threat_type': 'Policy Violation',
-                    'severity': 5
-                }
-            ]
-        }
+        assert len(acc_123_threats) == 2
+        assert all(t.get('account_id') == 'acc-123' for t in acc_123_threats)
 
-        # Correlate
-        correlation = orchestrator.correlate_cross_account_threats(threats_by_account)
+    def test_identify_cross_account_threats(self):
+        """✅ Identify threats spanning multiple accounts."""
+        detector1 = MockAnomalyDetector(threats=[
+            {
+                'threat_id': 'threat-lateral-1',
+                'threat_type': 'Lateral Movement',
+                'severity': 9,
+                'account_id': 'acc-123',
+                'evidence': [],
+                'affected_resources': [{'resource_id': 'i-001', 'resource_type': 'ec2'}],
+            },
+        ])
 
-        assert correlation['total_accounts'] == 3
-        assert correlation['total_threats'] == 4
-        assert correlation['multi_account_threat_groups'] >= 1
+        detector2 = MockAnomalyDetector(threats=[
+            {
+                'threat_id': 'threat-lateral-2',
+                'threat_type': 'Lateral Movement',
+                'severity': 9,
+                'account_id': 'acc-456',
+                'evidence': [],
+                'affected_resources': [{'resource_id': 'i-002', 'resource_type': 'ec2'}],
+            },
+        ])
 
-        # Find APT group correlation
-        apt_corr = next(
-            (g for g in correlation['correlation_groups'] if 'lazarus' in g['threat_signature']),
-            None
-        )
-        assert apt_corr is not None
-        assert len(apt_corr['accounts_affected']) >= 2
-        assert apt_corr['threat_count'] >= 2
+        service1 = ThreatDetectionService(anomaly_detector=detector1, smart_engine=None)
+        service2 = ThreatDetectionService(anomaly_detector=detector2, smart_engine=None)
 
-    def test_cross_account_blast_radius_assessment(self):
-        """✅ Assess blast radius of threat spanning multiple accounts."""
-        mock_audit = Mock()
-        orchestrator = MultiAccountOrchestrator(mock_audit)
+        aggregator = MultiAccountThreatAggregator()
+        aggregator.register_account('acc-123', service1)
+        aggregator.register_account('acc-456', service2)
+
+        aggregator.detect_threats_all_accounts()
+        cross_account = aggregator.identify_cross_account_threats()
+
+        assert len(cross_account) == 2
+        assert all(t.get('threat_type') == 'Lateral Movement' for t in cross_account)
+
+    def test_remediate_threat_across_accounts(self):
+        """✅ Execute remediation across multiple accounts."""
+        orchestrator = RemediationOrchestrator(audit_logger=None, max_workers=3)
+        engine = SmartRemediationEngine(orchestrator=orchestrator, audit_logger=None)
+
+        executor1 = AutoRemediationExecutor(smart_engine=engine, remediation_orchestrator=orchestrator)
+        executor2 = AutoRemediationExecutor(smart_engine=engine, remediation_orchestrator=orchestrator)
+
+        multi_orchestrator = MultiAccountRemediationOrchestrator()
+        multi_orchestrator.register_account_executor('acc-123', executor1)
+        multi_orchestrator.register_account_executor('acc-456', executor2)
 
         threat = {
-            'threat_id': 'THREAT-BLAST-001',
-            'threat_type': 'Ransomware',
-            'severity': 10,
-            'affected_resources': 5,
-            'blast_radius_score': 9.5
+            'threat_id': 'threat-multi-remediate',
+            'threat_type': 'Unauthorized EC2',
+            'severity': 8,
         }
 
-        affected_accounts = ['111111111111', '222222222222', '333333333333']
+        resource_map = {
+            'acc-123': [{'resource_id': 'i-001', 'resource_type': 'ec2', 'critical': False}],
+            'acc-456': [{'resource_id': 'i-002', 'resource_type': 'ec2', 'critical': False}],
+        }
 
-        blast = orchestrator.assess_cross_account_blast_radius(threat, affected_accounts)
+        result = multi_orchestrator.remediate_threat_across_accounts(threat, resource_map)
 
-        assert blast['accounts_affected'] == 3
-        assert blast['total_resources'] == 15  # 5 resources per account * 3 accounts
-        assert blast['risk_level'] in ['critical', 'high', 'medium', 'low']
-        assert len(blast['recommendations']) > 0
+        assert result['execution_id']
+        assert result['threat_id'] == 'threat-multi-remediate'
+        assert 'acc-123' in result['results']
+        assert 'acc-456' in result['results']
 
-    def test_cross_account_execution_summary(self):
-        """✅ Generate summary of cross-account operations."""
-        mock_audit = Mock()
-        orchestrator = MultiAccountOrchestrator(mock_audit)
+    def test_apply_account_policy(self):
+        """✅ Apply account-specific policy to remediation."""
+        policy_manager = AccountPolicyManager()
 
-        # Register and execute
-        for account_id in ['111111111111', '222222222222']:
-            orchestrator.register_account(account_id, f'arn:aws:iam::{account_id}:role/Role')
+        policy_manager.register_account_policy('acc-123', {
+            'allowed_strategies': ['MONITOR', 'ISOLATE'],
+            'approval_threshold': 7,
+        })
 
-        threats = [{'threat_id': f'T-{i}', 'severity': 5, 'affected_resources': 1} for i in range(3)]
+        multi_orchestrator = MultiAccountRemediationOrchestrator(policy_manager=policy_manager)
 
-        # Execute once
-        orchestrator.execute_parallel_remediation(threats)
+        threat = {
+            'threat_id': 'threat-policy',
+            'threat_type': 'Unauthorized EC2',
+            'severity': 8,
+        }
 
-        summary = orchestrator.get_cross_account_summary()
+        result = multi_orchestrator.apply_account_policy(threat, 'acc-123', {})
 
-        assert summary['total_executions'] >= 1
-        assert summary['total_threats_remediated'] >= 0
-        assert summary['success_rate'] >= 0.0
-        assert 0.0 <= summary['success_rate'] <= 1.0
+        assert result['account_id'] == 'acc-123'
+        assert 'REMEDIATE' in result['restricted_strategies']
+        assert 'ISOLATE' in result['allowed_strategies']
 
-    def test_multi_region_account_support(self):
-        """✅ Support accounts in different regions."""
-        mock_audit = Mock()
-        orchestrator = MultiAccountOrchestrator(mock_audit)
+    def test_coordinate_remediation_sequence(self):
+        """✅ Coordinate remediation with dependencies."""
+        multi_orchestrator = MultiAccountRemediationOrchestrator()
 
-        accounts = [
-            ('111111111111', 'us-east-1'),
-            ('222222222222', 'us-west-2'),
-            ('333333333333', 'eu-west-1'),
-            ('444444444444', 'ap-southeast-1')
+        threats = [
+            {'threat_id': 'threat-1', 'threat_type': 'Type1'},
+            {'threat_id': 'threat-2', 'threat_type': 'Type2'},
+            {'threat_id': 'threat-3', 'threat_type': 'Type3'},
         ]
 
-        # Register accounts in different regions
-        for account_id, region in accounts:
-            result = orchestrator.register_account(
-                account_id,
-                f'arn:aws:iam::{account_id}:role/CrossAccountRole',
-                region
-            )
-            assert result['region'] == region
-            assert orchestrator.account_registry[account_id]['region'] == region
+        dependency_map = {
+            'threat-1': [],
+            'threat-2': ['threat-1'],
+            'threat-3': ['threat-2'],
+        }
 
-        # Verify all accounts registered
-        assert len(orchestrator.account_registry) == 4
+        result = multi_orchestrator.coordinate_remediation_sequence(threats, dependency_map)
+
+        assert result['execution_sequence'] == ['threat-1', 'threat-2', 'threat-3']
+        assert result['total_threats'] == 3
+
+
+class TestMultiAccountSummary:
+
+    def test_get_multi_account_summary(self):
+        """✅ Get summary of multi-account remediation activity."""
+        orchestrator = RemediationOrchestrator(audit_logger=None, max_workers=3)
+        engine = SmartRemediationEngine(orchestrator=orchestrator, audit_logger=None)
+
+        executor1 = AutoRemediationExecutor(smart_engine=engine, remediation_orchestrator=orchestrator)
+        executor2 = AutoRemediationExecutor(smart_engine=engine, remediation_orchestrator=orchestrator)
+
+        multi_orchestrator = MultiAccountRemediationOrchestrator()
+        multi_orchestrator.register_account_executor('acc-123', executor1)
+        multi_orchestrator.register_account_executor('acc-456', executor2)
+
+        threat = {
+            'threat_id': 'threat-summary',
+            'threat_type': 'Unauthorized EC2',
+            'severity': 7,
+        }
+
+        resource_map = {
+            'acc-123': [{'resource_id': 'i-001', 'resource_type': 'ec2', 'critical': False}],
+            'acc-456': [{'resource_id': 'i-002', 'resource_type': 'ec2', 'critical': False}],
+        }
+
+        multi_orchestrator.remediate_threat_across_accounts(threat, resource_map)
+
+        summary = multi_orchestrator.get_multi_account_summary()
+
+        assert summary['total_executions'] >= 1
+        assert 'success_rate' in summary
+        assert 0 <= summary['success_rate'] <= 100
