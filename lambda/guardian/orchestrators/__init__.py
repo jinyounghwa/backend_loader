@@ -1,5 +1,5 @@
-"""Orchestration and coordination of security incident response"""
+"""Remediation orchestration module."""
 
-from .incident_orchestrator import IncidentOrchestrator
+from .remediation_orchestrator import RemediationOrchestrator, RemediationStatus
 
-__all__ = ['IncidentOrchestrator']
+__all__ = ['RemediationOrchestrator', 'RemediationStatus']

@@ -1,8 +1,5 @@
-"""AWS Guardian Automated Cleanup Engines"""
+"""Smart remediation engine module."""
 
-from .auto_cleanup_engine import AutoCleanupEngine, CleanupTarget
+from .smart_remediation import SmartRemediationEngine, RiskLevel
 
-__all__ = [
-    'AutoCleanupEngine',
-    'CleanupTarget',
-]
+__all__ = ['SmartRemediationEngine', 'RiskLevel']
