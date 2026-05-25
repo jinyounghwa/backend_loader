@@ -1,5 +1,5 @@
 """Smart remediation engine module."""
 
-from .smart_remediation import SmartRemediationEngine, RiskLevel
+from .smart_remediation_engine import SmartRemediationEngine
 
-__all__ = ['SmartRemediationEngine', 'RiskLevel']
+__all__ = ['SmartRemediationEngine']
