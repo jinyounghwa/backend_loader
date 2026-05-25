@@ -72,6 +72,7 @@ class ThreatDetectionService:
                     'threat_type': threat.get('threat_type'),
                     'detected_at': threat.get('detected_at'),
                     'status': threat.get('status'),
+                    'account_id': threat.get('account_id'),
                 })
 
         return filtered_threats
