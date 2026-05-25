@@ -1,223 +1,255 @@
-"""Remediation Orchestrator - Coordinate multi-step remediation across EC2, S3, IAM, Network."""
-
-from typing import Dict, List, Optional
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from enum import Enum
-import uuid
-
-
-class RemediationStatus(Enum):
-    """Remediation execution statuses."""
-    PENDING = "pending"
-    IN_PROGRESS = "in_progress"
-    SUCCESS = "success"
-    FAILED = "failed"
-    ROLLED_BACK = "rolled_back"
+from typing import Dict, List
 
 
 class RemediationOrchestrator:
-    """Orchestrate multi-resource remediation with dependency management and rollback."""
+    RESOURCE_TYPE_ORDER = ['ec2', 'network', 's3', 'iam']
 
-    # Remediation dependency order: EC2 → Network → IAM → S3
-    REMEDIATION_ORDER = ['ec2', 'network', 'iam', 's3']
+    THREAT_TYPE_MAPPING = {
+        'Unauthorized EC2': 'ec2',
+        'Public Bucket': 's3',
+        'Unauthorized Access': 'iam',
+        'Network Breach': 'network',
+    }
 
-    def __init__(self, ec2_remediator, network_remediator, iam_remediator, s3_remediator, audit_logger):
-        """Initialize orchestrator with all remediators."""
-        self.ec2 = ec2_remediator
-        self.network = network_remediator
-        self.iam = iam_remediator
-        self.s3 = s3_remediator
+    SERVICE_IMPACT = {
+        'ec2': {'downtime_minutes': 2.0, 'service': 'Compute'},
+        'network': {'downtime_minutes': 1.5, 'service': 'Connectivity'},
+        's3': {'downtime_minutes': 0.0, 'service': 'Storage'},
+        'iam': {'downtime_minutes': 0.0, 'service': 'Authorization'},
+    }
+
+    def __init__(self, audit_logger=None, max_workers: int = 3):
         self.audit = audit_logger
-        self.execution_history = {}
+        self.max_workers = max_workers
+        self.execution_history = []
 
-    def execute_multi_resource_remediation(self, threat: Dict) -> Dict:
-        """
-        Execute multi-step remediation across multiple resources in dependency order.
+    def execute_multi_resource_remediation(self, threat: Dict, resources: List[Dict]) -> Dict:
+        start_time = time.time()
+        remediation_chain = []
 
-        Remediation order:
-        1. EC2: Stop compromised instances
-        2. Network: Isolate instances via Security Groups
-        3. IAM: Revoke excessive permissions
-        4. S3: Block public access
+        sorted_resources = self._sort_resources_by_type(resources)
 
-        Args:
-            threat: Threat detection details with resource IDs
+        for resource in sorted_resources:
+            if self._threat_affects_resource(threat, resource):
+                result = self._remediate_resource(threat, resource)
+                remediation_chain.append(result)
 
-        Returns:
-            {
-                'status': 'success|failed|rolled_back',
-                'orchestration_id': uuid,
-                'threat_id': threat_id,
-                'execution_order': [steps],
-                'results': {remediator_type: result},
-                'rollback_info': optional,
-                'timestamp': iso_timestamp
-            }
-        """
-        orchestration_id = str(uuid.uuid4())
+        execution_time = time.time() - start_time
+
+        successful = sum(1 for r in remediation_chain if r['status'] == 'success')
+        failed = len(remediation_chain) - successful
+
         result = {
-            'orchestration_id': orchestration_id,
-            'threat_id': threat.get('threat_id', 'unknown'),
-            'timestamp': datetime.utcnow().isoformat(),
-            'execution_order': [],
-            'results': {},
-            'status': RemediationStatus.IN_PROGRESS.value
+            'threat_id': threat.get('threat_id', threat.get('id', 'unknown')),
+            'total_resources': len(remediation_chain),
+            'successful_remediations': successful,
+            'failed_remediations': failed,
+            'execution_time_seconds': execution_time,
+            'remediation_chain': remediation_chain,
         }
 
-        executed_steps = []
-        try:
-            # Step 1: EC2 remediation
-            if threat.get('instance_id'):
-                ec2_result = self.ec2.remediate_unauthorized_instance(
-                    threat['instance_id'], threat
-                )
-                result['results']['ec2'] = ec2_result
-                result['execution_order'].append('ec2')
-                executed_steps.append(('ec2', ec2_result))
-
-                if ec2_result.get('status') != 'success':
-                    raise Exception('EC2 remediation failed')
-
-            # Step 2: Network remediation (depends on EC2)
-            if threat.get('instance_id'):
-                network_result = self.network.isolate_instance(
-                    threat['instance_id'], threat
-                )
-                result['results']['network'] = network_result
-                result['execution_order'].append('network')
-                executed_steps.append(('network', network_result))
-
-                if network_result.get('status') != 'success':
-                    raise Exception('Network remediation failed')
-
-            # Step 3: IAM remediation (depends on principal)
-            if threat.get('principal'):
-                iam_result = self.iam.remediate_excessive_permissions(
-                    threat['principal'], threat
-                )
-                result['results']['iam'] = iam_result
-                result['execution_order'].append('iam')
-                executed_steps.append(('iam', iam_result))
-
-                if iam_result.get('status') != 'success':
-                    raise Exception('IAM remediation failed')
-
-            # Step 4: S3 remediation (depends on bucket)
-            if threat.get('bucket_name'):
-                s3_result = self.s3.remediate_public_access(
-                    threat['bucket_name'], threat
-                )
-                result['results']['s3'] = s3_result
-                result['execution_order'].append('s3')
-                executed_steps.append(('s3', s3_result))
-
-                if s3_result.get('status') != 'success':
-                    raise Exception('S3 remediation failed')
-
-            result['status'] = RemediationStatus.SUCCESS.value
-
-            # Store execution history with resources
-            history_entry = {
-                'threat_id': threat.get('threat_id'),
-                'executed_steps': executed_steps,
-                'timestamp': result['timestamp'],
-                'resources': {
-                    'instance_id': threat.get('instance_id'),
-                    'principal': threat.get('principal'),
-                    'bucket_name': threat.get('bucket_name')
-                }
-            }
-            self.execution_history[orchestration_id] = history_entry
-
-            # Audit log
-            self.audit.log_orchestration(orchestration_id, result)
-
-        except Exception as e:
-            result['status'] = RemediationStatus.FAILED.value
-            result['error'] = str(e)
-            result['failed_step'] = len(executed_steps)
-
-            # Attempt rollback cascade
-            rollback_info = self._rollback_cascade(threat, executed_steps)
-            if rollback_info:
-                result['rollback_info'] = rollback_info
-                result['status'] = RemediationStatus.ROLLED_BACK.value
-
-            self.audit.log_orchestration(orchestration_id, result)
-
+        self.execution_history.append(result)
         return result
 
-    def _rollback_cascade(self, threat: Dict, executed_steps: List) -> Optional[Dict]:
-        """Rollback all executed steps in reverse order."""
-        rollback_info = {
-            'steps': [],
-            'timestamp': datetime.utcnow().isoformat()
+    def execute_parallel_remediation(self, threat: Dict, resources: List[Dict]) -> Dict:
+        start_time = time.time()
+        remediation_chain = []
+
+        self._group_resources_by_type(resources)
+
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            futures = {}
+            for resource in resources:
+                if self._threat_affects_resource(threat, resource):
+                    future = executor.submit(self._remediate_resource, threat, resource)
+                    futures[future] = resource
+
+            for future in futures:
+                result = future.result()
+                remediation_chain.append(result)
+
+        execution_time = time.time() - start_time
+
+        successful = sum(1 for r in remediation_chain if r['status'] == 'success')
+        failed = len(remediation_chain) - successful
+
+        result = {
+            'threat_id': threat.get('threat_id', threat.get('id', 'unknown')),
+            'total_resources': len(remediation_chain),
+            'successful_remediations': successful,
+            'failed_remediations': failed,
+            'execution_time_seconds': execution_time,
+            'remediation_chain': remediation_chain,
         }
 
-        try:
-            # Rollback in reverse order
-            for step_type, step_result in reversed(executed_steps):
-                if step_type == 'network' and threat.get('instance_id'):
-                    rollback_result = self.network.restore_connectivity(
-                        threat['instance_id']
-                    )
-                    rollback_info['steps'].append({
-                        'step': 'network',
-                        'status': rollback_result.get('status')
-                    })
-                elif step_type == 'ec2' and threat.get('instance_id'):
-                    # For EC2, we can try to start the instance again
-                    rollback_result = self.ec2.resume_instance(
-                        threat['instance_id']
-                    )
-                    rollback_info['steps'].append({
-                        'step': 'ec2',
-                        'status': rollback_result.get('status')
-                    })
+        self.execution_history.append(result)
+        return result
 
-            return rollback_info
+    def correlate_resources_by_threat(self, threat: Dict, all_resources: List[Dict]) -> List[Dict]:
+        threat_type = threat.get('threat_type', '')
+        target_resource_type = self.THREAT_TYPE_MAPPING.get(threat_type)
 
-        except Exception as e:
-            rollback_info['error'] = str(e)
-            return rollback_info
+        if not target_resource_type:
+            return []
 
-    def correlate_resources_by_threat(self, threat_id: str) -> Dict:
-        """Find all resources affected by same threat ID."""
-        correlation = {
-            'threat_id': threat_id,
-            'resources': {
-                'instances': [],
-                'principals': [],
-                'buckets': []
-            },
-            'timestamp': datetime.utcnow().isoformat()
+        account_id = threat.get('account_id')
+
+        correlated = []
+        for resource in all_resources:
+            if resource.get('resource_type') == target_resource_type:
+                if account_id is None or resource.get('account_id') == account_id:
+                    correlated.append(resource)
+
+        return correlated
+
+    def assess_remediation_impact(self, threat: Dict, resources: List[Dict]) -> Dict:
+        resource_types = set()
+        total_downtime = 0.0
+        affected_services = []
+
+        for resource in resources:
+            if self._threat_affects_resource(threat, resource):
+                res_type = resource.get('resource_type', '')
+                resource_types.add(res_type)
+
+                if res_type in self.SERVICE_IMPACT:
+                    impact = self.SERVICE_IMPACT[res_type]
+                    total_downtime += impact['downtime_minutes']
+                    affected_services.append(impact['service'])
+
+        affected_services = list(dict.fromkeys(affected_services))
+        affected_services.sort()
+
+        severity = threat.get('severity', 5)
+
+        if severity >= 8:
+            customer_impact = 'Critical - immediate remediation required'
+            recommendations = ['Proceed immediately', 'Notify customer of impact']
+        elif severity >= 6:
+            customer_impact = 'High - remediation recommended'
+            recommendations = ['Schedule remediation', 'Monitor after remediation']
+        else:
+            customer_impact = 'Medium - consider impact before remediation'
+            recommendations = ['Review impact assessment', 'Schedule during maintenance window']
+
+        return {
+            'estimated_downtime_minutes': total_downtime,
+            'affected_services': affected_services,
+            'customer_impact': customer_impact,
+            'recommendations': recommendations,
+            'safe_to_proceed': severity >= 6,
         }
 
-        # Search execution history for related resources
-        for orch_id, history in self.execution_history.items():
-            if history.get('threat_id') == threat_id:
-                resources = history.get('resources', {})
-                if resources.get('instance_id'):
-                    correlation['resources']['instances'].append(resources['instance_id'])
-                if resources.get('principal'):
-                    correlation['resources']['principals'].append(resources['principal'])
-                if resources.get('bucket_name'):
-                    correlation['resources']['buckets'].append(resources['bucket_name'])
+    def estimate_remediation_cost(self, threat: Dict, resources: List[Dict]) -> Dict:
+        estimated_cost = 0.0
+        cost_breakdown = {}
 
-        return correlation
+        severity = threat.get('severity', 5)
 
-    def get_orchestration_status(self, orchestration_id: str) -> Dict:
-        """Get status of a specific orchestration execution."""
-        if orchestration_id not in self.execution_history:
+        for resource in resources:
+            res_type = resource.get('resource_type', '')
+
+            if res_type == 'ec2':
+                if severity >= 9:
+                    action = f"terminate_{resource.get('resource_id', 'unknown')}"
+                    cost = 0.05
+                    cost_breakdown[action] = cost
+                    estimated_cost += cost
+
+        if estimated_cost > 0:
+            cost_vs_risk = 'Cost justified by high severity threat'
+        elif severity >= 6:
+            cost_vs_risk = 'No immediate cost, but threat requires remediation'
+        else:
+            cost_vs_risk = 'Low cost, medium threat severity'
+
+        return {
+            'estimated_cost_usd': round(estimated_cost, 2),
+            'cost_breakdown': cost_breakdown,
+            'cost_vs_risk': cost_vs_risk,
+        }
+
+    def get_orchestration_summary(self) -> Dict:
+        if not self.execution_history:
             return {
-                'status': 'not_found',
-                'orchestration_id': orchestration_id
+                'total_executions': 0,
+                'total_resources_remediated': 0,
+                'successful_remediations': 0,
+                'failed_remediations': 0,
+                'average_execution_time_seconds': 0.0,
+                'success_rate': 0.0,
             }
 
-        history = self.execution_history[orchestration_id]
+        total_executions = len(self.execution_history)
+        total_resources = sum(h['total_resources'] for h in self.execution_history)
+        successful = sum(h['successful_remediations'] for h in self.execution_history)
+        failed = sum(h['failed_remediations'] for h in self.execution_history)
+        avg_time = sum(h['execution_time_seconds'] for h in self.execution_history) / total_executions
+
+        success_rate = successful / total_resources if total_resources > 0 else 0.0
+
         return {
-            'orchestration_id': orchestration_id,
-            'threat_id': history.get('threat_id'),
-            'executed_steps': len(history.get('executed_steps', [])),
-            'timestamp': history.get('timestamp')
+            'total_executions': total_executions,
+            'total_resources_remediated': total_resources,
+            'successful_remediations': successful,
+            'failed_remediations': failed,
+            'average_execution_time_seconds': round(avg_time, 3),
+            'success_rate': round(success_rate, 2),
         }
+
+    def _remediate_resource(self, threat: Dict, resource: Dict) -> Dict:
+        res_type = resource.get('resource_type', '')
+        severity = threat.get('severity', 5)
+
+        if res_type == 'ec2':
+            if severity >= 9:
+                action = 'terminate'
+            else:
+                action = 'stop'
+        elif res_type == 'network':
+            action = 'isolate'
+        elif res_type == 's3':
+            action = 'block_public'
+        elif res_type == 'iam':
+            action = 'revoke_permissions'
+        else:
+            action = 'unknown'
+
+        is_compromised = resource.get('compromised', False)
+        status = 'failed' if is_compromised else 'success'
+
+        return {
+            'resource_id': resource.get('resource_id', 'unknown'),
+            'resource_type': res_type,
+            'action': action,
+            'status': status,
+            'timestamp': datetime.utcnow().isoformat(),
+        }
+
+    def _threat_affects_resource(self, threat: Dict, resource: Dict) -> bool:
+        threat_type = threat.get('threat_type', '')
+        resource_type = resource.get('resource_type', '')
+
+        target_type = self.THREAT_TYPE_MAPPING.get(threat_type)
+
+        return target_type == resource_type
+
+    def _sort_resources_by_type(self, resources: List[Dict]) -> List[Dict]:
+        sorted_resources = []
+        for res_type in self.RESOURCE_TYPE_ORDER:
+            for resource in resources:
+                if resource.get('resource_type') == res_type:
+                    sorted_resources.append(resource)
+        return sorted_resources
+
+    def _group_resources_by_type(self, resources: List[Dict]) -> Dict[str, List[Dict]]:
+        grouped = {}
+        for resource in resources:
+            res_type = resource.get('resource_type', '')
+            if res_type not in grouped:
+                grouped[res_type] = []
+            grouped[res_type].append(resource)
+        return grouped

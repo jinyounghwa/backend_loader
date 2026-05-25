@@ -1,5 +1,5 @@
 """Remediation orchestration module."""
 
-from .remediation_orchestrator import RemediationOrchestrator, RemediationStatus
+from .remediation_orchestrator import RemediationOrchestrator
 
-__all__ = ['RemediationOrchestrator', 'RemediationStatus']
+__all__ = ['RemediationOrchestrator']

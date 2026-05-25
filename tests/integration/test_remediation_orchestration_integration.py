@@ -1,271 +1,178 @@
-"""Sprint 47 Phase 1: Remediation Orchestration Integration Tests (6 tests)"""
+"""Sprint 49 Phase 1: Remediation Orchestration Integration Tests (7 tests)"""
 
 import sys
 from pathlib import Path
 import pytest
-from unittest.mock import Mock
-from datetime import datetime
+import time
 
 lambda_path = Path(__file__).parent.parent.parent / "lambda"
 sys.path.insert(0, str(lambda_path))
 
-from guardian.orchestrators.remediation_orchestrator import RemediationOrchestrator, RemediationStatus
+from guardian.orchestrators.remediation_orchestrator import RemediationOrchestrator
 
 
 class TestRemediationOrchestrationIntegration:
-    """End-to-end remediation orchestration scenarios."""
 
-    def test_threat_triggers_multi_resource_remediation(self):
-        """✅ Threat detection triggers coordinated remediation across all resources."""
-        mock_ec2 = Mock()
-        mock_network = Mock()
-        mock_iam = Mock()
-        mock_s3 = Mock()
-        mock_audit = Mock()
+    @pytest.fixture
+    def orchestrator(self):
+        return RemediationOrchestrator(audit_logger=None, max_workers=3)
 
-        orchestrator = RemediationOrchestrator(mock_ec2, mock_network, mock_iam, mock_s3, mock_audit)
-
+    def test_end_to_end_multi_resource_threat_remediation(self, orchestrator):
+        """✅ Complete flow: threat → correlate resources → execute remediation."""
         threat = {
-            'threat_id': 'THREAT-INT-ORCH-001',
-            'event_type': 'CompromisedInstanceDetected',
-            'severity': 9,
-            'instance_id': 'i-compromised-complete',
-            'principal': 'arn:aws:iam::123456789012:user/attacker-created',
-            'bucket_name': 'compromised-data-bucket',
-            'timestamp': datetime.utcnow().isoformat(),
-            'description': 'EC2 instance compromised with suspicious IAM user'
+            'threat_id': 'threat-e2e',
+            'threat_type': 'Unauthorized EC2',
+            'severity': 8,
+            'account_id': 'acc-123',
         }
 
-        # Setup all mocks
-        mock_ec2.remediate_unauthorized_instance.return_value = {
-            'status': 'success',
-            'instance_id': 'i-compromised-complete',
-            'action_taken': 'stopped'
-        }
-        mock_network.isolate_instance.return_value = {
-            'status': 'success',
-            'new_security_group_id': 'sg-isolated-complete'
-        }
-        mock_iam.remediate_excessive_permissions.return_value = {
-            'status': 'success',
-            'action_taken': 'revoked',
-            'policies_revoked': ['AdministratorAccess']
-        }
-        mock_s3.remediate_public_access.return_value = {
-            'status': 'success',
-            'action_taken': 'blocked'
-        }
-
-        result = orchestrator.execute_multi_resource_remediation(threat)
-
-        # Verify complete flow
-        assert result['status'] == RemediationStatus.SUCCESS.value
-        assert len(result['execution_order']) == 4
-        assert result['results']['ec2']['status'] == 'success'
-        assert result['results']['network']['status'] == 'success'
-        assert result['results']['iam']['status'] == 'success'
-        assert result['results']['s3']['status'] == 'success'
-
-    def test_remediation_rollback_cascade(self):
-        """✅ Multi-step rollback cascade when orchestration fails."""
-        mock_ec2 = Mock()
-        mock_network = Mock()
-        mock_iam = Mock()
-        mock_s3 = Mock()
-        mock_audit = Mock()
-
-        orchestrator = RemediationOrchestrator(mock_ec2, mock_network, mock_iam, mock_s3, mock_audit)
-
-        threat = {
-            'threat_id': 'THREAT-INT-ORCH-002',
-            'instance_id': 'i-cascade-rollback',
-            'principal': 'arn:aws:iam::123456789012:user/test'
-        }
-
-        # EC2 and Network succeed, IAM fails
-        mock_ec2.remediate_unauthorized_instance.return_value = {
-            'status': 'success',
-            'instance_id': 'i-cascade-rollback'
-        }
-        mock_network.isolate_instance.return_value = {
-            'status': 'success',
-            'isolated_group': 'sg-isolated-cascade'
-        }
-        mock_iam.remediate_excessive_permissions.return_value = {
-            'status': 'failed',
-            'error': 'Cannot revoke from protected role'
-        }
-
-        # Setup rollback
-        mock_network.restore_connectivity.return_value = {
-            'status': 'success'
-        }
-        mock_ec2.resume_instance.return_value = {
-            'status': 'success'
-        }
-
-        result = orchestrator.execute_multi_resource_remediation(threat)
-
-        # Verify rollback cascade
-        assert result['status'] == RemediationStatus.ROLLED_BACK.value
-        assert 'rollback_info' in result
-        assert len(result['rollback_info']['steps']) == 2  # Network and EC2 rolled back
-        assert mock_network.restore_connectivity.called
-        assert mock_ec2.resume_instance.called
-
-    def test_remediation_impact_assessment(self):
-        """✅ Orchestrator tracks and reports remediation impact."""
-        mock_ec2 = Mock()
-        mock_network = Mock()
-        mock_iam = Mock()
-        mock_s3 = Mock()
-        mock_audit = Mock()
-
-        orchestrator = RemediationOrchestrator(mock_ec2, mock_network, mock_iam, mock_s3, mock_audit)
-
-        threat = {
-            'threat_id': 'THREAT-INT-ORCH-003',
-            'instance_id': 'i-impact-assess',
-            'principal': 'arn:aws:iam::123456789012:user/test',
-            'bucket_name': 'test-bucket'
-        }
-
-        mock_ec2.remediate_unauthorized_instance.return_value = {
-            'status': 'success',
-            'impact': 'stopped_instance'
-        }
-        mock_network.isolate_instance.return_value = {
-            'status': 'success',
-            'impact': 'network_isolation'
-        }
-        mock_iam.remediate_excessive_permissions.return_value = {
-            'status': 'success',
-            'impact': 'permission_revocation'
-        }
-        mock_s3.remediate_public_access.return_value = {
-            'status': 'success',
-            'impact': 'public_access_blocked'
-        }
-
-        result = orchestrator.execute_multi_resource_remediation(threat)
-
-        # Verify impact tracking
-        assert result['status'] == RemediationStatus.SUCCESS.value
-        assert 'results' in result
-        assert all(r['status'] == 'success' for r in result['results'].values())
-
-    def test_remediation_cost_estimation(self):
-        """✅ Orchestrator estimates cost impact of remediation actions."""
-        mock_ec2 = Mock()
-        mock_network = Mock()
-        mock_iam = Mock()
-        mock_s3 = Mock()
-        mock_audit = Mock()
-
-        orchestrator = RemediationOrchestrator(mock_ec2, mock_network, mock_iam, mock_s3, mock_audit)
-
-        threat = {
-            'threat_id': 'THREAT-INT-ORCH-004',
-            'instance_id': 'i-cost-estimate',
-            'principal': 'arn:aws:iam::123456789012:user/test',
-            'bucket_name': 'test-bucket'
-        }
-
-        # All remediations succeed
-        mock_ec2.remediate_unauthorized_instance.return_value = {'status': 'success'}
-        mock_network.isolate_instance.return_value = {'status': 'success'}
-        mock_iam.remediate_excessive_permissions.return_value = {'status': 'success'}
-        mock_s3.remediate_public_access.return_value = {'status': 'success'}
-
-        result = orchestrator.execute_multi_resource_remediation(threat)
-
-        # Note: Cost estimation would be in SmartRemediationEngine
-        # Verify orchestrator successfully executes
-        assert result['status'] == RemediationStatus.SUCCESS.value
-        assert len(result['execution_order']) == 4
-
-    def test_distributed_tracing_via_threat_id(self):
-        """✅ Orchestrator tracks remediation execution via threat ID."""
-        mock_ec2 = Mock()
-        mock_network = Mock()
-        mock_iam = Mock()
-        mock_s3 = Mock()
-        mock_audit = Mock()
-
-        orchestrator = RemediationOrchestrator(mock_ec2, mock_network, mock_iam, mock_s3, mock_audit)
-
-        threat = {
-            'threat_id': 'THREAT-INT-ORCH-005',
-            'instance_id': 'i-trace-001',
-            'principal': 'arn:aws:iam::123456789012:user/test'
-        }
-
-        mock_ec2.remediate_unauthorized_instance.return_value = {'status': 'success'}
-        mock_network.isolate_instance.return_value = {'status': 'success'}
-        mock_iam.remediate_excessive_permissions.return_value = {'status': 'success'}
-
-        result = orchestrator.execute_multi_resource_remediation(threat)
-
-        # Verify distributed tracing
-        assert result['threat_id'] == 'THREAT-INT-ORCH-005'
-        assert 'orchestration_id' in result
-        assert 'timestamp' in result
-
-        # Check execution history tracking
-        orchestration_id = result['orchestration_id']
-        status = orchestrator.get_orchestration_status(orchestration_id)
-        assert status['threat_id'] == 'THREAT-INT-ORCH-005'
-        assert status['executed_steps'] == 3
-
-    def test_concurrent_orchestration_requests(self):
-        """✅ Multiple concurrent threat remediations execute independently."""
-        mock_ec2 = Mock()
-        mock_network = Mock()
-        mock_iam = Mock()
-        mock_s3 = Mock()
-        mock_audit = Mock()
-
-        orchestrator = RemediationOrchestrator(mock_ec2, mock_network, mock_iam, mock_s3, mock_audit)
-
-        threats = [
-            {
-                'threat_id': 'THREAT-INT-ORCH-006-A',
-                'instance_id': 'i-concurrent-001',
-                'principal': 'arn:aws:iam::123456789012:user/attacker-a'
-            },
-            {
-                'threat_id': 'THREAT-INT-ORCH-006-B',
-                'instance_id': 'i-concurrent-002',
-                'principal': 'arn:aws:iam::123456789012:user/attacker-b'
-            },
-            {
-                'threat_id': 'THREAT-INT-ORCH-006-C',
-                'instance_id': 'i-concurrent-003',
-                'principal': 'arn:aws:iam::123456789012:user/attacker-c'
-            }
+        resources = [
+            {'resource_id': 'i-001', 'resource_type': 'ec2', 'account_id': 'acc-123', 'compromised': False},
+            {'resource_id': 'i-002', 'resource_type': 'ec2', 'account_id': 'acc-123', 'compromised': False},
+            {'resource_id': 'sg-001', 'resource_type': 'network', 'account_id': 'acc-123', 'compromised': False},
+            {'resource_id': 'bucket-001', 'resource_type': 's3', 'account_id': 'acc-123', 'compromised': False},
+            {'resource_id': 'role-001', 'resource_type': 'iam', 'account_id': 'acc-123', 'compromised': False},
         ]
 
-        # Setup mocks to return different results for different instances
-        def remediate_ec2(*args, **kwargs):
-            instance_id = args[0]
-            return {'status': 'success', 'instance_id': instance_id}
+        result = orchestrator.execute_multi_resource_remediation(threat, resources)
 
-        mock_ec2.remediate_unauthorized_instance.side_effect = remediate_ec2
-        mock_network.isolate_instance.return_value = {'status': 'success'}
-        mock_iam.remediate_excessive_permissions.return_value = {'status': 'success'}
+        assert result['threat_id'] == 'threat-e2e'
+        assert result['total_resources'] == 2
+        assert all(item['resource_type'] == 'ec2' for item in result['remediation_chain'])
 
-        # Execute concurrent remediations
-        results = [orchestrator.execute_multi_resource_remediation(threat) for threat in threats]
+    def test_remediation_execution_order_dependency(self, orchestrator):
+        """✅ Verify execution respects dependency order."""
+        threat = {
+            'threat_id': 'threat-order',
+            'threat_type': 'Network Breach',
+            'severity': 7,
+            'account_id': 'acc-123',
+        }
 
-        # Verify all completed successfully
-        assert len(results) == 3
-        assert all(r['status'] == RemediationStatus.SUCCESS.value for r in results)
+        resources = [
+            {'resource_id': 'bucket-001', 'resource_type': 's3', 'account_id': 'acc-123', 'compromised': False},
+            {'resource_id': 'i-001', 'resource_type': 'ec2', 'account_id': 'acc-123', 'compromised': False},
+            {'resource_id': 'sg-001', 'resource_type': 'network', 'account_id': 'acc-123', 'compromised': False},
+            {'resource_id': 'role-001', 'resource_type': 'iam', 'account_id': 'acc-123', 'compromised': False},
+        ]
 
-        # Verify each has unique orchestration ID
-        orch_ids = [r['orchestration_id'] for r in results]
-        assert len(set(orch_ids)) == 3  # All unique
+        result = orchestrator.execute_multi_resource_remediation(threat, resources)
 
-        # Verify tracking for each
-        for orch_id, threat in zip(orch_ids, threats):
-            status = orchestrator.get_orchestration_status(orch_id)
-            assert status['threat_id'] == threat['threat_id']
+        chain = result['remediation_chain']
+        assert chain[0]['resource_type'] == 'network'
+
+    def test_parallel_remediation_independent_resources(self, orchestrator):
+        """✅ Parallel execution for same resource type."""
+        threat = {
+            'threat_id': 'threat-parallel',
+            'threat_type': 'Unauthorized EC2',
+            'severity': 6,
+            'account_id': 'acc-123',
+        }
+
+        resources = [
+            {'resource_id': 'i-001', 'resource_type': 'ec2', 'account_id': 'acc-123', 'compromised': False},
+            {'resource_id': 'i-002', 'resource_type': 'ec2', 'account_id': 'acc-123', 'compromised': False},
+            {'resource_id': 'i-003', 'resource_type': 'ec2', 'account_id': 'acc-123', 'compromised': False},
+            {'resource_id': 'i-004', 'resource_type': 'ec2', 'account_id': 'acc-123', 'compromised': False},
+            {'resource_id': 'i-005', 'resource_type': 'ec2', 'account_id': 'acc-123', 'compromised': False},
+        ]
+
+        start = time.time()
+        result = orchestrator.execute_parallel_remediation(threat, resources)
+        parallel_time = time.time() - start
+
+        assert result['total_resources'] == 5
+        assert result['successful_remediations'] == 5
+
+    def test_multi_type_resource_remediation_mixed(self, orchestrator):
+        """✅ Handle mixed resource types with proper ordering."""
+        threat = {
+            'threat_id': 'threat-mixed',
+            'threat_type': 'Unauthorized EC2',
+            'severity': 7,
+            'account_id': 'acc-123',
+        }
+
+        resources = [
+            {'resource_id': 'i-001', 'resource_type': 'ec2', 'account_id': 'acc-123', 'compromised': False},
+            {'resource_id': 'i-002', 'resource_type': 'ec2', 'account_id': 'acc-123', 'compromised': False},
+            {'resource_id': 'bucket-001', 'resource_type': 's3', 'account_id': 'acc-123', 'compromised': False},
+            {'resource_id': 'bucket-002', 'resource_type': 's3', 'account_id': 'acc-123', 'compromised': False},
+            {'resource_id': 'bucket-003', 'resource_type': 's3', 'account_id': 'acc-123', 'compromised': False},
+            {'resource_id': 'role-001', 'resource_type': 'iam', 'account_id': 'acc-123', 'compromised': False},
+            {'resource_id': 'role-002', 'resource_type': 'iam', 'account_id': 'acc-123', 'compromised': False},
+        ]
+
+        result = orchestrator.execute_multi_resource_remediation(threat, resources)
+
+        chain = result['remediation_chain']
+        assert all(item['resource_type'] == 'ec2' for item in chain)
+
+    def test_impact_assessment_with_multiple_services(self, orchestrator):
+        """✅ Impact assessment aggregates across services."""
+        threat = {
+            'threat_type': 'Network Breach',
+            'severity': 7,
+            'account_id': 'acc-123',
+        }
+
+        resources = [
+            {'resource_id': 'i-001', 'resource_type': 'ec2', 'account_id': 'acc-123'},
+            {'resource_id': 'i-002', 'resource_type': 'ec2', 'account_id': 'acc-123'},
+            {'resource_id': 'sg-001', 'resource_type': 'network', 'account_id': 'acc-123'},
+            {'resource_id': 'sg-002', 'resource_type': 'network', 'account_id': 'acc-123'},
+        ]
+
+        impact = orchestrator.assess_remediation_impact(threat, resources)
+
+        assert impact['estimated_downtime_minutes'] == 3.0
+        assert 'Connectivity' in impact['affected_services']
+
+    def test_cost_estimation_multi_resource_scenarios(self, orchestrator):
+        """✅ Cost estimation for complex remediation scenarios."""
+        low_threat = {'threat_id': 'threat-low', 'severity': 3}
+        high_threat = {'threat_id': 'threat-high', 'severity': 10}
+
+        resources = [
+            {'resource_id': 'i-001', 'resource_type': 'ec2', 'compromised': False},
+            {'resource_id': 'i-002', 'resource_type': 'ec2', 'compromised': False},
+        ]
+
+        cost_low = orchestrator.estimate_remediation_cost(low_threat, resources)
+        cost_high = orchestrator.estimate_remediation_cost(high_threat, resources)
+
+        assert cost_low['estimated_cost_usd'] == 0.0
+        assert cost_high['estimated_cost_usd'] == 0.10
+
+    def test_orchestration_summary_aggregation(self, orchestrator):
+        """✅ Summary correctly aggregates multiple executions."""
+        threat = {
+            'threat_id': 'threat-summary',
+            'threat_type': 'Unauthorized EC2',
+            'severity': 7,
+            'account_id': 'acc-123',
+        }
+
+        orchestrator.execute_multi_resource_remediation(threat, [
+            {'resource_id': 'i-001', 'resource_type': 'ec2', 'account_id': 'acc-123', 'compromised': False},
+            {'resource_id': 'i-002', 'resource_type': 'ec2', 'account_id': 'acc-123', 'compromised': False},
+            {'resource_id': 'i-003', 'resource_type': 'ec2', 'account_id': 'acc-123', 'compromised': False},
+        ])
+
+        orchestrator.execute_multi_resource_remediation(threat, [
+            {'resource_id': 'i-004', 'resource_type': 'ec2', 'account_id': 'acc-123', 'compromised': False},
+            {'resource_id': 'i-005', 'resource_type': 'ec2', 'account_id': 'acc-123', 'compromised': False},
+        ])
+
+        orchestrator.execute_multi_resource_remediation(threat, [
+            {'resource_id': 'i-006', 'resource_type': 'ec2', 'account_id': 'acc-123', 'compromised': False},
+        ])
+
+        summary = orchestrator.get_orchestration_summary()
+
+        assert summary['total_executions'] == 3
+        assert summary['total_resources_remediated'] == 6
+        assert summary['successful_remediations'] == 6
+        assert summary['failed_remediations'] == 0
+        assert summary['success_rate'] == 1.0
