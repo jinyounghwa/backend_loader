@@ -15,11 +15,21 @@ if lambda_dir not in sys.path:
 from guardian.responders.connection_manager import ConnectionManager
 from guardian.responders.notification_buffer import NotificationBuffer
 from guardian.responders.websocket_notifier import WebSocketNotifier
+from guardian.realtime.dashboard_broadcaster import DashboardBroadcaster
+import boto3
+import asyncio
 
 # 전역 인스턴스
 ws_notifier = WebSocketNotifier()
 conn_manager = ConnectionManager(ttl_seconds=300)
 notification_buffer = NotificationBuffer(batch_window=10)
+
+# DashboardBroadcaster 인스턴스
+try:
+    apigateway = boto3.client('apigatewaymanagementapi')
+    dashboard_broadcaster = DashboardBroadcaster(apigateway)
+except Exception as e:
+    dashboard_broadcaster = None
 
 
 def _error_response(status_code: int, message: str) -> Dict[str, Any]:
@@ -172,5 +182,121 @@ async def handle_connection_stats(event: Dict[str, Any], context: Any) -> Dict[s
             "notification_buffer": notification_buffer.get_buffer_stats(),
         }
         return _json_response(200, stats)
+    except Exception as e:
+        return _error_response(500, str(e))
+
+
+async def broadcast_threat_detected(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """위협 탐지 이벤트 실시간 브로드캐스트"""
+    try:
+        if not dashboard_broadcaster:
+            return _error_response(500, "Dashboard broadcaster not initialized")
+
+        body = _parse_body(event)
+        threat = body.get("threat", {})
+
+        await dashboard_broadcaster.on_threat_detected(threat)
+
+        return _json_response(200, {
+            "status": "broadcasted",
+            "threat_id": threat.get("threat_id"),
+            "active_connections": dashboard_broadcaster.get_active_connection_count()
+        })
+    except Exception as e:
+        return _error_response(500, str(e))
+
+
+async def broadcast_action_executed(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """작업 실행 이벤트 실시간 브로드캐스트"""
+    try:
+        if not dashboard_broadcaster:
+            return _error_response(500, "Dashboard broadcaster not initialized")
+
+        body = _parse_body(event)
+        action = body.get("action", {})
+
+        await dashboard_broadcaster.on_action_executed(action)
+
+        return _json_response(200, {
+            "status": "broadcasted",
+            "action_id": action.get("action_id"),
+            "active_connections": dashboard_broadcaster.get_active_connection_count()
+        })
+    except Exception as e:
+        return _error_response(500, str(e))
+
+
+async def broadcast_feedback_submitted(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """피드백 제출 이벤트 실시간 브로드캐스트"""
+    try:
+        if not dashboard_broadcaster:
+            return _error_response(500, "Dashboard broadcaster not initialized")
+
+        body = _parse_body(event)
+        feedback = body.get("feedback", {})
+        current_accuracy = body.get("current_accuracy", 0.0)
+
+        await dashboard_broadcaster.on_feedback_submitted(feedback, current_accuracy)
+
+        return _json_response(200, {
+            "status": "broadcasted",
+            "feedback_id": feedback.get("feedback_id"),
+            "model_accuracy": round(current_accuracy, 4),
+            "active_connections": dashboard_broadcaster.get_active_connection_count()
+        })
+    except Exception as e:
+        return _error_response(500, str(e))
+
+
+async def broadcast_playbook_status(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """플레이북 상태 변경 이벤트 실시간 브로드캐스트"""
+    try:
+        if not dashboard_broadcaster:
+            return _error_response(500, "Dashboard broadcaster not initialized")
+
+        body = _parse_body(event)
+        playbook = body.get("playbook", {})
+
+        await dashboard_broadcaster.on_playbook_status_changed(playbook)
+
+        return _json_response(200, {
+            "status": "broadcasted",
+            "playbook_id": playbook.get("playbook_id"),
+            "active_connections": dashboard_broadcaster.get_active_connection_count()
+        })
+    except Exception as e:
+        return _error_response(500, str(e))
+
+
+async def broadcast_metrics_updated(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """대시보드 메트릭 업데이트 이벤트 실시간 브로드캐스트"""
+    try:
+        if not dashboard_broadcaster:
+            return _error_response(500, "Dashboard broadcaster not initialized")
+
+        body = _parse_body(event)
+        metrics = body.get("metrics", {})
+
+        await dashboard_broadcaster.on_metrics_updated(metrics)
+
+        return _json_response(200, {
+            "status": "broadcasted",
+            "active_connections": dashboard_broadcaster.get_active_connection_count()
+        })
+    except Exception as e:
+        return _error_response(500, str(e))
+
+
+def get_broadcaster_status(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """DashboardBroadcaster 상태 조회"""
+    try:
+        if not dashboard_broadcaster:
+            return _error_response(500, "Dashboard broadcaster not initialized")
+
+        return _json_response(200, {
+            "active_connections": dashboard_broadcaster.get_active_connection_count(),
+            "connection_ids": dashboard_broadcaster.get_active_connections(),
+            "status": "operational" if dashboard_broadcaster.get_active_connection_count() >= 0 else "error"
+        })
     except Exception as e:
         return _error_response(500, str(e))
