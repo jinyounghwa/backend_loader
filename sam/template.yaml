@@ -533,6 +533,164 @@ Resources:
           Value: RuleDeploymentTracking
 
   # ==========================================
+  # Persistence Layer Tables (Phase 1)
+  # ==========================================
+  EventStoreTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-event-store'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: event_id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+        - AttributeName: account_id
+          AttributeType: S
+        - AttributeName: event_type
+          AttributeType: S
+      KeySchema:
+        - AttributeName: event_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: TimestampIndex
+          KeySchema:
+            - AttributeName: timestamp
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: AccountIdIndex
+          KeySchema:
+            - AttributeName: account_id
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: EventTypeIndex
+          KeySchema:
+            - AttributeName: event_type
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: EventPersistence
+
+  DecisionStoreTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-decision-store'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: decision_id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+        - AttributeName: threat_id
+          AttributeType: S
+        - AttributeName: severity
+          AttributeType: S
+      KeySchema:
+        - AttributeName: decision_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: TimestampIndex
+          KeySchema:
+            - AttributeName: timestamp
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: ThreatIdIndex
+          KeySchema:
+            - AttributeName: threat_id
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: SeverityIndex
+          KeySchema:
+            - AttributeName: severity
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: DecisionRecording
+
+  FeedbackStoreTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${ProjectName}-feedback-store'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: feedback_id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+        - AttributeName: decision_id
+          AttributeType: S
+        - AttributeName: feedback_type
+          AttributeType: S
+      KeySchema:
+        - AttributeName: feedback_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: TimestampIndex
+          KeySchema:
+            - AttributeName: timestamp
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: DecisionIdIndex
+          KeySchema:
+            - AttributeName: decision_id
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: FeedbackTypeIndex
+          KeySchema:
+            - AttributeName: feedback_type
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: LearningFeedback
+
+  # ==========================================
   # SNS Topic for Alerts
   # ==========================================
   WebSocketAlertsTopic:
@@ -1103,6 +1261,42 @@ Outputs:
     Value: !Sub 'https://${ValidationApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
     Export:
       Name: !Sub '${ProjectName}-ValidationApiEndpoint'
+
+  EventStoreTableName:
+    Description: Event Store Table Name
+    Value: !Ref EventStoreTable
+    Export:
+      Name: !Sub '${ProjectName}-EventStoreTable'
+
+  EventStoreTableArn:
+    Description: Event Store Table ARN
+    Value: !GetAtt EventStoreTable.Arn
+    Export:
+      Name: !Sub '${ProjectName}-EventStoreTableArn'
+
+  DecisionStoreTableName:
+    Description: Decision Store Table Name
+    Value: !Ref DecisionStoreTable
+    Export:
+      Name: !Sub '${ProjectName}-DecisionStoreTable'
+
+  DecisionStoreTableArn:
+    Description: Decision Store Table ARN
+    Value: !GetAtt DecisionStoreTable.Arn
+    Export:
+      Name: !Sub '${ProjectName}-DecisionStoreTableArn'
+
+  FeedbackStoreTableName:
+    Description: Feedback Store Table Name
+    Value: !Ref FeedbackStoreTable
+    Export:
+      Name: !Sub '${ProjectName}-FeedbackStoreTable'
+
+  FeedbackStoreTableArn:
+    Description: Feedback Store Table ARN
+    Value: !GetAtt FeedbackStoreTable.Arn
+    Export:
+      Name: !Sub '${ProjectName}-FeedbackStoreTableArn'
 
   ValidationFunctionArn:
     Description: Validation Lambda Function ARN
