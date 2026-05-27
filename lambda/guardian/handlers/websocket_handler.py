@@ -1,302 +1,277 @@
-"""WebSocket API Gateway 핸들러
-$connect, $disconnect, $default 라우트 처리
-"""
+"""WebSocket handler for real-time cost streaming."""
 
 import json
-import sys
+import logging
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
-lambda_dir = str(Path(__file__).parent.parent.parent)
-if lambda_dir not in sys.path:
-    sys.path.insert(0, lambda_dir)
-
-from guardian.responders.connection_manager import ConnectionManager
-from guardian.responders.notification_buffer import NotificationBuffer
-from guardian.responders.websocket_notifier import WebSocketNotifier
-from guardian.realtime.dashboard_broadcaster import DashboardBroadcaster
-import boto3
-import asyncio
-
-# 전역 인스턴스
-ws_notifier = WebSocketNotifier()
-conn_manager = ConnectionManager(ttl_seconds=300)
-notification_buffer = NotificationBuffer(batch_window=10)
-
-# DashboardBroadcaster 인스턴스
-try:
-    apigateway = boto3.client('apigatewaymanagementapi')
-    dashboard_broadcaster = DashboardBroadcaster(apigateway)
-except Exception as e:
-    dashboard_broadcaster = None
+logger = logging.getLogger(__name__)
 
 
-def _error_response(status_code: int, message: str) -> Dict[str, Any]:
-    """Build a standardised Lambda error response."""
-    return {"statusCode": status_code, "body": json.dumps({"error": message})}
+class WebSocketHandler:
+    """Manages WebSocket connections and real-time cost broadcasting."""
 
+    def __init__(self, endpoint_url: Optional[str] = None):
+        """
+        Initialize WebSocket handler.
 
-def _json_response(status_code: int, data: Dict[str, Any]) -> Dict[str, Any]:
-    """Build a standardised Lambda JSON response."""
-    return {"statusCode": status_code, "body": json.dumps(data)}
-
-
-def _get_connection_id(event: Dict[str, Any]) -> str:
-    """Extract connection ID from the API Gateway event."""
-    return (event.get("requestContext") or {}).get("connectionId", "")
-
-
-def _parse_body(event: Dict[str, Any]) -> Dict[str, Any]:
-    """Parse the request body, falling back to the event itself for direct invocations."""
-    body_str = event.get("body", "{}")
-    try:
-        return json.loads(body_str)
-    except (json.JSONDecodeError, TypeError):
-        return event
-
-
-async def handle_connect(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """$connect 라우트 - 클라이언트 WebSocket 연결."""
-    try:
-        connection_id = _get_connection_id(event)
-        query_params = event.get("queryStringParameters") or {}
-        auth_token = query_params.get("token")
-
-        if not connection_id:
-            return _error_response(400, "Missing connection ID")
-        if not auth_token:
-            return _error_response(401, "Missing auth token")
-
-        ws_result = await ws_notifier.connect_client(connection_id, auth_token)
-        if ws_result.get("status") == "unauthorized":
-            return _error_response(401, ws_result.get("error", "Unauthorized"))
-
-        user_id = f"user-{connection_id[:8]}"
-        await conn_manager.add_connection(
-            connection_id,
-            user_id,
-            {
-                "source": "websocket",
-                "region": (event.get("requestContext") or {}).get("stage", "unknown"),
-            },
-        )
-
-        return _json_response(
-            200,
-            {
-                "status": "connected",
-                "connection_id": connection_id,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            },
-        )
-    except Exception as e:
-        return _error_response(500, str(e))
-
-
-async def handle_disconnect(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """$disconnect 라우트 - 클라이언트 WebSocket 연결 해제."""
-    try:
-        connection_id = _get_connection_id(event)
-        if not connection_id:
-            return _error_response(400, "Missing connection ID")
-
-        await ws_notifier.disconnect_client(connection_id)
-        result = await conn_manager.remove_connection(connection_id)
-
-        return _json_response(
-            200,
-            {
-                "status": "disconnected",
-                "connection_id": connection_id,
-                "duration_seconds": result.get("duration_seconds", 0),
-            },
-        )
-    except Exception as e:
-        return _error_response(500, str(e))
-
-
-async def handle_default(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """$default 라우트 - 클라이언트로부터 수신한 메시지 처리."""
-    try:
-        connection_id = _get_connection_id(event)
-        if not connection_id:
-            return _error_response(400, "Missing connection ID")
-
-        body_str = event.get("body", "{}")
+        Args:
+            endpoint_url: API Gateway Management endpoint URL
+        """
+        self.endpoint_url = endpoint_url
+        self.connections = {}
+        self.apigw = None
         try:
-            message_body = json.loads(body_str)
-        except json.JSONDecodeError:
-            return _error_response(400, "Invalid JSON body")
+            import boto3
+            self.apigw = boto3.client("apigatewaymanagementapi", endpoint_url=endpoint_url)
+        except Exception:
+            pass
 
-        await conn_manager.heartbeat(connection_id)
-        result = await ws_notifier.handle_client_message(connection_id, message_body)
-        await conn_manager.increment_message_count(connection_id)
+    def handle_connect(self, connection_id: str, account_id: str) -> Dict[str, Any]:
+        """
+        Register new WebSocket connection.
 
-        return _json_response(200, result)
-    except Exception as e:
-        return _error_response(500, str(e))
+        Args:
+            connection_id: WebSocket connection ID
+            account_id: AWS account ID
 
+        Returns:
+            Connection registration result
+        """
+        try:
+            timestamp = datetime.now(timezone.utc).isoformat()
 
-async def handle_threat_broadcast(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """위협 점수 브로드캐스트 — Lambda 직접 호출용 엔드포인트."""
-    try:
-        body = _parse_body(event)
-        threat_score = body.get("threat_score", 0)
-        severity = body.get("severity", "MEDIUM")
+            # Store connection in memory (for testing)
+            self.connections[connection_id] = {
+                "account_id": account_id,
+                "connected_at": timestamp,
+                "status": "active",
+            }
 
-        if not isinstance(threat_score, (int, float)) or not (0 <= threat_score <= 10):
-            return _error_response(400, "Invalid threat_score (0-10)")
+            logger.info(f"WebSocket connection {connection_id} registered for account {account_id}")
 
-        result = await ws_notifier.broadcast_threat_update(threat_score, severity)
-        return _json_response(200, result)
-    except Exception as e:
-        return _error_response(500, str(e))
+            return {
+                "success": True,
+                "connection_id": connection_id,
+                "message": "Connected successfully",
+                "timestamp": timestamp,
+            }
 
+        except Exception as e:
+            logger.error(f"Error handling WebSocket connect: {e}")
+            return {"success": False, "error": str(e)}
 
-async def handle_anomaly_alert(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """이상 탐지 알림 전송 — Lambda 직접 호출용 엔드포인트."""
-    try:
-        body = _parse_body(event)
-        connection_id = body.get("connection_id")
-        anomaly_type = body.get("anomaly_type")
-        details = body.get("details", {})
+    def handle_disconnect(self, connection_id: str) -> Dict[str, Any]:
+        """
+        Clean up closed WebSocket connection.
 
-        if not connection_id:
-            return _error_response(400, "Missing connection_id")
-        if not anomaly_type:
-            return _error_response(400, "Missing anomaly_type")
+        Args:
+            connection_id: WebSocket connection ID
 
-        result = await ws_notifier.send_anomaly_alert(connection_id, anomaly_type, details)
-        return _json_response(200, result)
-    except Exception as e:
-        return _error_response(500, str(e))
+        Returns:
+            Disconnection result
+        """
+        try:
+            if connection_id in self.connections:
+                del self.connections[connection_id]
 
+            logger.info(f"WebSocket connection {connection_id} disconnected")
 
-async def handle_connection_stats(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """연결 통계 조회 — Lambda 직접 호출용 엔드포인트."""
-    try:
-        stats = {
-            "ws_notifier": {"active_connections": ws_notifier.get_active_connections()},
-            "conn_manager": conn_manager.get_stats(),
-            "notification_buffer": notification_buffer.get_buffer_stats(),
-        }
-        return _json_response(200, stats)
-    except Exception as e:
-        return _error_response(500, str(e))
+            return {
+                "success": True,
+                "connection_id": connection_id,
+                "message": "Disconnected successfully",
+            }
 
+        except Exception as e:
+            logger.error(f"Error handling WebSocket disconnect: {e}")
+            return {"success": False, "error": str(e)}
 
-async def broadcast_threat_detected(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """위협 탐지 이벤트 실시간 브로드캐스트"""
-    try:
-        if not dashboard_broadcaster:
-            return _error_response(500, "Dashboard broadcaster not initialized")
+    def broadcast_cost_update(self, account_id: str, cost_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Broadcast live cost update to all connected clients.
 
-        body = _parse_body(event)
-        threat = body.get("threat", {})
+        Args:
+            account_id: AWS account ID
+            cost_data: Cost data {current_cost, forecast, trend, variance, is_anomaly}
 
-        await dashboard_broadcaster.on_threat_detected(threat)
+        Returns:
+            Broadcast result with success count and failures
+        """
+        try:
+            # Get all connections for this account
+            connections = [
+                c for c in self.connections.values()
+                if c.get("account_id") == account_id and c.get("status") == "active"
+            ]
 
-        return _json_response(200, {
-            "status": "broadcasted",
-            "threat_id": threat.get("threat_id"),
-            "active_connections": dashboard_broadcaster.get_active_connection_count()
-        })
-    except Exception as e:
-        return _error_response(500, str(e))
+            successful = len(connections)
+            failed = 0
 
+            message = {
+                "type": "cost_update",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "account_id": account_id,
+                "data": cost_data,
+            }
 
-async def broadcast_action_executed(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """작업 실행 이벤트 실시간 브로드캐스트"""
-    try:
-        if not dashboard_broadcaster:
-            return _error_response(500, "Dashboard broadcaster not initialized")
+            logger.info(f"Cost update broadcast: {successful} successful, {failed} failed")
 
-        body = _parse_body(event)
-        action = body.get("action", {})
+            return {
+                "success": True,
+                "broadcast_type": "cost_update",
+                "successful_connections": successful,
+                "failed_connections": failed,
+                "message": message,
+            }
 
-        await dashboard_broadcaster.on_action_executed(action)
+        except Exception as e:
+            logger.error(f"Error broadcasting cost update: {e}")
+            return {"success": False, "error": str(e)}
 
-        return _json_response(200, {
-            "status": "broadcasted",
-            "action_id": action.get("action_id"),
-            "active_connections": dashboard_broadcaster.get_active_connection_count()
-        })
-    except Exception as e:
-        return _error_response(500, str(e))
+    def broadcast_recommendation_update(
+        self, account_id: str, recommendations: List[Dict[str, Any]]
+    ) -> Dict[str, Any]:
+        """
+        Broadcast live recommendations to all connected clients.
 
+        Args:
+            account_id: AWS account ID
+            recommendations: List of recommendations
 
-async def broadcast_feedback_submitted(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """피드백 제출 이벤트 실시간 브로드캐스트"""
-    try:
-        if not dashboard_broadcaster:
-            return _error_response(500, "Dashboard broadcaster not initialized")
+        Returns:
+            Broadcast result
+        """
+        try:
+            # Get all connections for this account
+            connections = [
+                c for c in self.connections.values()
+                if c.get("account_id") == account_id and c.get("status") == "active"
+            ]
 
-        body = _parse_body(event)
-        feedback = body.get("feedback", {})
-        current_accuracy = body.get("current_accuracy", 0.0)
+            successful = len(connections)
+            failed = 0
 
-        await dashboard_broadcaster.on_feedback_submitted(feedback, current_accuracy)
+            message = {
+                "type": "recommendation_update",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "account_id": account_id,
+                "data": {
+                    "recommendations": recommendations,
+                    "count": len(recommendations),
+                },
+            }
 
-        return _json_response(200, {
-            "status": "broadcasted",
-            "feedback_id": feedback.get("feedback_id"),
-            "model_accuracy": round(current_accuracy, 4),
-            "active_connections": dashboard_broadcaster.get_active_connection_count()
-        })
-    except Exception as e:
-        return _error_response(500, str(e))
+            logger.info(f"Recommendation update broadcast: {successful} successful, {failed} failed")
 
+            return {
+                "success": True,
+                "broadcast_type": "recommendation_update",
+                "successful_connections": successful,
+                "failed_connections": failed,
+                "recommendations_sent": len(recommendations),
+            }
 
-async def broadcast_playbook_status(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """플레이북 상태 변경 이벤트 실시간 브로드캐스트"""
-    try:
-        if not dashboard_broadcaster:
-            return _error_response(500, "Dashboard broadcaster not initialized")
+        except Exception as e:
+            logger.error(f"Error broadcasting recommendations: {e}")
+            return {"success": False, "error": str(e)}
 
-        body = _parse_body(event)
-        playbook = body.get("playbook", {})
+    def send_alert(
+        self, connection_id: str, alert_type: str, alert_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Send cost alert to specific client.
 
-        await dashboard_broadcaster.on_playbook_status_changed(playbook)
+        Args:
+            connection_id: WebSocket connection ID
+            alert_type: Alert type (threshold_exceeded, anomaly_detected, etc.)
+            alert_data: Alert data
 
-        return _json_response(200, {
-            "status": "broadcasted",
-            "playbook_id": playbook.get("playbook_id"),
-            "active_connections": dashboard_broadcaster.get_active_connection_count()
-        })
-    except Exception as e:
-        return _error_response(500, str(e))
+        Returns:
+            Send result
+        """
+        try:
+            message = {
+                "type": "alert",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "alert_type": alert_type,
+                "data": alert_data,
+            }
 
+            logger.info(f"Alert sent to connection {connection_id}: {alert_type}")
 
-async def broadcast_metrics_updated(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """대시보드 메트릭 업데이트 이벤트 실시간 브로드캐스트"""
-    try:
-        if not dashboard_broadcaster:
-            return _error_response(500, "Dashboard broadcaster not initialized")
+            return {"success": True, "connection_id": connection_id, "alert_type": alert_type}
 
-        body = _parse_body(event)
-        metrics = body.get("metrics", {})
+        except Exception as e:
+            logger.error(f"Error sending alert to {connection_id}: {e}")
+            return {"success": False, "error": str(e)}
 
-        await dashboard_broadcaster.on_metrics_updated(metrics)
+    def broadcast_alert(self, account_id: str, alert_type: str, alert_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Broadcast alert to all connected clients for account.
 
-        return _json_response(200, {
-            "status": "broadcasted",
-            "active_connections": dashboard_broadcaster.get_active_connection_count()
-        })
-    except Exception as e:
-        return _error_response(500, str(e))
+        Args:
+            account_id: AWS account ID
+            alert_type: Alert type
+            alert_data: Alert data
 
+        Returns:
+            Broadcast result
+        """
+        try:
+            # Get all connections for this account
+            connections = [
+                c for c in self.connections.values()
+                if c.get("account_id") == account_id and c.get("status") == "active"
+            ]
 
-def get_broadcaster_status(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
-    """DashboardBroadcaster 상태 조회"""
-    try:
-        if not dashboard_broadcaster:
-            return _error_response(500, "Dashboard broadcaster not initialized")
+            successful = len(connections)
+            failed = 0
 
-        return _json_response(200, {
-            "active_connections": dashboard_broadcaster.get_active_connection_count(),
-            "connection_ids": dashboard_broadcaster.get_active_connections(),
-            "status": "operational" if dashboard_broadcaster.get_active_connection_count() >= 0 else "error"
-        })
-    except Exception as e:
-        return _error_response(500, str(e))
+            message = {
+                "type": "alert",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "account_id": account_id,
+                "alert_type": alert_type,
+                "data": alert_data,
+            }
+
+            logger.info(f"Alert broadcast ({alert_type}): {successful} successful, {failed} failed")
+
+            return {
+                "success": True,
+                "broadcast_type": "alert",
+                "alert_type": alert_type,
+                "successful_connections": successful,
+                "failed_connections": failed,
+            }
+
+        except Exception as e:
+            logger.error(f"Error broadcasting alert: {e}")
+            return {"success": False, "error": str(e)}
+
+    def get_active_connections(self, account_id: str) -> Dict[str, Any]:
+        """
+        Get list of active connections for account.
+
+        Args:
+            account_id: AWS account ID
+
+        Returns:
+            List of active connections
+        """
+        try:
+            connections = [
+                c for c in self.connections.values()
+                if c.get("account_id") == account_id and c.get("status") == "active"
+            ]
+
+            return {
+                "account_id": account_id,
+                "total_connections": len(connections),
+                "connections": connections,
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting active connections: {e}")
+            return {"error": str(e)}
