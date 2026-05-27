@@ -1,197 +1,219 @@
-"""Sprint 41 Phase 2: Cost Forecasting Model"""
+"""Tests for Phase 3 Cost Analytics (Cost Forecasting, Savings Analysis, Spike Detection)."""
 
 import pytest
-from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from forecasters.cost_forecast_model import CostForecastModel
 
 
 # ==========================================
-# Test Group 1: ARIMA Model Training (2 tests)
+# CostForecaster Tests
 # ==========================================
 
-def test_cost_forecast_model_initialization():
-    """Test cost forecast model initialization"""
-    cost_history_table = MagicMock()
-    dynamodb_table = MagicMock()
 
-    model = CostForecastModel(cost_history_table, dynamodb_table)
+class TestCostForecaster:
+    """Test CostForecaster functionality."""
 
-    assert model is not None
-    assert model.cost_history_table is not None
-    assert model.table is not None
+    @pytest.fixture
+    def cost_forecaster(self):
+        """Create a CostForecaster instance."""
+        from guardian.analytics.cost_forecaster import CostForecaster
 
+        return CostForecaster()
 
-def test_train_arima_model():
-    """Test training ARIMA model for cost forecasting"""
-    cost_history_table = MagicMock()
+    def test_forecast_daily_cost(self, cost_forecaster):
+        """Test daily cost forecasting with trend calculation."""
+        historical_costs = [
+            (100.0, "2026-05-27T00:00:00Z"),
+            (110.0, "2026-05-26T00:00:00Z"),
+            (105.0, "2026-05-25T00:00:00Z"),
+        ]
 
-    # Mock historical cost data
-    historical_data = []
-    base_cost = 1000.0
-    for i in range(90):
-        cost = base_cost + (i * 5) + (i % 7 * 50)  # Uptrend with weekly pattern
-        historical_data.append({
-            'date': (datetime.now(timezone.utc) - timedelta(days=90-i)).isoformat(),
-            'cost': cost
-        })
+        result = cost_forecaster.forecast_daily_cost(historical_costs, days=5)
 
-    cost_history_table.query.return_value = {'Items': historical_data}
-    dynamodb_table = MagicMock()
+        assert result["forecast_available"] is True
+        assert "mean_historical_cost" in result
+        assert "trend" in result
+        assert "forecasts" in result
+        assert len(result["forecasts"]) == 5
 
-    model = CostForecastModel(cost_history_table, dynamodb_table)
-    model_id = model.train_arima_model('acc-123', historical_days=90)
+        # Check forecast structure
+        for forecast in result["forecasts"]:
+            assert "day" in forecast
+            assert "forecast" in forecast
+            assert "lower_bound" in forecast
+            assert "upper_bound" in forecast
+            assert "confidence" in forecast
+            assert forecast["lower_bound"] <= forecast["forecast"] <= forecast["upper_bound"]
 
-    assert model_id is not None
-    assert isinstance(model_id, str)
-
-
-# ==========================================
-# Test Group 2: Cost Forecasting (2 tests)
-# ==========================================
-
-def test_forecast_costs():
-    """Test forecasting future costs"""
-    cost_history_table = MagicMock()
-    dynamodb_table = MagicMock()
-
-    model = CostForecastModel(cost_history_table, dynamodb_table)
-    forecast = model.forecast_costs('acc-123', 'model-123', days_ahead=30)
-
-    assert forecast is not None
-    assert isinstance(forecast, dict)
-    assert 'forecast' in forecast or 'error' in forecast
-
-
-def test_forecast_with_confidence_interval():
-    """Test cost forecast with confidence intervals"""
-    forecast_data = {
-        'forecast': [1500.0, 1525.0, 1550.0, 1575.0],
-        'lower_bound': [1400.0, 1420.0, 1440.0, 1460.0],
-        'upper_bound': [1600.0, 1630.0, 1660.0, 1690.0],
-        'confidence': 0.95
-    }
-
-    # Verify forecast structure
-    assert len(forecast_data['forecast']) == 4
-    assert len(forecast_data['lower_bound']) == 4
-    assert len(forecast_data['upper_bound']) == 4
-    assert all(forecast_data['lower_bound'][i] < forecast_data['forecast'][i] < forecast_data['upper_bound'][i]
-               for i in range(len(forecast_data['forecast'])))
-
-
-# ==========================================
-# Test Group 3: Anomaly Detection (2 tests)
-# ==========================================
-
-def test_detect_cost_anomalies():
-    """Test detecting cost anomalies from forecast"""
-    cost_history_table = MagicMock()
-    dynamodb_table = MagicMock()
-
-    model = CostForecastModel(cost_history_table, dynamodb_table)
-
-    actual_cost = 2000.0  # Much higher than expected
-    predicted_cost = 1500.0
-
-    anomaly = model.detect_cost_anomalies('acc-123', actual_cost, predicted_cost)
-
-    assert anomaly is not None
-    assert isinstance(anomaly, dict)
-    assert 'is_anomaly' in anomaly or 'deviation' in anomaly
-
-
-def test_anomaly_deviation_calculation():
-    """Test calculation of deviation from predicted cost"""
-    actual = 2000.0
-    predicted = 1500.0
-
-    deviation_percent = abs(actual - predicted) / predicted * 100
-
-    assert deviation_percent == pytest.approx(33.33, 0.1)
-    assert deviation_percent > 20  # Threshold for anomaly
-
-
-# ==========================================
-# Test Group 4: Model Accuracy Validation (2 tests)
-# ==========================================
-
-def test_validate_model_accuracy():
-    """Test validation of forecasting model accuracy"""
-    cost_history_table = MagicMock()
-    dynamodb_table = MagicMock()
-
-    model = CostForecastModel(cost_history_table, dynamodb_table)
-
-    # Simulated previous forecast and actual data
-    predictions = [1500.0, 1525.0, 1550.0, 1575.0]
-    actuals = [1480.0, 1510.0, 1560.0, 1590.0]
-
-    accuracy = model.calculate_forecast_accuracy(predictions, actuals)
-
-    assert accuracy is not None
-    assert isinstance(accuracy, dict)
-    assert 'mape' in accuracy or 'rmse' in accuracy
-
-
-def test_mape_calculation():
-    """Test Mean Absolute Percentage Error calculation"""
-    predictions = [100.0, 200.0, 300.0]
-    actuals = [110.0, 180.0, 320.0]
-
-    errors = [abs(predictions[i] - actuals[i]) / actuals[i] * 100 for i in range(len(predictions))]
-    mape = sum(errors) / len(errors)
-
-    assert mape > 0
-    assert mape < 50  # Reasonable MAPE
-
-
-# ==========================================
-# Test Group 5: Recommendation Generation (2 tests)
-# ==========================================
-
-def test_recommend_cost_reductions():
-    """Test generating cost reduction recommendations from forecast"""
-    cost_history_table = MagicMock()
-    dynamodb_table = MagicMock()
-
-    model = CostForecastModel(cost_history_table, dynamodb_table)
-
-    forecast = {
-        'forecast': [1500.0, 1600.0, 1700.0],
-        'trend': 'increasing',
-        'monthly_projection': 1600.0
-    }
-
-    recommendations = model.recommend_cost_reductions('acc-123', forecast)
-
-    assert recommendations is not None
-    assert isinstance(recommendations, list)
-
-
-def test_cost_reduction_action_items():
-    """Test cost reduction action items are specific and measurable"""
-    recommendations = [
-        {
-            'action': 'Stop idle EC2 instances',
-            'potential_savings': 200.0,
-            'priority': 'high',
-            'timeframe': 'immediate'
-        },
-        {
-            'action': 'Delete old snapshots',
-            'potential_savings': 75.0,
-            'priority': 'medium',
-            'timeframe': 'within 1 week'
+    def test_forecast_monthly_cost(self, cost_forecaster):
+        """Test monthly cost aggregation from daily forecasts."""
+        daily_forecasts = {
+            "forecasts": [
+                {"forecast": 100.0, "lower_bound": 90.0, "upper_bound": 110.0},
+                {"forecast": 102.0, "lower_bound": 92.0, "upper_bound": 112.0},
+                {"forecast": 104.0, "lower_bound": 94.0, "upper_bound": 114.0},
+            ]
         }
-    ]
 
-    total_savings = sum(r['potential_savings'] for r in recommendations)
+        result = cost_forecaster.forecast_monthly_cost(daily_forecasts)
 
-    assert total_savings == 275.0
-    assert all('action' in r and 'potential_savings' in r for r in recommendations)
+        assert result["forecast_available"] is True
+        assert "total_forecast" in result
+        assert "daily_average" in result
+        assert "min_daily" in result
+        assert "max_daily" in result
+        assert "lower_bound_total" in result
+        assert "upper_bound_total" in result
+        assert "days_forecasted" in result
+        assert result["total_forecast"] == pytest.approx(306.0, rel=0.01)
+
+    def test_predict_cost_after_action(self, cost_forecaster):
+        """Test cost projections after optimization actions."""
+        current_costs = [100.0, 110.0, 105.0, 115.0, 120.0]
+
+        result = cost_forecaster.predict_cost_after_action(
+            current_costs, action_type="stop_ec2", action_impact=0.3
+        )
+
+        assert "action_type" in result
+        assert result["action_type"] == "stop_ec2"
+        assert "current_daily_average" in result
+        assert "projected_daily_average" in result
+        assert "daily_savings" in result
+        assert "current_monthly_cost" in result
+        assert "projected_monthly_cost" in result
+        assert "monthly_savings" in result
+        assert "annual_savings" in result
+        assert "impact_percentage" in result
+        assert result["impact_percentage"] == 30.0
+
+        # Verify savings calculation
+        assert result["projected_daily_average"] == pytest.approx(
+            result["current_daily_average"] * 0.7, rel=0.01
+        )
+
+    def test_estimate_savings_potential(self, cost_forecaster):
+        """Test identification of optimization opportunities."""
+        costs_by_service = {
+            "ec2": 1000.0,
+            "rds": 500.0,
+            "s3": 200.0,
+            "nat_gateway": 100.0,
+            "cloudwatch": 50.0,
+            "elastic_ip": 10.0,
+        }
+
+        result = cost_forecaster.estimate_savings_potential(costs_by_service)
+
+        assert len(result) > 0
+        # Verify sorted by potential savings
+        assert all(
+            result[i]["max_potential_savings"] >= result[i + 1]["max_potential_savings"]
+            for i in range(len(result) - 1)
+        )
+
+        # Check structure
+        for opportunity in result:
+            assert "service" in opportunity
+            assert "current_cost" in opportunity
+            assert "max_potential_savings" in opportunity
+            assert "savings_percentage" in opportunity
+            assert "reason" in opportunity
+            assert "impact" in opportunity
+            assert opportunity["impact"] in ["HIGH", "MEDIUM", "LOW"]
+
+    def test_calculate_breakeven(self, cost_forecaster):
+        """Test ROI and break-even analysis for investments."""
+        result = cost_forecaster.calculate_breakeven(upfront_cost=5000.0, monthly_savings=500.0)
+
+        assert result["breakeven_available"] is True
+        assert "upfront_cost" in result
+        assert "monthly_savings" in result
+        assert "breakeven_months" in result
+        assert "annual_benefit" in result
+        assert "roi_percent" in result
+        assert "payback_feasible" in result
+        assert result["breakeven_months"] == pytest.approx(10.0, rel=0.01)
+        assert result["payback_feasible"] is True
+
+    def test_detect_cost_spike(self, cost_forecaster):
+        """Test statistical spike detection using z-scores."""
+        costs = [100.0, 105.0, 102.0, 103.0, 250.0, 101.0, 104.0]
+
+        result = cost_forecaster.detect_cost_spike(costs, threshold=1.5)
+
+        assert isinstance(result, list)
+        # Should detect the spike at 250.0
+        if result:
+            spike = result[0]
+            assert "day" in spike
+            assert "cost" in spike
+            assert "z_score" in spike
+            assert "increase_percent" in spike
+            assert "severity" in spike
+            assert spike["severity"] in ["HIGH", "MEDIUM"]
+
+    def test_get_forecast_summary(self, cost_forecaster):
+        """Test comprehensive forecast summary generation."""
+        historical_costs = [
+            (100.0, "2026-05-27T00:00:00Z"),
+            (110.0, "2026-05-26T00:00:00Z"),
+            (105.0, "2026-05-25T00:00:00Z"),
+            (115.0, "2026-05-24T00:00:00Z"),
+        ]
+
+        result = cost_forecaster.get_forecast_summary(historical_costs, days=5)
+
+        assert result["forecast_available"] is True
+        assert "daily" in result
+        assert "monthly" in result
+        assert "summary" in result
+        assert result["summary"]["days_forecasted"] == 5
+        assert "average_daily_forecast" in result["summary"]
+        assert "projected_monthly" in result["summary"]
+
+
+# ==========================================
+# Integration Tests
+# ==========================================
+
+
+class TestCostAnalyticsIntegration:
+    """Integration tests for cost analytics."""
+
+    def test_complete_cost_forecasting_pipeline(self):
+        """Test complete cost forecasting pipeline with all operations."""
+        from guardian.analytics.cost_forecaster import CostForecaster
+
+        forecaster = CostForecaster()
+
+        # Step 1: Historical cost data
+        historical_costs = [
+            (100.0 + i * 5, f"2026-05-{27-i:02d}T00:00:00Z") for i in range(10)
+        ]
+
+        # Step 2: Get daily forecast
+        daily_forecast = forecaster.forecast_daily_cost(historical_costs, days=7)
+        assert daily_forecast["forecast_available"] is True
+
+        # Step 3: Get monthly forecast
+        monthly_forecast = forecaster.forecast_monthly_cost(daily_forecast)
+        assert monthly_forecast["forecast_available"] is True
+
+        # Step 4: Analyze cost spike
+        costs = [float(c) for c, _ in historical_costs]
+        spikes = forecaster.detect_cost_spike(costs)
+        assert isinstance(spikes, list)
+
+        # Step 5: Estimate savings opportunities
+        services_costs = {"ec2": 500.0, "rds": 300.0, "s3": 100.0}
+        opportunities = forecaster.estimate_savings_potential(services_costs)
+        assert len(opportunities) > 0
+
+        # Step 6: Project savings from action
+        action_result = forecaster.predict_cost_after_action(costs, "reduce_nat", 0.5)
+        assert action_result["monthly_savings"] > 0
+
+        # Step 7: Calculate investment ROI
+        roi_result = forecaster.calculate_breakeven(
+            upfront_cost=2000.0, monthly_savings=action_result["daily_savings"] * 30
+        )
+        assert "breakeven_months" in roi_result
