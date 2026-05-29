@@ -1,7 +1,7 @@
 """Approval Workflow - Risk-based approval requirements for remediation actions."""
 
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 import uuid
 
@@ -90,7 +90,7 @@ class ApprovalWorkflow:
             'threat_id': threat.get('threat_id'),
             'risk_level': risk_level,
             'remediation_plan': remediation_plan,
-            'created_at': datetime.utcnow().isoformat(),
+            'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'approvals': [],
             'rejected': False,
             'rejection_reason': None
@@ -116,7 +116,7 @@ class ApprovalWorkflow:
             approval_request['timeout_minutes'] = requirements['timeout_minutes']
 
             # Calculate expiration time
-            expires_at = datetime.utcnow() + timedelta(minutes=requirements['timeout_minutes'])
+            expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=requirements['timeout_minutes'])
             approval_request['expires_at'] = expires_at.isoformat()
 
         # Store approval request
@@ -151,7 +151,7 @@ class ApprovalWorkflow:
         result = {
             'approval_id': approval_id,
             'approver_id': approver_id,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         if approval_id not in self.approval_requests:
@@ -163,7 +163,7 @@ class ApprovalWorkflow:
         # Check expiration
         if approval_request.get('expires_at'):
             expires_at = datetime.fromisoformat(approval_request['expires_at'])
-            if datetime.utcnow() > expires_at:
+            if datetime.now(timezone.utc).replace(tzinfo=None) > expires_at:
                 approval_request['status'] = ApprovalStatus.EXPIRED.value
                 result['status'] = 'expired'
                 return result
@@ -215,7 +215,7 @@ class ApprovalWorkflow:
         approval_request['status'] = ApprovalStatus.REJECTED.value
         approval_request['rejected'] = True
         approval_request['rejection_reason'] = reason
-        approval_request['rejected_at'] = datetime.utcnow().isoformat()
+        approval_request['rejected_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         approval_request['rejected_by'] = rejector_id
 
         result['status'] = 'rejected'
@@ -239,7 +239,7 @@ class ApprovalWorkflow:
 
         # Check expiration
         expires_at = datetime.fromisoformat(token_data['expires_at'])
-        if datetime.utcnow() > expires_at:
+        if datetime.now(timezone.utc).replace(tzinfo=None) > expires_at:
             return {
                 'valid': False,
                 'error': 'Token expired'
@@ -273,11 +273,11 @@ class ApprovalWorkflow:
     def _generate_approval_token(self, approval_id: str, timeout_minutes: int) -> str:
         """Generate a time-limited approval token."""
         token = str(uuid.uuid4())
-        expires_at = datetime.utcnow() + timedelta(minutes=timeout_minutes) if timeout_minutes > 0 else datetime.utcnow() + timedelta(days=1)
+        expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=timeout_minutes) if timeout_minutes > 0 else datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=1)
 
         self.approval_tokens[token] = {
             'approval_id': approval_id,
-            'created_at': datetime.utcnow().isoformat(),
+            'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'expires_at': expires_at.isoformat()
         }
 

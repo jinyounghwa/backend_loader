@@ -6,7 +6,7 @@ Rules define threat detection conditions and alert actions.
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 import boto3
 from botocore.exceptions import ClientError
@@ -38,8 +38,8 @@ class SecurityRule:
         self.enabled = enabled
         self.template_id = template_id
         self.template_version = template_version
-        self.created_at = created_at or datetime.utcnow()
-        self.updated_at = updated_at or datetime.utcnow()
+        self.created_at = created_at or datetime.now(timezone.utc).replace(tzinfo=None)
+        self.updated_at = updated_at or datetime.now(timezone.utc).replace(tzinfo=None)
 
     def to_dynamodb_item(self) -> Dict[str, Any]:
         """Convert rule to DynamoDB item format"""
@@ -88,8 +88,8 @@ class SecurityRuleRepository:
         """Create a new security rule"""
         try:
             rule.rule_id = rule.rule_id or str(uuid.uuid4())
-            rule.created_at = datetime.utcnow()
-            rule.updated_at = datetime.utcnow()
+            rule.created_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            rule.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
             self.table.put_item(Item=rule.to_dynamodb_item())
             return rule
@@ -127,7 +127,7 @@ class SecurityRuleRepository:
             if "enabled" in updates:
                 existing_rule.enabled = updates["enabled"]
 
-            existing_rule.updated_at = datetime.utcnow()
+            existing_rule.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
             self.table.put_item(Item=existing_rule.to_dynamodb_item())
             return existing_rule

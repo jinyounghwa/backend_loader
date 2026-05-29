@@ -1,7 +1,7 @@
 """Playbook Approval Service for managing approval workflows on automated remediation."""
 
 from typing import List, Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 
@@ -29,7 +29,7 @@ class PlaybookApprovalService:
             'approval_group': playbook.get('approval_group'),
             'status': 'PENDING',
             'actions': actions,
-            'requested_at': datetime.utcnow().isoformat(),
+            'requested_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'expires_at': None,
             'approved_by': None,
             'approved_at': None,
@@ -67,7 +67,7 @@ class PlaybookApprovalService:
 
         approval['status'] = 'APPROVED'
         approval['approved_by'] = approver_id
-        approval['approved_at'] = datetime.utcnow().isoformat()
+        approval['approved_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         approval['approval_reason'] = reason
 
         return {
@@ -104,7 +104,7 @@ class PlaybookApprovalService:
 
         approval['status'] = 'REJECTED'
         approval['rejected_by'] = approver_id
-        approval['rejected_at'] = datetime.utcnow().isoformat()
+        approval['rejected_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         approval['rejection_reason'] = reason
 
         return {
@@ -137,7 +137,7 @@ class PlaybookApprovalService:
             'group_name': approval_group,
             'members': [],
             'required_approvers': 1,
-            'created_at': datetime.utcnow().isoformat()
+            'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         self.approval_groups[group_config['group_id']] = group_config
@@ -166,7 +166,7 @@ class PlaybookApprovalService:
             'comment_id': str(uuid.uuid4()),
             'commenter_id': commenter_id,
             'text': comment,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         approval['comments'].append(comment_obj)

@@ -1,6 +1,6 @@
 import json
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier
@@ -55,7 +55,7 @@ class ModelRetrainer:
                 'training_samples': 0,
                 'metrics': {},
                 'improvements': {},
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             }
 
         # 2. 특성 추출
@@ -67,7 +67,7 @@ class ModelRetrainer:
                 'training_samples': 0,
                 'metrics': {},
                 'improvements': {},
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             }
 
         # 3. 데이터 정규화
@@ -100,7 +100,7 @@ class ModelRetrainer:
             'training_samples': len(feedback_logs),
             'metrics': metrics,
             'improvements': improvements,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
     def _train_model(self, X_scaled: np.ndarray, y: np.ndarray):
@@ -232,14 +232,14 @@ class ModelRetrainer:
             return {
                 'status': 'success',
                 'deployed_version': model_version,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             }
         except Exception as e:
             logger.error(f"Failed to deploy model {model_version}: {e}")
             return {
                 'status': 'failed',
                 'error': str(e),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             }
 
     def get_model_feature_importance(self) -> Dict[str, float]:

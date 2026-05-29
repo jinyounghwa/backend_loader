@@ -1,7 +1,7 @@
 """Smart Remediation Engine - Impact assessment, cost estimation, and risk scoring."""
 
 from typing import Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 
@@ -83,7 +83,7 @@ class SmartRemediationEngine:
             'approval_required': strategy['approval'],
             'confidence_score': confidence,
             'reasoning': self._generate_reasoning(severity, strategy, confidence),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         return result
@@ -119,7 +119,7 @@ class SmartRemediationEngine:
             },
             'affected_resources': 0,
             'estimated_downtime_minutes': 0,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         # Analyze each remediation step
@@ -174,7 +174,7 @@ class SmartRemediationEngine:
             'total_cost': 0,
             'savings_prevented': 0,
             'roi': 0,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         steps = remediation_plan.get('steps', [])
@@ -227,7 +227,7 @@ class SmartRemediationEngine:
             'correlated_resources': resources,
             'correlation_confidence': 0.95,  # High confidence correlation
             'recommended_actions': [],
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         # Generate recommendations based on resources

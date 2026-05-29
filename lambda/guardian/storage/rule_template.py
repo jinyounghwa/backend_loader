@@ -6,7 +6,7 @@ Templates provide reusable rule configurations for common threat patterns.
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 import boto3
 from botocore.exceptions import ClientError
@@ -40,8 +40,8 @@ class RuleTemplate:
         self.example_action = example_action
         self.tags = tags or []
         self.version = version
-        self.created_at = created_at or datetime.utcnow()
-        self.updated_at = updated_at or datetime.utcnow()
+        self.created_at = created_at or datetime.now(timezone.utc).replace(tzinfo=None)
+        self.updated_at = updated_at or datetime.now(timezone.utc).replace(tzinfo=None)
 
     def to_dynamodb_item(self) -> Dict[str, Any]:
         """Convert template to DynamoDB item format"""
@@ -163,7 +163,7 @@ class TemplateRepository:
     def update_template(self, template: RuleTemplate) -> bool:
         """Update an existing template"""
         try:
-            template.updated_at = datetime.utcnow()
+            template.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
             self.table.put_item(Item=template.to_dynamodb_item())
             return True
         except ClientError as e:

@@ -1,7 +1,7 @@
 """ML-Based Remediation Prediction - Success rate and strategy optimization."""
 
 from typing import Dict, List, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import defaultdict
 import statistics
 
@@ -36,7 +36,7 @@ class RemediationPredictor:
         features['blast_radius_score'] = float(threat.get('blast_radius_score', 0)) / 10.0
 
         # Time-based features
-        timestamp = threat.get('timestamp', datetime.utcnow().isoformat())
+        timestamp = threat.get('timestamp', datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
         if isinstance(timestamp, str):
             try:
                 dt = datetime.fromisoformat(timestamp)
@@ -321,7 +321,7 @@ class RemediationPredictor:
             'status': outcome,
             'actual_time': time_taken,
             'actual_cost': cost,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
         self.historical_data.append(record)
 

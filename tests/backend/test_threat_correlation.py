@@ -2,7 +2,7 @@
 
 import sys
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 import pytest
 
@@ -56,7 +56,7 @@ class TestThreatCorrelation:
         mock_audit = Mock()
         engine = ThreatCorrelationEngine(audit_logger=mock_audit)
 
-        base_time = datetime.utcnow()
+        base_time = datetime.now(timezone.utc).replace(tzinfo=None)
         threats = [
             {
                 'threat_id': 'CHAIN-001',
@@ -96,7 +96,7 @@ class TestThreatCorrelation:
                 'severity': 8,
                 'account_id': 'acct-1',
                 'evidence': ['api_key_exposed', 'failed_auth'],
-                'detected_at': datetime.utcnow().isoformat()
+                'detected_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             },
             {
                 'threat_id': 'CLUST-002',
@@ -104,7 +104,7 @@ class TestThreatCorrelation:
                 'severity': 7,
                 'account_id': 'acct-1',
                 'evidence': ['api_key_exposed'],
-                'detected_at': (datetime.utcnow() + timedelta(minutes=5)).isoformat()
+                'detected_at': (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=5)).isoformat()
             },
             {
                 'threat_id': 'CLUST-003',
@@ -112,7 +112,7 @@ class TestThreatCorrelation:
                 'severity': 9,
                 'account_id': 'acct-2',
                 'evidence': ['s3_access', 'bucket_export'],
-                'detected_at': (datetime.utcnow() + timedelta(minutes=10)).isoformat()
+                'detected_at': (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=10)).isoformat()
             }
         ]
 
@@ -133,7 +133,7 @@ class TestThreatCorrelation:
             'severity': 8,
             'account_id': 'prod',
             'evidence': ['ssh_scan', 'port_probe'],
-            'detected_at': datetime.utcnow().isoformat()
+            'detected_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         threat2 = {
@@ -142,7 +142,7 @@ class TestThreatCorrelation:
             'severity': 7,
             'account_id': 'prod',
             'evidence': ['ssh_scan'],
-            'detected_at': (datetime.utcnow() + timedelta(minutes=10)).isoformat()
+            'detected_at': (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=10)).isoformat()
         }
 
         similarity = engine.calculate_threat_similarity(threat1, threat2)

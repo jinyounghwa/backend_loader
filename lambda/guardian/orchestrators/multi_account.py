@@ -1,7 +1,7 @@
 """Multi-Account Orchestration - Cross-account remediation and threat correlation."""
 
 from typing import Dict, List, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import asyncio
 
@@ -39,7 +39,7 @@ class MultiAccountOrchestrator:
             'account_id': account_id,
             'assumed_role_arn': assumed_role_arn,
             'region': region,
-            'registered_at': datetime.utcnow().isoformat(),
+            'registered_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'credentials_cached': False
         }
 
@@ -48,7 +48,7 @@ class MultiAccountOrchestrator:
             'assumed_role_arn': assumed_role_arn,
             'region': region,
             'status': 'registered',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
     def assume_role(self, account_id: str, session_duration_seconds: int = 3600) -> Dict:
@@ -111,7 +111,7 @@ class MultiAccountOrchestrator:
                 'execution_time_seconds': float
             }
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # Determine target accounts
         target_accounts = account_ids or list(self.account_registry.keys())
@@ -153,7 +153,7 @@ class MultiAccountOrchestrator:
             for results in results_by_account.values()
         )
 
-        execution_time = (datetime.utcnow() - start_time).total_seconds()
+        execution_time = (datetime.now(timezone.utc).replace(tzinfo=None) - start_time).total_seconds()
 
         self.execution_results.append({
             'total_accounts': len(target_accounts),
@@ -161,7 +161,7 @@ class MultiAccountOrchestrator:
             'successful': total_successful,
             'failed': total_failed,
             'execution_time': execution_time,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         })
 
         return {
@@ -245,7 +245,7 @@ class MultiAccountOrchestrator:
             'total_threats': total_threats,
             'multi_account_threat_groups': len(correlation_groups),
             'correlation_groups': correlation_groups,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
     def assess_cross_account_blast_radius(self, threat: Dict, affected_accounts: List[str]) -> Dict:
@@ -308,7 +308,7 @@ class MultiAccountOrchestrator:
             'risk_level': risk_level,
             'impact_summary': impact,
             'recommendations': recommendations,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
     def get_cross_account_summary(self) -> Dict:
@@ -368,5 +368,5 @@ class MultiAccountOrchestrator:
     def _get_expiration(self, duration_seconds: int) -> str:
         """Get expiration timestamp for assumed role session."""
         from datetime import timedelta
-        expiration = datetime.utcnow() + timedelta(seconds=duration_seconds)
+        expiration = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=duration_seconds)
         return expiration.isoformat()

@@ -1,5 +1,5 @@
 from typing import Dict, Any, List, Tuple, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class AutoTriggerEngine:
@@ -102,7 +102,7 @@ class AutoTriggerEngine:
         Returns:
             bool: 실행 가능하면 True, 5초 내 실행했으면 False
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         last_exec = self.last_execution_time.get(playbook_id)
 
         # 처음 실행이거나 5초 이상 지났으면 실행 가능

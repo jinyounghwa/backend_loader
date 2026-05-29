@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 import pytest
 from unittest.mock import Mock, patch
-from datetime import datetime
+from datetime import datetime, timezone
 
 lambda_path = Path(__file__).parent.parent.parent / "lambda"
 sys.path.insert(0, str(lambda_path))
@@ -23,7 +23,7 @@ class TestEC2RemediationIntegration:
             'event_type': 'UnauthorizedInstanceStart',
             'severity': 8,
             'account_id': '123456789012',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'description': 'EC2 instance started in unauthorized region'
         }
 
@@ -43,7 +43,7 @@ class TestEC2RemediationIntegration:
                     'InstanceId': instance_id,
                     'State': {'Name': 'running'},
                     'InstanceType': 't3.micro',
-                    'LaunchTime': datetime.utcnow(),
+                    'LaunchTime': datetime.now(timezone.utc).replace(tzinfo=None),
                     'Tags': [
                         {'Key': 'Name', 'Value': 'suspicious-instance'},
                         {'Key': 'environment', 'Value': 'dev'}

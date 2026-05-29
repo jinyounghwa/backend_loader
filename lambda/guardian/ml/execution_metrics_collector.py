@@ -1,5 +1,5 @@
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class ExecutionMetricsCollector:
@@ -73,8 +73,8 @@ class ExecutionMetricsCollector:
         Returns:
             실행 기록 리스트
         """
-        end_time = datetime.utcnow().isoformat() + 'Z'
-        start_time = (datetime.utcnow() - timedelta(days=days)).isoformat() + 'Z'
+        end_time = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
+        start_time = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)).isoformat() + 'Z'
 
         return self.storage.query_by_playbook(playbook_id, start_time, end_time)
 
@@ -157,8 +157,8 @@ class ExecutionMetricsCollector:
         Returns:
             메트릭 딕셔너리 (calculate_execution_metrics 포맷)
         """
-        end_time = datetime.utcnow().isoformat() + 'Z'
-        start_time = (datetime.utcnow() - timedelta(days=days)).isoformat() + 'Z'
+        end_time = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
+        start_time = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)).isoformat() + 'Z'
 
         records = self.storage.query_by_threat_type(threat_type, start_time, end_time)
         return self.calculate_execution_metrics(records)

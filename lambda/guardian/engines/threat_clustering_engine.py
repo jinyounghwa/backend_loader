@@ -288,7 +288,7 @@ class ThreatClusteringEngine:
         if not detected_at:
             return 0.0
 
-        from datetime import datetime
+        from datetime import datetime, timezone
         if isinstance(detected_at, str):
             try:
                 dt = datetime.fromisoformat(detected_at.replace('Z', '+00:00'))
@@ -297,7 +297,7 @@ class ThreatClusteringEngine:
         else:
             dt = detected_at
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         if isinstance(dt, type(now)):
             diff = (now - dt).total_seconds() / 3600.0
         else:

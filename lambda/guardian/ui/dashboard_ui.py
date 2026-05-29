@@ -2,7 +2,7 @@ import logging
 import uuid
 import json
 from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ class DashboardUI:
             'region': region,
             'latitude': latitude,
             'longitude': longitude,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'status': 'ACTIVE'
         }
 
@@ -81,7 +81,7 @@ class DashboardUI:
             return {'error': 'Threat not found'}
 
         self.threat_map[threat_id]['status'] = 'RESOLVED'
-        self.threat_map[threat_id]['resolved_at'] = datetime.utcnow().isoformat()
+        self.threat_map[threat_id]['resolved_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
         logger.info(f"Threat resolved: {threat_id}")
 
@@ -108,7 +108,7 @@ class DashboardUI:
             }
         """
         self.metrics = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'overall_status': metrics.get('overall_status', 'HEALTHY'),
             'success_rate': metrics.get('success_rate', 0.9),
             'avg_latency_ms': metrics.get('avg_latency_ms', 0),
@@ -142,7 +142,7 @@ class DashboardUI:
             'threat_id': response.get('threat_id'),
             'action': response.get('action'),
             'status': response.get('status', 'COMPLETED'),
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'effectiveness': response.get('effectiveness', 0.7)
         }
 
@@ -190,7 +190,7 @@ class DashboardUI:
             'metrics': self.metrics,
             'recent_responses': recent_responses,
             'widget_configs': self.widget_configs,
-            'data_timestamp': datetime.utcnow().isoformat()
+            'data_timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
     def get_threat_timeline(self, hours: int = 24) -> List[Dict]:
@@ -203,7 +203,7 @@ class DashboardUI:
         Returns:
             위협 타임라인 목록
         """
-        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+        cutoff_time = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=hours)
 
         timeline = []
         for threat_id, threat in self.threat_map.items():
@@ -303,7 +303,7 @@ class DashboardUI:
                 'metrics': 10000,
                 'response_history': 5000
             },
-            'export_time': datetime.utcnow().isoformat()
+            'export_time': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         return json.dumps(config, indent=2)

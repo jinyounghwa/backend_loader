@@ -1,7 +1,7 @@
 """S3 Bucket Auto-Remediation - Block public access on insecure buckets."""
 
 from typing import Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 import json
 
@@ -50,7 +50,7 @@ class S3Remediator:
         """
         result = {
             'bucket_name': bucket_name,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'threat': threat.get('threat_id', 'unknown')
         }
 
@@ -147,14 +147,14 @@ class S3Remediator:
             policy_doc = policy.get('Policy', '{}')
             return {
                 'policy': policy_doc,
-                'backup_time': datetime.utcnow().isoformat(),
+                'backup_time': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 'bucket_name': bucket_name
             }
         except Exception:
             # No policy attached is not an error
             return {
                 'policy': None,
-                'backup_time': datetime.utcnow().isoformat(),
+                'backup_time': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 'bucket_name': bucket_name
             }
 
@@ -223,7 +223,7 @@ class S3Remediator:
         """Attempt to restore bucket to pre-remediation state."""
         result = {
             'bucket_name': bucket_name,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         # Check if we have a backup

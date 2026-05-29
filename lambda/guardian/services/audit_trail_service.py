@@ -1,7 +1,7 @@
 """Audit Trail Service for comprehensive compliance and forensic audit logging."""
 
 from typing import List, Dict, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import uuid
 
 
@@ -19,7 +19,7 @@ class AuditTrailService:
         event = {
             'event_id': event_id,
             'event_type': 'THREAT_DETECTION',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'threat_id': threat.get('threat_id'),
             'threat_type': threat.get('threat_type'),
             'severity': threat.get('severity'),
@@ -37,7 +37,7 @@ class AuditTrailService:
         event = {
             'event_id': event_id,
             'event_type': 'REMEDIATION_ACTION',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'threat_id': threat_id,
             'action': action,
             'status': status,
@@ -53,7 +53,7 @@ class AuditTrailService:
         event = {
             'event_id': event_id,
             'event_type': 'POLICY_ENFORCEMENT',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'account_id': account_id,
             'policy_name': policy_name,
             'decision': decision
@@ -67,7 +67,7 @@ class AuditTrailService:
         event = {
             'event_id': event_id,
             'event_type': 'USER_ACTION',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'user_id': user_id,
             'action': action,
             'target': target,
@@ -114,7 +114,7 @@ class AuditTrailService:
         if format_type == 'json':
             return {
                 'format': 'json',
-                'export_timestamp': datetime.utcnow().isoformat(),
+                'export_timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 'event_count': len(events),
                 'start_time': start_time,
                 'end_time': end_time,
@@ -123,7 +123,7 @@ class AuditTrailService:
         elif format_type == 'csv':
             return {
                 'format': 'csv',
-                'export_timestamp': datetime.utcnow().isoformat(),
+                'export_timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 'event_count': len(events),
                 'headers': ['timestamp', 'event_type', 'threat_id', 'action', 'status', 'user_id'],
                 'events': events

@@ -1,7 +1,7 @@
 """IAM Permission Auto-Remediation - Revoke excessive permissions."""
 
 from typing import Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 
@@ -62,7 +62,7 @@ class IAMRemediator:
         """
         result = {
             'principal': principal,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'threat': threat.get('threat_id', 'unknown'),
             'policies_revoked': []
         }
@@ -162,7 +162,7 @@ class IAMRemediator:
         """Rotate access keys for IAM user."""
         result = {
             'user_name': user_name,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'old_keys': [],
             'new_key_created': False
         }
@@ -201,7 +201,7 @@ class IAMRemediator:
         result = {
             'principal': principal,
             'duration_seconds': duration,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         try:

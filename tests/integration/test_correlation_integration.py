@@ -2,7 +2,7 @@
 
 import sys
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 import pytest
 
@@ -29,7 +29,7 @@ class TestCorrelationIntegration:
                 'severity': 8,
                 'account_id': 'prod',
                 'evidence': ['ssh_auth_failure'],
-                'detected_at': datetime.utcnow().isoformat()
+                'detected_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             },
             {
                 'threat_id': 'E2E-002',
@@ -37,7 +37,7 @@ class TestCorrelationIntegration:
                 'severity': 7,
                 'account_id': 'prod',
                 'evidence': ['ssh_auth_failure'],
-                'detected_at': (datetime.utcnow() + timedelta(minutes=5)).isoformat()
+                'detected_at': (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=5)).isoformat()
             },
             {
                 'threat_id': 'E2E-003',
@@ -45,7 +45,7 @@ class TestCorrelationIntegration:
                 'severity': 9,
                 'account_id': 'prod',
                 'evidence': ['s3_export'],
-                'detected_at': (datetime.utcnow() + timedelta(minutes=15)).isoformat()
+                'detected_at': (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=15)).isoformat()
             }
         ]
 
@@ -66,7 +66,7 @@ class TestCorrelationIntegration:
         engine = ThreatCorrelationEngine()
         detector = AttackChainDetector()
 
-        base_time = datetime.utcnow()
+        base_time = datetime.now(timezone.utc).replace(tzinfo=None)
         threats = [
             {
                 'threat_id': 'STAGE-001',
@@ -151,21 +151,21 @@ class TestCorrelationIntegration:
                 'threat_type': 'Lateral Movement',
                 'severity': 9,
                 'account_id': 'prod-acct-001',
-                'detected_at': datetime.utcnow().isoformat()
+                'detected_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             },
             {
                 'threat_id': 'MULTI-ACCT-002',
                 'threat_type': 'Cross-Account Access',
                 'severity': 8,
                 'account_id': 'dev-acct-002',
-                'detected_at': (datetime.utcnow() + timedelta(minutes=5)).isoformat()
+                'detected_at': (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=5)).isoformat()
             },
             {
                 'threat_id': 'MULTI-ACCT-003',
                 'threat_type': 'Data Exfiltration',
                 'severity': 9,
                 'account_id': 'prod-acct-001',
-                'detected_at': (datetime.utcnow() + timedelta(minutes=10)).isoformat()
+                'detected_at': (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=10)).isoformat()
             }
         ]
 
@@ -257,7 +257,7 @@ class TestCorrelationIntegration:
                 'account_id': 'prod',
                 'affected_resources': [{'resource_type': 'ec2'}],
                 'evidence': ['suspicious_login'],
-                'detected_at': (datetime.utcnow() + timedelta(minutes=i)).isoformat()
+                'detected_at': (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=i)).isoformat()
             }
             for i in range(5)
         ]

@@ -1,7 +1,7 @@
 """Compliance Report Generator for SOC 2, CIS, and PCI-DSS reporting."""
 
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import uuid
 
 
@@ -19,7 +19,7 @@ class ComplianceReportGenerator:
         Focuses on security controls, monitoring, and incident response.
         """
         report_id = str(uuid.uuid4())
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc).replace(tzinfo=None)
         start_time = end_time - timedelta(days=period_days)
 
         events = self.audit.get_audit_trail(
@@ -40,7 +40,7 @@ class ComplianceReportGenerator:
         report = {
             'report_id': report_id,
             'report_type': 'SOC2_TYPE_II',
-            'generated_date': datetime.utcnow().isoformat(),
+            'generated_date': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'period_start': start_time.isoformat(),
             'period_end': end_time.isoformat(),
             'period_days': period_days,
@@ -64,7 +64,7 @@ class ComplianceReportGenerator:
         Focuses on configuration compliance and security baselines.
         """
         report_id = str(uuid.uuid4())
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc).replace(tzinfo=None)
         start_time = end_time - timedelta(days=period_days)
 
         events = self.audit.get_audit_trail(
@@ -78,7 +78,7 @@ class ComplianceReportGenerator:
         report = {
             'report_id': report_id,
             'report_type': 'CIS_BENCHMARK',
-            'generated_date': datetime.utcnow().isoformat(),
+            'generated_date': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'period_start': start_time.isoformat(),
             'period_end': end_time.isoformat(),
             'metrics': {
@@ -101,7 +101,7 @@ class ComplianceReportGenerator:
         Focuses on data protection, access logging, and incident management.
         """
         report_id = str(uuid.uuid4())
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc).replace(tzinfo=None)
         start_time = end_time - timedelta(days=period_days)
 
         events = self.audit.get_audit_trail(
@@ -115,7 +115,7 @@ class ComplianceReportGenerator:
         report = {
             'report_id': report_id,
             'report_type': 'PCI_DSS',
-            'generated_date': datetime.utcnow().isoformat(),
+            'generated_date': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'period_start': start_time.isoformat(),
             'period_end': end_time.isoformat(),
             'metrics': {
@@ -135,7 +135,7 @@ class ComplianceReportGenerator:
     def generate_trend_report(self, metric_type: str, days: int = 90) -> Dict:
         """Generate trend analysis for specified metric over time period."""
         report_id = str(uuid.uuid4())
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc).replace(tzinfo=None)
         start_time = end_time - timedelta(days=days)
 
         events = self.audit.get_audit_trail(
@@ -149,7 +149,7 @@ class ComplianceReportGenerator:
             'report_id': report_id,
             'report_type': 'TREND_ANALYSIS',
             'metric_type': metric_type,
-            'generated_date': datetime.utcnow().isoformat(),
+            'generated_date': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'period_days': days,
             'trends': trends,
             'overall_trend': 'IMPROVING' if trends[-1] > trends[0] else 'DECLINING',
@@ -195,7 +195,7 @@ class ComplianceReportGenerator:
         latest_pci = self._find_latest_report('PCI_DSS')
 
         return {
-            'generated_date': datetime.utcnow().isoformat(),
+            'generated_date': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'total_reports': len(self.reports),
             'frameworks': {
                 'soc2': self._extract_status(latest_soc2),

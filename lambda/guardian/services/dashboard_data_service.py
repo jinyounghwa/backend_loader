@@ -1,5 +1,5 @@
 from typing import Dict, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class DashboardDataService:
@@ -27,7 +27,7 @@ class DashboardDataService:
         recent_remediations = self._get_recent_remediations(5)
 
         dashboard_data = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'account_id': account_id,
             'active_threats': active_threats,
             'threat_summary': threat_summary,
@@ -37,7 +37,7 @@ class DashboardDataService:
         }
 
         self._cache[cache_key] = dashboard_data
-        self._cache_timestamp[cache_key] = datetime.utcnow()
+        self._cache_timestamp[cache_key] = datetime.now(timezone.utc).replace(tzinfo=None)
 
         return dashboard_data
 
@@ -77,7 +77,7 @@ class DashboardDataService:
 
         timeline = self.tracker.get_threat_timeline(threat_id)
 
-        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+        cutoff_time = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=hours)
         filtered_timeline = []
 
         for event in timeline:
@@ -262,5 +262,5 @@ class DashboardDataService:
         if cache_key not in self._cache_timestamp:
             return False
 
-        age = datetime.utcnow() - self._cache_timestamp[cache_key]
+        age = datetime.now(timezone.utc).replace(tzinfo=None) - self._cache_timestamp[cache_key]
         return age.total_seconds() < ttl_seconds

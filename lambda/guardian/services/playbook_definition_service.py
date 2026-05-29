@@ -1,7 +1,7 @@
 """Playbook Definition Service for managing custom remediation playbooks."""
 
 from typing import List, Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 
@@ -28,8 +28,8 @@ class PlaybookDefinitionService:
             'actions': actions,
             'approval_required': False,
             'approval_group': None,
-            'created_at': datetime.utcnow().isoformat(),
-            'updated_at': datetime.utcnow().isoformat(),
+            'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+            'updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'execution_count': 0
         }
 
@@ -51,7 +51,7 @@ class PlaybookDefinitionService:
                 else:
                     playbook[field] = updates[field]
 
-        playbook['updated_at'] = datetime.utcnow().isoformat()
+        playbook['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         return playbook
 
     def delete_playbook(self, playbook_id: str) -> bool:
@@ -82,7 +82,7 @@ class PlaybookDefinitionService:
             return False
 
         self.playbooks[playbook_id]['enabled'] = True
-        self.playbooks[playbook_id]['updated_at'] = datetime.utcnow().isoformat()
+        self.playbooks[playbook_id]['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         return True
 
     def disable_playbook(self, playbook_id: str) -> bool:
@@ -91,7 +91,7 @@ class PlaybookDefinitionService:
             return False
 
         self.playbooks[playbook_id]['enabled'] = False
-        self.playbooks[playbook_id]['updated_at'] = datetime.utcnow().isoformat()
+        self.playbooks[playbook_id]['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         return True
 
     def validate_playbook(self, playbook: Dict) -> Dict:

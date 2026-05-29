@@ -1,6 +1,6 @@
 import json
 import boto3
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from decimal import Decimal
 import uuid
@@ -59,7 +59,7 @@ class AnomalyClusteringEngine:
             return {
                 'clusters': clusters,
                 'silhouette_score': float(silhouette_score),
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 'threat_count': len(threats),
                 'cluster_count': len(clusters)
             }
@@ -118,12 +118,12 @@ class AnomalyClusteringEngine:
                     'threats': threat_ids,
                     'centroid': [avg_severity, avg_impact],
                     'cohesion': cluster.get('cohesion', 0.0),
-                    'updated_at': datetime.utcnow().isoformat()
+                    'updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
                 })
 
         return {
             'clusters': updated_clusters,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'cluster_count': len(updated_clusters)
         }
 

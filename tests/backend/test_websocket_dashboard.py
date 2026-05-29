@@ -1,7 +1,7 @@
 import pytest
 import json
 from unittest.mock import Mock, AsyncMock, MagicMock, patch
-from datetime import datetime
+from datetime import datetime, timezone
 from guardian.realtime.dashboard_broadcaster import DashboardBroadcaster
 
 
@@ -52,7 +52,7 @@ class TestDashboardBroadcaster:
             'threat_type': 'connection_spike',
             'severity': 'HIGH',
             'rule_id': 'rule_1',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'evidence': ['log1', 'log2'],
             'account_id': 'acc_123',
             'recommended_playbooks': ['pb_1', 'pb_2']
@@ -80,7 +80,7 @@ class TestDashboardBroadcaster:
             'playbook_id': 'pb_1',
             'action_type': 'stop_instance',
             'status': 'SUCCESS',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'cost': 0.0
         }
 
@@ -102,7 +102,7 @@ class TestDashboardBroadcaster:
             'threat_id': 'threat_1',
             'is_correct': True,
             'severity': 'HIGH',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         await broadcaster.on_feedback_submitted(feedback, current_accuracy=0.85)
@@ -132,7 +132,7 @@ class TestDashboardBroadcaster:
             'threat_type': 'connection_spike',
             'severity': 'HIGH',
             'rule_id': 'rule_1',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'evidence': [],
             'account_id': 'acc_123',
             'recommended_playbooks': []
@@ -155,7 +155,7 @@ class TestDashboardBroadcaster:
             'status': 'EXECUTING',
             'executed_actions': 3,
             'total_actions': 5,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         await broadcaster.on_playbook_status_changed(playbook)
@@ -177,7 +177,7 @@ class TestDashboardBroadcaster:
             'avg_response_time_ms': 250.5,
             'total_cost_1h': 5.25,
             'top_threat_types': ['connection_spike', 'unknown_region'],
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         await broadcaster.on_metrics_updated(metrics)
@@ -208,7 +208,7 @@ class TestDashboardBroadcaster:
                 'threat_type': 'connection_spike',
                 'severity': 'HIGH',
                 'rule_id': 'rule_1',
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 'evidence': [],
                 'account_id': 'acc_123',
                 'recommended_playbooks': []
@@ -245,7 +245,7 @@ class TestDashboardBroadcaster:
             'threat_type': 'connection_spike',
             'severity': 'HIGH',
             'rule_id': 'rule_1',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'evidence': [],
             'account_id': 'acc_123',
             'recommended_playbooks': []

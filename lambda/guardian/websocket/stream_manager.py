@@ -1,7 +1,7 @@
 """Dashboard Stream Manager for coordinating event streaming."""
 
 from typing import Dict, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class DashboardStreamManager:
@@ -18,7 +18,7 @@ class DashboardStreamManager:
         event = {
             'event_id': str(id(threat)),
             'event_type': 'threat_detected',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'threat': threat
         }
 
@@ -34,7 +34,7 @@ class DashboardStreamManager:
         event = {
             'event_id': str(id(update)),
             'event_type': 'remediation_update',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'execution_id': execution_id,
             'update': update
         }
@@ -55,7 +55,7 @@ class DashboardStreamManager:
         event = {
             'event_id': str(id(resource_id)),
             'event_type': 'resource_update',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'resource_id': resource_id,
             'status': status,
             'action': action
@@ -70,7 +70,7 @@ class DashboardStreamManager:
         stream_event = {
             'event_id': str(id(event)),
             'event_type': 'playbook_execution',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'playbook_event': event
         }
 
@@ -90,7 +90,7 @@ class DashboardStreamManager:
         event = {
             'event_id': str(id(metrics)),
             'event_type': 'compliance_update',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'framework': framework,
             'metrics': metrics
         }
@@ -110,7 +110,7 @@ class DashboardStreamManager:
         stream_event = {
             'event_id': str(id(event)),
             'event_type': 'audit_event',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'audit_event': event
         }
 
@@ -130,7 +130,7 @@ class DashboardStreamManager:
             if len(current_batch) >= batch_size:
                 batches.append({
                     'batch_id': str(id(current_batch)),
-                    'timestamp': datetime.utcnow().isoformat(),
+                    'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                     'events': current_batch,
                     'event_count': len(current_batch)
                 })
@@ -140,7 +140,7 @@ class DashboardStreamManager:
         if current_batch:
             batches.append({
                 'batch_id': str(id(current_batch)),
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 'events': current_batch,
                 'event_count': len(current_batch)
             })

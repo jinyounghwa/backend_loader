@@ -1,6 +1,6 @@
 import json
 import boto3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Dict, List, Optional
 
@@ -54,7 +54,7 @@ class ThreatPredictionModel:
             forecast = fitted_model.get_forecast(steps=days_ahead).predicted_mean
 
             for i, (pred, conf_int) in enumerate(zip(forecast, confidence_intervals.values)):
-                pred_date = (datetime.utcnow() + timedelta(days=i+1)).strftime('%Y-%m-%d')
+                pred_date = (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=i+1)).strftime('%Y-%m-%d')
                 predictions.append({
                     'date': pred_date,
                     'expected_threats': max(0, float(pred)),
@@ -91,7 +91,7 @@ class ThreatPredictionModel:
 
             self.models[account_id] = {
                 'model': fitted_model,
-                'trained_at': datetime.utcnow().isoformat(),
+                'trained_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 'data_points': len(threat_counts)
             }
 
@@ -118,7 +118,7 @@ class ThreatPredictionModel:
 
     def _get_historical_threats(self, account_id: str, lookback_days: int = 30) -> List[Dict]:
         """지난 N일 위협 데이터 조회"""
-        start_date = (datetime.utcnow() - timedelta(days=lookback_days)).isoformat()
+        start_date = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=lookback_days)).isoformat()
 
         try:
             response = self.threats_table.query(
@@ -166,7 +166,7 @@ class ThreatPredictionModel:
 
         predictions = []
         for i in range(days_ahead):
-            pred_date = (datetime.utcnow() + timedelta(days=i+1)).strftime('%Y-%m-%d')
+            pred_date = (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=i+1)).strftime('%Y-%m-%d')
             predictions.append({
                 'date': pred_date,
                 'expected_threats': float(avg_threats),
@@ -276,7 +276,7 @@ class ThreatPredictionModel:
         """기본 예측 (데이터 부족 시)"""
         predictions = []
         for i in range(7):
-            pred_date = (datetime.utcnow() + timedelta(days=i+1)).strftime('%Y-%m-%d')
+            pred_date = (datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=i+1)).strftime('%Y-%m-%d')
             predictions.append({
                 'date': pred_date,
                 'expected_threats': 2.0,

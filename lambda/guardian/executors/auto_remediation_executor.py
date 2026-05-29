@@ -1,5 +1,5 @@
 from typing import Dict, List
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 
@@ -33,7 +33,7 @@ class AutoRemediationExecutor:
             'threat_id': threat.get('threat_id', 'unknown'),
             'strategy': strategy,
             'auto_remediated': should_auto_remediate,
-            'started_at': datetime.utcnow().isoformat(),
+            'started_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'approval_required': not safe_to_execute or strategy in ['REMEDIATE', 'TERMINATE'],
         }
 
@@ -42,7 +42,7 @@ class AutoRemediationExecutor:
             execution_record['orchestration_id'] = orch_result.get('threat_id')
             execution_record['status'] = 'success' if orch_result.get('successful_remediations', 0) > 0 else 'partial'
             execution_record['resources_affected'] = orch_result.get('successful_remediations', 0)
-            execution_record['completed_at'] = datetime.utcnow().isoformat()
+            execution_record['completed_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
             self.rollback_capable_executions[execution_id] = {
                 'threat': threat,
@@ -74,7 +74,7 @@ class AutoRemediationExecutor:
             'threat_id': threat.get('threat_id', 'unknown'),
             'strategy': strategy,
             'approver_id': approver_id,
-            'approved_at': datetime.utcnow().isoformat(),
+            'approved_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'status': 'pending',
         }
 
@@ -83,7 +83,7 @@ class AutoRemediationExecutor:
             execution_record['orchestration_id'] = orch_result.get('threat_id')
             execution_record['status'] = 'success' if orch_result.get('successful_remediations', 0) > 0 else 'partial'
             execution_record['resources_affected'] = orch_result.get('successful_remediations', 0)
-            execution_record['completed_at'] = datetime.utcnow().isoformat()
+            execution_record['completed_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
             self.rollback_capable_executions[execution_id] = {
                 'threat': threat,
@@ -126,7 +126,7 @@ class AutoRemediationExecutor:
             'rollback_id': rollback_id,
             'original_execution_id': execution_id,
             'threat_id': threat.get('threat_id', 'unknown'),
-            'initiated_at': datetime.utcnow().isoformat(),
+            'initiated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'status': 'success',
             'resources_restored': len(resources),
         }

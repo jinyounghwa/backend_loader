@@ -1,5 +1,5 @@
 from typing import Dict, List
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 
@@ -15,7 +15,7 @@ class RemediationProgressTracker:
             'execution_id': execution_id,
             'threat_id': threat_id,
             'strategy': strategy,
-            'started_at': datetime.utcnow().isoformat(),
+            'started_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'status': 'in_progress',
             'resources_processed': 0,
             'resources_successful': 0,
@@ -40,7 +40,7 @@ class RemediationProgressTracker:
         remediation['resource_updates'].append({
             'resource_id': resource_id,
             'status': status,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'result': result,
         })
 
@@ -49,7 +49,7 @@ class RemediationProgressTracker:
             return
 
         remediation = self.active_remediations[execution_id]
-        remediation['completed_at'] = datetime.utcnow().isoformat()
+        remediation['completed_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         remediation['status'] = outcome.get('status', 'completed')
         remediation['final_outcome'] = outcome
 

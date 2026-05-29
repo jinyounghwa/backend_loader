@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 import pytest
 from unittest.mock import Mock
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import hmac
 import hashlib
@@ -111,7 +111,7 @@ class TestRealTimeResponseIntegration:
                 'description': 'Malware detected by external scanner'
             },
             'source': 'external-security-tool',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         body = json.dumps(threat_payload)

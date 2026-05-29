@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any
 from dataclasses import dataclass, asdict
 
@@ -68,7 +68,7 @@ class RuleEvaluationHandler:
         Returns:
             EvaluationResult: 평가 실행 결과
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc).replace(tzinfo=None)
         evaluation_id = self._generate_evaluation_id()
         errors = []
         threats_list = []
@@ -159,14 +159,14 @@ class RuleEvaluationHandler:
         success: bool
     ) -> EvaluationResult:
         """평가 결과 구성"""
-        elapsed = (datetime.utcnow() - start_time).total_seconds()
+        elapsed = (datetime.now(timezone.utc).replace(tzinfo=None) - start_time).total_seconds()
 
         # 실패한 응답 수 계산
         failed_count = sum(1 for r in responses if not r.get('success', False))
 
         metrics = EvaluationMetrics(
             evaluation_id=evaluation_id,
-            timestamp=datetime.utcnow().isoformat() + 'Z',
+            timestamp=datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
             active_rules_count=len(active_rules),
             detected_threats_count=len(threats),
             executed_responses_count=len(responses),

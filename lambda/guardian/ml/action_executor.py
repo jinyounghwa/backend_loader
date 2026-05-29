@@ -1,5 +1,5 @@
 from typing import Dict, Any, Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 
@@ -60,7 +60,7 @@ class ActionExecutor:
                 'status': 'FAILED',
                 'target_id': target_id,
                 'error': f'Unsupported action type: {action_type}',
-                'timestamp': datetime.utcnow().isoformat() + 'Z',
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
                 'dry_run': dry_run
             }
 
@@ -86,7 +86,7 @@ class ActionExecutor:
                 'status': result.get('status', 'FAILED'),
                 'target_id': target_id,
                 'result': result,
-                'timestamp': datetime.utcnow().isoformat() + 'Z',
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
                 'dry_run': dry_run
             }
 
@@ -103,7 +103,7 @@ class ActionExecutor:
                 'status': 'FAILED',
                 'target_id': target_id,
                 'error': str(e),
-                'timestamp': datetime.utcnow().isoformat() + 'Z',
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
                 'dry_run': dry_run
             }
 
@@ -133,7 +133,7 @@ class ActionExecutor:
         status = action_result.get('status')
 
         checks = []
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # 기본 검증: 작업이 성공했는가?
         checks.append({
@@ -159,7 +159,7 @@ class ActionExecutor:
             nat_check = self._validate_nat_block_region(target_id)
             checks.append(nat_check)
 
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc).replace(tzinfo=None)
         validation_time = (end_time - start_time).total_seconds()
 
         # 모든 검사 통과?
@@ -212,7 +212,7 @@ class ActionExecutor:
                 'action_id': action_id,
                 'rollback_status': 'FAILED',
                 'error': f'Action not found: {action_id}',
-                'timestamp': datetime.utcnow().isoformat() + 'Z'
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             }
 
         original_result = self.executed_actions[action_id]
@@ -241,7 +241,7 @@ class ActionExecutor:
                 'original_action_type': action_type,
                 'rollback_status': rollback_result.get('status', 'FAILED'),
                 'rollback_action_id': rollback_id,
-                'timestamp': datetime.utcnow().isoformat() + 'Z'
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             }
 
         except Exception as e:
@@ -250,7 +250,7 @@ class ActionExecutor:
                 'original_action_type': action_type,
                 'rollback_status': 'FAILED',
                 'error': str(e),
-                'timestamp': datetime.utcnow().isoformat() + 'Z'
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             }
 
     # EC2 작업들

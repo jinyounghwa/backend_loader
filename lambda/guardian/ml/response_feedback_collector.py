@@ -1,5 +1,5 @@
 from typing import Dict, Any, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class ResponseFeedbackCollector:
@@ -69,8 +69,8 @@ class ResponseFeedbackCollector:
                 'effectiveness_score': float (0-100)
             }
         """
-        end_time = datetime.utcnow().isoformat() + 'Z'
-        start_time = (datetime.utcnow() - timedelta(days=days)).isoformat() + 'Z'
+        end_time = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
+        start_time = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)).isoformat() + 'Z'
 
         feedback_records = self.storage.query_by_playbook(playbook_id, start_time, end_time)
 
@@ -144,8 +144,8 @@ class ResponseFeedbackCollector:
                 'top_effective_playbooks': [...]
             }
         """
-        end_time = datetime.utcnow().isoformat() + 'Z'
-        start_time = (datetime.utcnow() - timedelta(days=days)).isoformat() + 'Z'
+        end_time = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
+        start_time = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)).isoformat() + 'Z'
 
         feedback_records = self.storage.query_by_threat_type(threat_type, start_time, end_time)
 

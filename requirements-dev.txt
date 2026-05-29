@@ -2,6 +2,11 @@ mypy==1.13.0
 types-boto3==1.0.2
 types-python-dateutil==2.9.0.20260508
 types-requests==2.32.0.20240622
+pytest>=7.4.0
 pytest-asyncio==0.25.0
+pytest-cov>=4.1.0
+PyYAML>=6.0
 black==24.4.2
 isort==5.13.2
+flake8>=6.0.0
+bandit[toml]>=1.7.5

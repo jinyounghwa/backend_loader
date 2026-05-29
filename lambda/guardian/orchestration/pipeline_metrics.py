@@ -1,7 +1,7 @@
 import logging
 from typing import Dict, List, Any
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +205,7 @@ class PipelineMetrics:
         # 실제 구현에서는 DynamoDB 조회
         # 여기서는 모의 구현
         try:
-            cutoff_time = datetime.utcnow() - timedelta(minutes=lookback_minutes)
+            cutoff_time = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=lookback_minutes)
             # self.table.query(...)
             return []
         except Exception as e:

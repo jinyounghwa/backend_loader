@@ -2,7 +2,7 @@
 
 import sys
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 import pytest
 
@@ -146,7 +146,7 @@ class TestAuditComplianceIntegration:
         )
 
         # Query and verify
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc).replace(tzinfo=None)
         start_time = end_time - timedelta(hours=1)
         events = audit.get_audit_trail(start_time.isoformat(), end_time.isoformat())
 
@@ -199,7 +199,7 @@ class TestAuditComplianceIntegration:
             )
 
         # Query all events
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc).replace(tzinfo=None)
         start_time = end_time - timedelta(hours=1)
         events = audit.get_audit_trail(start_time.isoformat(), end_time.isoformat())
 

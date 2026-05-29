@@ -3,6 +3,7 @@
 import subprocess
 import json
 import os
+import sys
 from pathlib import Path
 import pytest
 
@@ -19,7 +20,7 @@ class TestCIPipeline:
         """✅ CI 파이프라인이 모든 유닛 테스트를 실행"""
         # 프로젝트의 모든 테스트 실행
         result = subprocess.run(
-            ["python3", "-m", "pytest", "tests/backend/", "-v", "--co", "-q"],
+            [sys.executable, "-m", "pytest", "tests/backend/", "-v", "--co", "-q"],
             cwd=str(project_root),
             capture_output=True,
             text=True,
@@ -43,7 +44,7 @@ def test_intentional_failure():
             test_file.write_text(test_code)
 
             result = subprocess.run(
-                ["python3", "-m", "pytest", "tests/backend/test_temp_failure.py", "-v"],
+                [sys.executable, "-m", "pytest", "tests/backend/test_temp_failure.py", "-v"],
                 cwd=str(project_root),
                 capture_output=True,
                 text=True,
@@ -62,7 +63,7 @@ def test_intentional_failure():
         """✅ CI 파이프라인이 커버리지 임계값(80%) 검사"""
         # 커버리지 임계값 설정 확인
         result = subprocess.run(
-            ["python3", "-m", "pytest", "tests/backend/", "--cov=lambda/guardian", "--cov-fail-under=80", "--co"],
+            [sys.executable, "-m", "pytest", "tests/backend/", "--cov=lambda/guardian", "--cov-fail-under=80", "--co"],
             cwd=str(project_root),
             capture_output=True,
             text=True,
@@ -77,7 +78,7 @@ def test_intentional_failure():
         # pytest coverage 실행 (실제 리포트 생성)
         try:
             result = subprocess.run(
-                ["python3", "-m", "pytest", "tests/backend/test_orchestration.py", "-v", "--cov=lambda/guardian", "--cov-report=json"],
+                [sys.executable, "-m", "pytest", "tests/backend/test_orchestration.py", "-v", "--cov=lambda/guardian", "--cov-report=json"],
                 cwd=str(project_root),
                 capture_output=True,
                 text=True,

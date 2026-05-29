@@ -1,7 +1,7 @@
 """Threat Correlation Engine - Correlate threats across resources and accounts."""
 
 from typing import Dict, List, Optional, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 
 
@@ -87,7 +87,7 @@ class ThreatCorrelationEngine:
             },
             'top_signatures': top_sigs,
             'total_signatures': len(signature_groups),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
     def correlate_across_resources(self, threats: List[Dict]) -> Dict:
@@ -173,7 +173,7 @@ class ThreatCorrelationEngine:
             'multi_resource_threats': multi_resource_count,
             'single_resource_threats': single_resource_count,
             'total_chains': len(chains),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
     def analyze_timeline(self, threats: List[Dict], time_window_minutes: int = 60) -> Dict:
@@ -220,7 +220,7 @@ class ThreatCorrelationEngine:
         window_start = None
 
         for threat in sorted_threats:
-            threat_time = datetime.fromisoformat(threat.get('timestamp', datetime.utcnow().isoformat()))
+            threat_time = datetime.fromisoformat(threat.get('timestamp', datetime.now(timezone.utc).replace(tzinfo=None).isoformat()))
 
             if not current_sequence:
                 current_sequence = [threat]
@@ -317,7 +317,7 @@ class ThreatCorrelationEngine:
             'suspicious_bursts': bursts,
             'total_sequences': len(formatted_sequences),
             'total_bursts': len(bursts),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
     def assess_blast_radius(self, threat: Dict, resource_chain: Dict) -> Dict:
@@ -395,5 +395,5 @@ class ThreatCorrelationEngine:
             'risk_level': risk_level,
             'estimated_impact': impact,
             'recommendations': recommendations,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }

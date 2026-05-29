@@ -2,7 +2,7 @@
 
 import sys
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 import pytest
 
@@ -146,7 +146,7 @@ class TestPolicyComplianceValidator:
         """✅ Check SLA compliance."""
         validator = PolicyComplianceValidator()
 
-        base_time = datetime.utcnow()
+        base_time = datetime.now(timezone.utc).replace(tzinfo=None)
         detection_time = base_time.isoformat()
         remediation_time = (base_time + timedelta(minutes=30)).isoformat()
 

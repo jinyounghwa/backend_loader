@@ -1,7 +1,7 @@
 import pytest
 import json
 from unittest.mock import Mock, AsyncMock, patch
-from datetime import datetime
+from datetime import datetime, timezone
 from guardian.intelligence.threat_intelligence import ThreatIntelligence
 from guardian.intelligence.cve_checker import CVEChecker
 from guardian.intelligence.ip_reputation import IPReputation
@@ -198,7 +198,7 @@ class TestThreatIntelligence:
             'software': 'Apache',
             'version': '2.4.41',
             'source_ip': '8.8.8.8',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         enriched = await threat_intelligence.enrich_threat(threat)
@@ -215,7 +215,7 @@ class TestThreatIntelligence:
             'threat_type': 'suspicious_connection',
             'severity': 'LOW',
             'source_ip': '123.45.67.89',  # 악성 IP
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         enriched = await threat_intelligence.enrich_threat(threat)
@@ -235,7 +235,7 @@ class TestThreatIntelligence:
                 'software': 'Apache',
                 'version': '2.4.41',
                 'source_ip': '8.8.8.8',
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             }
             for i in range(3)
         ]
@@ -277,7 +277,7 @@ class TestThreatIntelligence:
             'threat_id': 'threat_3',
             'threat_type': 'unknown_region',
             'severity': 'HIGH',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         enriched = await threat_intelligence.enrich_threat(threat)

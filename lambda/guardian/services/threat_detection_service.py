@@ -1,5 +1,5 @@
 from typing import Dict, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class ThreatDetectionService:
@@ -23,7 +23,7 @@ class ThreatDetectionService:
                 'threat_type': threat.get('threat_type', 'Unknown'),
                 'severity': threat.get('severity', 5),
                 'account_id': threat.get('account_id', account_id),
-                'detected_at': datetime.utcnow().isoformat(),
+                'detected_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 'evidence': threat.get('evidence', []),
                 'status': 'detected',
             }
@@ -115,7 +115,7 @@ class ThreatDetectionService:
                 threat['remediation_strategy'] = strategy_used
                 threat['remediation_success'] = success
                 threat['status'] = 'resolved' if success else 'remediation_failed'
-                threat['remediated_at'] = datetime.utcnow().isoformat()
+                threat['remediated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
                 break
 
     def get_threat_summary(self) -> Dict:

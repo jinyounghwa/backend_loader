@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 import pytest
 from unittest.mock import Mock, patch
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import time
 
 lambda_path = Path(__file__).parent.parent.parent / "lambda"
@@ -184,7 +184,7 @@ class TestApprovalWorkflowsIntegration:
         # Simulate timeout by manually setting expiration to past
         approval_request = workflow.approval_requests[approval_id]
         approval_request['expires_at'] = (
-            datetime.utcnow() - timedelta(minutes=1)
+            datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1)
         ).isoformat()
 
         # Try to approve after timeout
@@ -251,13 +251,13 @@ class TestApprovalWorkflowsIntegration:
                 'approval_id': approval['approval_id'],
                 'risk_level': approval['risk_level'],
                 'status': final_status,
-                'created_at': datetime.utcnow().isoformat()
+                'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             })
 
         # Generate compliance report
         report = {
             'report_type': 'approval_audit',
-            'generated_at': datetime.utcnow().isoformat(),
+            'generated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'total_approvals': len(approval_history),
             'auto_approved': sum(1 for a in approval_history if a['risk_level'] == 'low'),
             'manual_approvals': sum(1 for a in approval_history if a['status'] == 'approved'),

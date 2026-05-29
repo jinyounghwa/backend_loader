@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import sys
 sys.path.insert(0, '/Users/younghwa.jin/Documents/backend_loader/lambda')
 from guardian.ml.response_feedback_collector import ResponseFeedbackCollector
@@ -14,7 +14,7 @@ class TestResponseFeedbackCollector:
 
     def test_record_execution_feedback(self):
         """실행 피드백 기록"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         feedback = {
             'execution_id': 'exec-fb-001',
             'playbook_id': 'pb-ssh-block',
@@ -38,7 +38,7 @@ class TestResponseFeedbackCollector:
 
     def test_calculate_feedback_metrics(self):
         """피드백 메트릭 계산"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # 4개 성공 피드백
         for i in range(4):
@@ -82,7 +82,7 @@ class TestResponseFeedbackCollector:
 
     def test_get_threat_resolution_impact(self):
         """위협 타입별 해결 영향도"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # Unknown Region 위협 3개 (2 성공, 1 실패)
         for i in range(3):

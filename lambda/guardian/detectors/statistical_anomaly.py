@@ -2,7 +2,7 @@ import logging
 import uuid
 import statistics
 from typing import Dict, List, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ class StatisticalAnomalyDetector:
         self.baselines[baseline_id] = {
             'baseline_id': baseline_id,
             'metrics': metrics,
-            'trained_at': datetime.utcnow().isoformat(),
+            'trained_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'window_days': window_days
         }
 

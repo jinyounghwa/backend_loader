@@ -1,7 +1,7 @@
 """Real-Time Event Processor - CloudTrail, SNS, and WebSocket threat response."""
 
 from typing import Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 import heapq
 import hashlib
@@ -44,7 +44,7 @@ class RealTimeEventProcessor:
         """
         result = {
             'event_id': event.get('detail-id', 'unknown'),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         try:
@@ -66,7 +66,7 @@ class RealTimeEventProcessor:
             priority = self._determine_priority(threat)
 
             # Add to priority queue
-            queue_entry = (priority, datetime.utcnow().timestamp(), threat)
+            queue_entry = (priority, datetime.now(timezone.utc).replace(tzinfo=None).timestamp(), threat)
             heapq.heappush(self.priority_queue, queue_entry)
 
             # Track processed event
@@ -98,7 +98,7 @@ class RealTimeEventProcessor:
         """
         result = {
             'notification_id': notification.get('MessageId', 'unknown'),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         try:
@@ -116,7 +116,7 @@ class RealTimeEventProcessor:
 
             # Add to priority queue
             priority = self._determine_priority(threat)
-            queue_entry = (priority, datetime.utcnow().timestamp(), threat)
+            queue_entry = (priority, datetime.now(timezone.utc).replace(tzinfo=None).timestamp(), threat)
             heapq.heappush(self.priority_queue, queue_entry)
 
             result['status'] = 'queued'
@@ -143,7 +143,7 @@ class RealTimeEventProcessor:
             }
         """
         result = {
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         try:
@@ -155,7 +155,7 @@ class RealTimeEventProcessor:
 
             # Validate webhook signature (would be verified by caller)
             priority = self._determine_priority(threat)
-            queue_entry = (priority, datetime.utcnow().timestamp(), threat)
+            queue_entry = (priority, datetime.now(timezone.utc).replace(tzinfo=None).timestamp(), threat)
             heapq.heappush(self.priority_queue, queue_entry)
 
             result['status'] = 'queued'
@@ -181,7 +181,7 @@ class RealTimeEventProcessor:
             }
         """
         result = {
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         if not self.priority_queue:
@@ -193,9 +193,9 @@ class RealTimeEventProcessor:
             priority, timestamp, threat = heapq.heappop(self.priority_queue)
 
             # Execute remediation
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc).replace(tzinfo=None)
             remediation_result = self.orchestrator.execute_multi_resource_remediation(threat)
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc).replace(tzinfo=None)
 
             result['status'] = 'remediated'
             result['threat_id'] = threat.get('threat_id')
@@ -211,7 +211,7 @@ class RealTimeEventProcessor:
 
     def check_throttle(self, threat_source: str) -> bool:
         """Check if threat source is being throttled (too many events)."""
-        current_time = datetime.utcnow().timestamp()
+        current_time = datetime.now(timezone.utc).replace(tzinfo=None).timestamp()
         window_start = current_time - 300  # 5-minute window
 
         # Clean old entries
@@ -263,7 +263,7 @@ class RealTimeEventProcessor:
         event_type = message.get('detail-type', '')
 
         threat = {
-            'threat_id': f'THREAT-SNS-{datetime.utcnow().timestamp():.0f}',
+            'threat_id': f'THREAT-SNS-{datetime.now(timezone.utc).replace(tzinfo=None).timestamp():.0f}',
             'source': 'sns',
             'event_type': event_type,
             'severity': 5
@@ -305,5 +305,5 @@ class RealTimeEventProcessor:
             'queue_size': len(self.priority_queue),
             'processed_events': len(self.processed_events),
             'throttled_sources': len(self.throttle_window),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }

@@ -1,7 +1,7 @@
 """WebSocket Event Broadcaster for real-time threat dashboard updates."""
 
 from typing import Dict, List, Optional, Callable
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 
@@ -18,7 +18,7 @@ class WebSocketEventBroadcaster:
         """Broadcast new threat detection to all connected clients."""
         message = {
             'event_type': 'threat_detected',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'threat_id': threat.get('threat_id'),
             'threat_type': threat.get('threat_type'),
             'severity': threat.get('severity'),
@@ -34,7 +34,7 @@ class WebSocketEventBroadcaster:
         """Broadcast remediation execution start."""
         message = {
             'event_type': 'remediation_started',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'execution_id': execution_id,
             'threat_id': threat_id,
             'status': 'started'
@@ -48,7 +48,7 @@ class WebSocketEventBroadcaster:
         """Broadcast real-time remediation progress."""
         message = {
             'event_type': 'remediation_progress',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'execution_id': execution_id,
             'progress_percent': progress_percent,
             'resources_status': resources_status,
@@ -63,7 +63,7 @@ class WebSocketEventBroadcaster:
         """Broadcast remediation completion."""
         message = {
             'event_type': 'remediation_completed',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'execution_id': execution_id,
             'status': status,
             'summary': summary
@@ -76,7 +76,7 @@ class WebSocketEventBroadcaster:
         """Broadcast compliance metric update."""
         message = {
             'event_type': 'compliance_status_changed',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'framework': framework,
             'status': new_status
         }
@@ -89,7 +89,7 @@ class WebSocketEventBroadcaster:
         """Broadcast playbook execution events."""
         message = {
             'event_type': 'playbook_execution',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'execution_id': execution_id,
             'playbook_name': playbook_name,
             'status': status
@@ -102,7 +102,7 @@ class WebSocketEventBroadcaster:
         """Register WebSocket client with optional event filters."""
         connection = {
             'connection_id': connection_id,
-            'connected_at': datetime.utcnow().isoformat(),
+            'connected_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'filters': filters or {},
             'subscriptions': []
         }
@@ -160,7 +160,7 @@ class WebSocketEventBroadcaster:
         self.message_queue.append({
             'id': message_id,
             'message': message,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         })
         return message_id
 

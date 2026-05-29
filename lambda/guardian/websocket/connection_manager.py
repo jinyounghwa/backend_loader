@@ -1,7 +1,7 @@
 """Dashboard Connection Manager for WebSocket connection lifecycle."""
 
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import uuid
 
 
@@ -21,8 +21,8 @@ class DashboardConnectionManager:
             'connection_id': connection_id,
             'user_id': user_id,
             'account_id': account_id,
-            'connected_at': datetime.utcnow().isoformat(),
-            'last_activity': datetime.utcnow().isoformat(),
+            'connected_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+            'last_activity': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'subscriptions': [],
             'status': 'active'
         }
@@ -120,12 +120,12 @@ class DashboardConnectionManager:
         if connection_id not in self.connections:
             return False
 
-        self.connections[connection_id]['last_activity'] = datetime.utcnow().isoformat()
+        self.connections[connection_id]['last_activity'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         return True
 
     def get_stale_connections(self, timeout_minutes: int = 30) -> List[str]:
         """Get connections with no activity (for cleanup)."""
-        cutoff_time = datetime.utcnow() - timedelta(minutes=timeout_minutes)
+        cutoff_time = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=timeout_minutes)
         stale = []
 
         for connection_id, connection in self.connections.items():

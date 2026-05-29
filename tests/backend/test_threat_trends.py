@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 import sys
 from pathlib import Path
@@ -17,7 +17,7 @@ def threat_trend_analyzer():
 @pytest.fixture
 def time_series_threats():
     threats = []
-    base_time = datetime.utcnow()
+    base_time = datetime.now(timezone.utc).replace(tzinfo=None)
 
     for day in range(10):
         for hour in range(24):

@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, MagicMock, patch, AsyncMock
 from guardian.ml.feature_engineer import FeatureEngineer
 from guardian.ml.model_retrainer import ModelRetrainer
@@ -22,7 +22,7 @@ class TestFeatureEngineer:
                 'threat_type': 'connection_spike',
                 'severity': 'HIGH',
                 'is_correct': True,
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 'evidence': ['log1', 'log2', 'log3'],
                 'detection_latency_sec': 30,
                 'action_success_rate': 0.95,
@@ -34,7 +34,7 @@ class TestFeatureEngineer:
                 'threat_type': 'unknown_region',
                 'severity': 'MEDIUM',
                 'is_correct': False,
-                'timestamp': (datetime.utcnow() - timedelta(hours=1)).isoformat(),
+                'timestamp': (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=1)).isoformat(),
                 'evidence': ['log4'],
                 'detection_latency_sec': 45,
                 'action_success_rate': 0.5,
@@ -85,7 +85,7 @@ class TestFeatureEngineer:
     def test_extract_threat_patterns(self, feature_engineer):
         """위협-대응-결과 패턴 추출"""
         detections = [
-            {'threat_id': 't1', 'threat_type': 'connection_spike', 'account_id': 'acc_1', 'timestamp': datetime.utcnow().isoformat()}
+            {'threat_id': 't1', 'threat_type': 'connection_spike', 'account_id': 'acc_1', 'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()}
         ]
         actions = [
             {'action_id': 'a1', 'threat_id': 't1', 'action_type': 'stop_instance'}
@@ -136,7 +136,7 @@ class TestModelRetrainer:
                 'threat_type': 'connection_spike' if i % 2 == 0 else 'unknown_region',
                 'severity': ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'][i % 4],
                 'is_correct': i % 3 != 0,  # 2/3가 정탐
-                'timestamp': (datetime.utcnow() - timedelta(days=i)).isoformat(),
+                'timestamp': (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=i)).isoformat(),
                 'evidence': [f'log_{i}_{j}' for j in range(i % 5 + 1)],
                 'detection_latency_sec': 20 + i,
                 'action_success_rate': 0.7 + (i % 3) * 0.1,

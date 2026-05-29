@@ -1,7 +1,7 @@
 import json
 import boto3
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
 import sys
 from pathlib import Path
@@ -47,7 +47,7 @@ class MLHandler:
                 'trend': result['trend'],
                 'anomaly_score': result['anomaly_score'],
                 'model_accuracy': result['model_accuracy'],
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             })
         except Exception as e:
             return self._error_response(500, str(e))
@@ -72,7 +72,7 @@ class MLHandler:
                 'silhouette_score': result['silhouette_score'],
                 'cluster_count': len(result['clusters']),
                 'threat_count': result.get('threat_count', len(threats)),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             })
         except Exception as e:
             return self._error_response(500, str(e))
@@ -100,7 +100,7 @@ class MLHandler:
                 'anomaly_hours': result['anomaly_hours'],
                 'trend': result['trend'],
                 'time_range': time_range,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             })
         except Exception as e:
             return self._error_response(500, str(e))
@@ -126,7 +126,7 @@ class MLHandler:
                 'total_threats': result['total_threats'],
                 'trend': result['trend'],
                 'time_window': time_window,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             })
         except Exception as e:
             return self._error_response(500, str(e))
@@ -152,7 +152,7 @@ class MLHandler:
                 'severity_distribution': result['severity_distribution'],
                 'resource_distribution': result['resource_distribution'],
                 'time_window': time_window,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             })
         except Exception as e:
             return self._error_response(500, str(e))
@@ -176,7 +176,7 @@ class MLHandler:
                 'patterns': result['patterns'],
                 'total_patterns': result['total_patterns'],
                 'threat_count': result['threat_count'],
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             })
         except Exception as e:
             return self._error_response(500, str(e))
@@ -200,7 +200,7 @@ class MLHandler:
                 'current_sequence': result['current_sequence'],
                 'matched_patterns': result['matched_patterns'],
                 'pattern_count': result['pattern_count'],
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             })
         except Exception as e:
             return self._error_response(500, str(e))
@@ -230,7 +230,7 @@ class MLHandler:
                 'similar_threats': result['similar_threats'],
                 'count': result['count'],
                 'threshold': similarity_threshold,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             })
         except Exception as e:
             return self._error_response(500, str(e))
@@ -255,7 +255,7 @@ class MLHandler:
                 'account_id': result['account_id'],
                 'trained_at': result.get('trained_at'),
                 'data_points': result.get('data_points'),
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             })
         except Exception as e:
             return self._error_response(500, str(e))
@@ -281,7 +281,7 @@ class MLHandler:
             },
             'body': json.dumps({
                 'error': error_message,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             })
         }
 

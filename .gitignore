@@ -61,6 +61,13 @@ terraform/*.tfstate*
 # pytest
 .pytest_cache/
 
+# coverage
+.coverage
+.coverage.*
+coverage.json
+coverage.xml
+htmlcov/
+
 # Gemini
 gemini-config.json
 

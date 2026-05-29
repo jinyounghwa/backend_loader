@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import sys
 sys.path.insert(0, '/Users/younghwa.jin/Documents/backend_loader/lambda')
 from guardian.ml.execution_metrics_collector import ExecutionMetricsCollector
@@ -45,7 +45,7 @@ class TestExecutionMetricsCollector:
     def test_get_execution_history(self):
         """Playbook 실행 이력 조회"""
         # 여러 실행 기록 추가
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         for i in range(3):
             execution = {
                 'execution_id': f'exec-00{i}',
@@ -87,7 +87,7 @@ class TestExecutionMetricsCollector:
     def test_calculate_execution_metrics(self):
         """실행 메트릭 집계"""
         # 5개 실행: 4 성공, 1 실패
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         records = []
 
         # 4개 성공
@@ -127,7 +127,7 @@ class TestExecutionMetricsCollector:
 
     def test_get_threat_type_metrics(self):
         """위협 타입별 메트릭"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # Unknown Region 위협에 대한 실행 3개
         for i in range(3):
@@ -171,7 +171,7 @@ class TestExecutionMetricsCollector:
 
     def test_get_playbook_impact_metrics(self):
         """Playbook 영향도 메트릭"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
 
         # pb-ssh-block 실행 3개: 2 성공, 1 실패
 

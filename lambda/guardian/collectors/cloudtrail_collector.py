@@ -2,7 +2,7 @@ import logging
 import uuid
 import time
 from typing import Dict, List, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import defaultdict
 
 logger = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ class CloudTrailCollector:
         self.collections[collector_id] = {
             'region': region,
             'event_names': event_names,
-            'started_at': datetime.utcnow().isoformat(),
+            'started_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'total_events': 0,
             'processed_events': 0,
             'duplicates': 0,
@@ -112,7 +112,7 @@ class CloudTrailCollector:
             'source_ips': source_ips,
             'principals': principals,
             'resources': resources,
-            'timestamp': event.get('eventTime', datetime.utcnow().isoformat())
+            'timestamp': event.get('eventTime', datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
         }
 
         if error_code:

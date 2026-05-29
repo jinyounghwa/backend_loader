@@ -1,6 +1,7 @@
+import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
 
 from guardian.ml.feature_engineer import FeatureEngineer
@@ -26,7 +27,7 @@ class RetrainingHandler:
             feature_engineer=self.feature_engineer
         )
 
-    def handle_retraining_event(self, event: Dict[str, Any], context) -> Dict[str, Any]:
+    async def handle_retraining_event(self, event: Dict[str, Any], context) -> Dict[str, Any]:
         """
         EventBridge 트리거 이벤트 처리 (매주 일요일 00:00 UTC)
 
@@ -53,7 +54,7 @@ class RetrainingHandler:
                     'body': json.dumps({
                         'status': 'skipped',
                         'reason': 'no_feedback_data',
-                        'timestamp': datetime.utcnow().isoformat()
+                        'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
                     })
                 }
 
@@ -81,7 +82,7 @@ class RetrainingHandler:
                         'model_version': result['model_version'],
                         'metrics': metrics,
                         'improvements': improvements,
-                        'timestamp': datetime.utcnow().isoformat()
+                        'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
                     })
                 }
             else:
@@ -96,7 +97,7 @@ class RetrainingHandler:
                         'metrics': metrics,
                         'improvements': improvements,
                         'reason': 'improvement_below_threshold',
-                        'timestamp': datetime.utcnow().isoformat()
+                        'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
                     })
                 }
 
@@ -109,7 +110,7 @@ class RetrainingHandler:
                 'body': json.dumps({
                     'status': 'failed',
                     'error': str(e),
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
                 })
             }
 
@@ -145,7 +146,7 @@ class RetrainingHandler:
 def lambda_handler(event, context):
     """AWS Lambda 진입점"""
     handler = RetrainingHandler()
-    response = handler.handle_retraining_event(event, context)
+    response = asyncio.run(handler.handle_retraining_event(event, context))
 
     # JSON 직렬화 처리 (NoneType 등)
     return json.loads(json.dumps(response, default=str))

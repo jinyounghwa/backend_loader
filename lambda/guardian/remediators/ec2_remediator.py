@@ -1,7 +1,7 @@
 """EC2 Instance Auto-Remediation - Stop unauthorized instances with safety checks."""
 
 from typing import Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 
@@ -49,7 +49,7 @@ class EC2Remediator:
         """
         result = {
             'instance_id': instance_id,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'threat': threat.get('threat_id', 'unknown')
         }
 
@@ -207,7 +207,7 @@ class EC2Remediator:
         """Attempt to restore instance to pre-remediation state."""
         result = {
             'instance_id': instance_id,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         # Check if we have a snapshot
@@ -281,7 +281,7 @@ class EC2Remediator:
             Resources=[instance_id],
             Tags=[
                 {'Key': 'guardian:remediated', 'Value': 'true'},
-                {'Key': 'guardian:remediation-time', 'Value': datetime.utcnow().isoformat()},
+                {'Key': 'guardian:remediation-time', 'Value': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()},
                 {'Key': 'guardian:threat-id', 'Value': threat.get('threat_id', 'unknown')}
             ]
         )

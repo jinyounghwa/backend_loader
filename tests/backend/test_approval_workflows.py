@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 import pytest
 from unittest.mock import Mock
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import time
 
 lambda_path = Path(__file__).parent.parent.parent / "lambda"
@@ -76,7 +76,7 @@ class TestApprovalWorkflows:
 
         # Parse expiration time
         expires_at = datetime.fromisoformat(approval['expires_at'])
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
         time_delta = (expires_at - now).total_seconds()
 
         # Should expire in ~5 minutes (300 seconds)
@@ -117,7 +117,7 @@ class TestApprovalWorkflows:
 
         # Manually expire the token for testing
         workflow.approval_tokens[token]['expires_at'] = (
-            datetime.utcnow() - timedelta(minutes=1)
+            datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=1)
         ).isoformat()
 
         # Token should now be expired

@@ -6,7 +6,7 @@ Covers RuleTemplate, TemplateRepository, and SecurityRule.create_from_template()
 
 import pytest
 from unittest.mock import MagicMock, patch
-from datetime import datetime
+from datetime import datetime, timezone
 import sys
 from pathlib import Path
 
@@ -74,8 +74,8 @@ class TestRuleTemplate:
             "example_action": '{"notify": ["telegram"]}',
             "tags": ["s3", "compliance"],
             "version": 1,
-            "created_at": datetime.utcnow().isoformat(),
-            "updated_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+            "updated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         }
 
         template = RuleTemplate.from_dynamodb_item(item)
@@ -165,8 +165,8 @@ class TestTemplateRepository:
                 "example_action": "{}",
                 "tags": [],
                 "version": 1,
-                "created_at": datetime.utcnow().isoformat(),
-                "updated_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+                "updated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             }
         }
 
@@ -191,8 +191,8 @@ class TestTemplateRepository:
                     "example_action": "{}",
                     "tags": [],
                     "version": 1,
-                    "created_at": datetime.utcnow().isoformat(),
-                    "updated_at": datetime.utcnow().isoformat(),
+                    "created_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+                    "updated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 },
                 {
                     "template_id": "template-2",
@@ -205,8 +205,8 @@ class TestTemplateRepository:
                     "example_action": "{}",
                     "tags": [],
                     "version": 1,
-                    "created_at": datetime.utcnow().isoformat(),
-                    "updated_at": datetime.utcnow().isoformat(),
+                    "created_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+                    "updated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 },
             ]
         }
@@ -287,8 +287,8 @@ class TestSecurityRuleFromTemplate:
             "enabled": True,
             "template_id": "template-1",
             "template_version": 1,
-            "created_at": datetime.utcnow().isoformat(),
-            "updated_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+            "updated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         }
 
         rule = SecurityRule.from_dynamodb_item(item)
@@ -306,8 +306,8 @@ class TestSecurityRuleFromTemplate:
             "priority": 5,
             "account_id": "all",
             "enabled": True,
-            "created_at": datetime.utcnow().isoformat(),
-            "updated_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+            "updated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         }
 
         rule = SecurityRule.from_dynamodb_item(item)

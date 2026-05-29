@@ -2,7 +2,7 @@
 
 import sys
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 import pytest
 
@@ -142,9 +142,9 @@ class TestRealtimeDashboardIntegration:
             'account_id': 'acc-test'
         }
 
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc).replace(tzinfo=None)
         recipient_count = broadcaster.broadcast_to_all(threat)
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc).replace(tzinfo=None)
 
         latency_ms = (end_time - start_time).total_seconds() * 1000
 

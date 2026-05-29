@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 import pytest
 from unittest.mock import Mock
-from datetime import datetime
+from datetime import datetime, timezone
 
 lambda_path = Path(__file__).parent.parent.parent / "lambda"
 sys.path.insert(0, str(lambda_path))
@@ -22,7 +22,7 @@ class TestS3RemediationIntegration:
             'event_type': 'PublicBucketDetected',
             'severity': 9,
             'bucket_name': 'insecure-bucket',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'description': 'S3 bucket with public read access detected'
         }
 

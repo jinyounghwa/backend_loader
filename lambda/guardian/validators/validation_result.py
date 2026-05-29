@@ -5,7 +5,7 @@ Contains errors, warnings, and optional dry-run test results.
 """
 
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class ValidationResult:
@@ -24,7 +24,7 @@ class ValidationResult:
         self.warnings = warnings or []
         self.dry_run_threats = dry_run_threats or []
         self.execution_time_ms = execution_time_ms
-        self.validated_at = datetime.utcnow().isoformat()
+        self.validated_at = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API response"""

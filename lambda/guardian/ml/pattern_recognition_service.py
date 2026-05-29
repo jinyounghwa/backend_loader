@@ -1,6 +1,6 @@
 import json
 import boto3
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Set, Tuple
 from decimal import Decimal
 import uuid
@@ -31,7 +31,7 @@ class PatternRecognitionService:
             return {
                 'patterns': [],
                 'total_patterns': 0,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             }
 
         # 위협 시퀀스 생성
@@ -58,7 +58,7 @@ class PatternRecognitionService:
             'patterns': patterns,
             'total_patterns': len(patterns),
             'threat_count': len(threat_sequence),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
     def match_pattern(self, threat_sequence: List[str], patterns: List[Dict]) -> Dict:
@@ -83,7 +83,7 @@ class PatternRecognitionService:
             'current_sequence': threat_sequence,
             'matched_patterns': matched_patterns,
             'pattern_count': len(matched_patterns),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
     def get_pattern_stats(self, pattern_id: str, threats: List[Dict]) -> Dict:
@@ -183,7 +183,7 @@ class PatternRecognitionService:
             'lift': float(lift),
             'occurrences': occurrences,
             'avg_severity': float(avg_severity),
-            'created_at': datetime.utcnow().isoformat()
+            'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
     def _count_itemset_occurrences(self, itemset: Tuple, threat_sequence: List[str]) -> int:

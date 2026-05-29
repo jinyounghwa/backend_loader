@@ -6,7 +6,7 @@ Covers RuleValidator, ValidationResult, and validation_handler.
 
 import pytest
 from unittest.mock import MagicMock, patch
-from datetime import datetime
+from datetime import datetime, timezone
 import sys
 from pathlib import Path
 
@@ -55,7 +55,7 @@ class TestValidationResult:
             "severity": 5,
             "message": "Test threat",
             "account_id": "acc-1",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             "evidence_count": 3,
         }
         result.add_dry_run_threat(threat)
@@ -179,12 +179,12 @@ class TestRuleValidator:
         test_logs = [
             {
                 "event_type": "$connect",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 "account_id": "acc-1",
             },
             {
                 "event_type": "$connect",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                 "account_id": "acc-1",
             },
         ]
@@ -196,7 +196,7 @@ class TestRuleValidator:
         mock_threat.severity = 5
         mock_threat.message = "Connection spike detected"
         mock_threat.account_id = "acc-1"
-        mock_threat.timestamp = datetime.utcnow()
+        mock_threat.timestamp = datetime.now(timezone.utc).replace(tzinfo=None)
         mock_threat.evidence = test_logs
 
         mock_anomaly_detector.detect_anomalies.return_value = [mock_threat]

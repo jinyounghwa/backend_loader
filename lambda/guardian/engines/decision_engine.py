@@ -1,7 +1,7 @@
 """Decision Engine - Risk analysis and remediation strategy recommendations."""
 
 from typing import Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class RemediationDecisionEngine:
@@ -76,7 +76,7 @@ class RemediationDecisionEngine:
             'evidence_count': evidence_count,
             'evidence_quality': self._assess_evidence_quality(threat.get('evidence', [])),
             'recommendation': recommendation,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
     def analyze_remediation_risk(self, threat: Dict, remediation_plan: Dict) -> Dict:
@@ -144,7 +144,7 @@ class RemediationDecisionEngine:
             'net_score': round(net_score, 2),
             'affected_resources': affected_resources,
             'recommendation': recommendation,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
     def decide_remediation_strategy(self, threat: Dict, remediation_plan: Dict) -> Dict:
@@ -196,7 +196,7 @@ class RemediationDecisionEngine:
             'confidence_level': confidence_analysis['confidence_level'],
             'risk_score': risk_analysis['risk_score'],
             'required_approvers': required_approvers,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
     def _assess_evidence_quality(self, evidence_list: list) -> str:
@@ -262,5 +262,5 @@ class RemediationDecisionEngine:
             'escalate': escalate,
             'escalation_level': escalation_level,
             'reason': reason,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }

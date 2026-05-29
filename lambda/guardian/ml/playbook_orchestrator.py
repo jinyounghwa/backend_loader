@@ -1,5 +1,5 @@
 from typing import Dict, Any, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 
@@ -48,7 +48,7 @@ class PlaybookOrchestrator:
             }
         """
         execution_id = str(uuid.uuid4())
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc).replace(tzinfo=None)
         playbook_id = playbook.get('playbook_id')
         actions = playbook.get('actions', [])
         dry_run = playbook.get('dry_run', False)
@@ -108,7 +108,7 @@ class PlaybookOrchestrator:
         else:
             status = 'FAILED'
 
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc).replace(tzinfo=None)
         execution_time = (end_time - start_time).total_seconds()
 
         execution_record = {

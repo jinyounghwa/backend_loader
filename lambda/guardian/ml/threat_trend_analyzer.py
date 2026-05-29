@@ -1,6 +1,6 @@
 import json
 import boto3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 try:
@@ -53,7 +53,7 @@ class ThreatTrendAnalyzer:
             'safe_hours': safe_hours,
             'anomaly_hours': anomaly_hours,
             'trend': trend,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
     def get_threat_velocity(self, account_id: str, time_window: str = '1h') -> Dict:
@@ -89,7 +89,7 @@ class ThreatTrendAnalyzer:
             'threats_per_hour': float(threat_velocity),
             'total_threats': threat_count,
             'trend': trend,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
     def get_threat_density(self, account_id: str, time_window: str = '1h') -> Dict:
@@ -128,7 +128,7 @@ class ThreatTrendAnalyzer:
             'total_threats': threat_count,
             'severity_distribution': severity_dist,
             'resource_distribution': resource_dist,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
     def _parse_time_range(self, time_range: str) -> int:
@@ -155,7 +155,7 @@ class ThreatTrendAnalyzer:
 
     def _get_threats_by_time_range(self, account_id: str, lookback_hours: int) -> List[Dict]:
         """시간 범위에 해당하는 위협 조회"""
-        start_time = (datetime.utcnow() - timedelta(hours=lookback_hours)).isoformat()
+        start_time = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=lookback_hours)).isoformat()
 
         try:
             response = self.threats_table.query(

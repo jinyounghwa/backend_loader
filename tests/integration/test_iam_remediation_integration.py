@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 import pytest
 from unittest.mock import Mock
-from datetime import datetime
+from datetime import datetime, timezone
 
 lambda_path = Path(__file__).parent.parent.parent / "lambda"
 sys.path.insert(0, str(lambda_path))
@@ -22,7 +22,7 @@ class TestIAMRemediationIntegration:
             'event_type': 'CompromisedUserDetected',
             'severity': 9,
             'principal': 'arn:aws:iam::123456789012:user/compromised-user',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'description': 'User with AdministratorAccess detected in unauthorized region'
         }
 

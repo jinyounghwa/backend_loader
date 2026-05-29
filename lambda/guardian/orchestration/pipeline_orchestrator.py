@@ -2,7 +2,7 @@ import logging
 import uuid
 import time
 from typing import Dict, List, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from guardian.orchestration.pipeline_metrics import PipelineMetrics
 
 logger = logging.getLogger(__name__)
@@ -205,7 +205,7 @@ class PipelineOrchestrator:
             'total_threats': len(threats),
             'mitigated_threats': sum(1 for t in threats if t.get('mitigated', False)),
             'end_to_end_latency_ms': (end_time - start_time) * 1000,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         # 메트릭 저장

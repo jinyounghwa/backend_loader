@@ -4,7 +4,7 @@ Stores alert sending history for audit trail and analytics.
 Tracks which alerts were successfully sent vs. failed.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 import boto3
 from botocore.exceptions import ClientError
@@ -31,7 +31,7 @@ class AlertHistory:
         self.timestamp = timestamp
         self.message = message
         self.status = status
-        self.created_at = created_at or datetime.utcnow().isoformat()
+        self.created_at = created_at or datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
     def to_dynamodb_item(self) -> Dict[str, Any]:
         """Convert to DynamoDB item format"""

@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 import pytest
 from unittest.mock import Mock
-from datetime import datetime
+from datetime import datetime, timezone
 
 lambda_path = Path(__file__).parent.parent.parent / "lambda"
 sys.path.insert(0, str(lambda_path))
@@ -22,7 +22,7 @@ class TestNetworkRemediationIntegration:
             'event_type': 'UnauthorizedPublicAccess',
             'severity': 9,
             'instance_id': 'i-compromised-production',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'description': 'Instance exposed to public internet'
         }
 

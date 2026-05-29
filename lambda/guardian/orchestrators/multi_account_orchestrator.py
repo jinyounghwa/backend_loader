@@ -1,5 +1,5 @@
 from typing import Dict, List
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 
@@ -42,7 +42,7 @@ class MultiAccountRemediationOrchestrator:
         execution_record = {
             'execution_id': execution_id,
             'threat_id': threat.get('threat_id'),
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'accounts_targeted': len(resource_map),
             'results': results,
         }

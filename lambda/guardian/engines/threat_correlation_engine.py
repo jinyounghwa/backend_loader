@@ -1,7 +1,7 @@
 """Threat Correlation Engine for intelligent threat grouping and pattern detection."""
 
 from typing import List, Dict, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import uuid
 
 
@@ -46,7 +46,7 @@ class ThreatCorrelationEngine:
 
         threats_sorted = sorted(
             threats,
-            key=lambda t: t.get('detected_at', datetime.utcnow().isoformat())
+            key=lambda t: t.get('detected_at', datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
         )
 
         window_start = None

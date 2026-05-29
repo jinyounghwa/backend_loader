@@ -1,7 +1,7 @@
 """Network Isolation Auto-Remediation - Isolate compromised instances via Security Groups."""
 
 from typing import Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 
@@ -44,7 +44,7 @@ class NetworkRemediator:
         """
         result = {
             'instance_id': instance_id,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'threat': threat.get('threat_id', 'unknown'),
             'rules_removed': 0,
             'rules_preserved': 0
@@ -102,7 +102,7 @@ class NetworkRemediator:
         """
         result = {
             'instance_id': instance_id,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'threat': threat.get('threat_id', 'unknown')
         }
 
@@ -130,7 +130,7 @@ class NetworkRemediator:
             self.remediation_history[instance_id] = {
                 'original_groups': original_sgs,
                 'isolated_group': new_sg_id,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
             }
 
             result['status'] = RemediationStatus.SUCCESS.value
@@ -164,7 +164,7 @@ class NetworkRemediator:
         """
         result = {
             'instance_id': instance_id,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         try:

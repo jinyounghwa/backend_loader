@@ -1,7 +1,7 @@
 """Audit Dashboard Service for real-time compliance metrics and visualization."""
 
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 
 
@@ -77,7 +77,7 @@ class AuditDashboardService:
             return {'error': 'Audit service not configured'}
 
         # Get remediation events from past 30 days
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc).replace(tzinfo=None)
         start_time = end_time - timedelta(days=30)
 
         events = self.audit.get_audit_trail(
@@ -112,8 +112,8 @@ class AuditDashboardService:
             return {'error': 'Audit service not configured', 'violations': {}}
 
         events = self.audit.get_audit_trail(
-            (datetime.utcnow() - timedelta(days=30)).isoformat(),
-            datetime.utcnow().isoformat()
+            (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)).isoformat(),
+            datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         )
 
         policy_events = [e for e in events if e.get('event_type') == 'POLICY_ENFORCEMENT']
@@ -144,7 +144,7 @@ class AuditDashboardService:
         if not self.audit:
             return {'error': 'Audit service not configured', 'heatmap': {}}
 
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc).replace(tzinfo=None)
         start_time = end_time - timedelta(days=period_days)
 
         events = self.audit.get_audit_trail(
@@ -197,7 +197,7 @@ class AuditDashboardService:
             }
         else:
             # Aggregate all user actions
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc).replace(tzinfo=None)
             start_time = end_time - timedelta(days=30)
             events = self.audit.get_audit_trail(
                 start_time.isoformat(),
@@ -227,7 +227,7 @@ class AuditDashboardService:
         if not self.audit:
             return {'error': 'Audit service not configured'}
 
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc).replace(tzinfo=None)
         start_time = end_time - timedelta(days=30)
 
         events = self.audit.get_audit_trail(

@@ -1,7 +1,7 @@
 """Real-time Dashboard Service for live threat and remediation updates."""
 
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class RealtimeDashboardService:
@@ -17,7 +17,7 @@ class RealtimeDashboardService:
     def get_initial_dashboard_state(self, account_id: Optional[str] = None) -> Dict:
         """Get full dashboard state for new WebSocket connection."""
         state = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'account_id': account_id,
             'threats': [],
             'remediations': [],
@@ -48,7 +48,7 @@ class RealtimeDashboardService:
             'threat_id': threat_id,
             'events': [
                 {
-                    'timestamp': datetime.utcnow().isoformat(),
+                    'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
                     'event_type': 'detected',
                     'details': 'Threat detected'
                 }
@@ -71,7 +71,7 @@ class RealtimeDashboardService:
                 'pending': 2,
                 'current_action': 'Isolating network'
             },
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         return progress
@@ -86,7 +86,7 @@ class RealtimeDashboardService:
     def get_dashboard_diff(self, last_state: Dict, current_state: Dict) -> Dict:
         """Calculate incremental diff for efficient updates."""
         diff = {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'changes': []
         }
 
@@ -141,7 +141,7 @@ class RealtimeDashboardService:
 
     def get_playback_history(self, threat_id: str, duration_minutes: int = 60) -> List[Dict]:
         """Get historical events for playback (replay last N minutes)."""
-        cutoff_time = datetime.utcnow() - timedelta(minutes=duration_minutes)
+        cutoff_time = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=duration_minutes)
         history = []
 
         # In real implementation, would fetch from audit trail
@@ -151,7 +151,7 @@ class RealtimeDashboardService:
     def get_dashboard_metrics(self) -> Dict:
         """Get current dashboard metrics."""
         return {
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'total_threats': 0,
             'active_threats': 0,
             'remediated': 0,
@@ -165,8 +165,8 @@ class RealtimeDashboardService:
         """Get dashboard state for specific connection."""
         return {
             'connection_id': connection_id,
-            'connected_at': datetime.utcnow().isoformat(),
-            'last_update': datetime.utcnow().isoformat(),
+            'connected_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+            'last_update': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'subscriptions': []
         }
 

@@ -2,7 +2,7 @@ import pytest
 import json
 import sys
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch, call
 from dataclasses import asdict
 
@@ -56,7 +56,7 @@ def mock_detector():
     threat_1.rule_id = 'rule-1'
     threat_1.severity = 8
     threat_1.account_id = '123456789'
-    threat_1.timestamp = datetime.utcnow()
+    threat_1.timestamp = datetime.now(timezone.utc).replace(tzinfo=None)
     threat_1.message = 'Connection spike detected'
     threat_1.evidence = [{'instance_id': 'i-123', 'count': 20}]
 
@@ -65,7 +65,7 @@ def mock_detector():
     threat_2.rule_id = 'rule-2'
     threat_2.severity = 5
     threat_2.account_id = '123456789'
-    threat_2.timestamp = datetime.utcnow()
+    threat_2.timestamp = datetime.now(timezone.utc).replace(tzinfo=None)
     threat_2.message = 'Auth failures detected'
     threat_2.evidence = [{'failed_logins': 10}]
 
@@ -85,7 +85,7 @@ def mock_responder():
     response_1.failed_actions = 0
     response_1.pending_approval_actions = 0
     response_1.approval_status = 'AUTO_APPROVED'
-    response_1.timestamp = datetime.utcnow().isoformat() + 'Z'
+    response_1.timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
     response_1.execution_time_seconds = 1.5
     response_1.results = []
 
@@ -97,7 +97,7 @@ def mock_responder():
     response_2.failed_actions = 0
     response_2.pending_approval_actions = 0
     response_2.approval_status = 'AUTO_APPROVED'
-    response_2.timestamp = datetime.utcnow().isoformat() + 'Z'
+    response_2.timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
     response_2.execution_time_seconds = 0.8
     response_2.results = []
 
@@ -248,7 +248,7 @@ def test_handle_evaluation_with_failed_response(handler, mock_detector, mock_res
     failed_response.failed_actions = 2
     failed_response.pending_approval_actions = 0
     failed_response.approval_status = 'PENDING'
-    failed_response.timestamp = datetime.utcnow().isoformat() + 'Z'
+    failed_response.timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
     failed_response.execution_time_seconds = 0.5
     failed_response.results = []
 
@@ -258,7 +258,7 @@ def test_handle_evaluation_with_failed_response(handler, mock_detector, mock_res
     threat.rule_id = 'rule-1'
     threat.severity = 8
     threat.account_id = '123456789'
-    threat.timestamp = datetime.utcnow()
+    threat.timestamp = datetime.now(timezone.utc).replace(tzinfo=None)
     threat.message = 'Test threat'
     threat.evidence = []
 
@@ -290,7 +290,7 @@ def test_handle_evaluation_with_missing_rule(handler, mock_rules_repo, mock_dete
     threat.rule_id = 'missing-rule'
     threat.severity = 8
     threat.account_id = '123456789'
-    threat.timestamp = datetime.utcnow()
+    threat.timestamp = datetime.now(timezone.utc).replace(tzinfo=None)
     threat.message = 'Test threat'
     threat.evidence = []
 
@@ -314,7 +314,7 @@ def test_threat_to_dict_conversion(handler):
     threat.rule_id = 'rule-1'
     threat.severity = 8
     threat.account_id = '123456789'
-    threat.timestamp = datetime.utcnow()
+    threat.timestamp = datetime.now(timezone.utc).replace(tzinfo=None)
     threat.message = 'Test threat'
     threat.evidence = [{'key': 'value'}]
 
@@ -338,7 +338,7 @@ def test_orchestration_result_to_dict_conversion(handler):
     result.failed_actions = 0
     result.pending_approval_actions = 0
     result.approval_status = 'AUTO_APPROVED'
-    result.timestamp = datetime.utcnow().isoformat() + 'Z'
+    result.timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
     result.execution_time_seconds = 1.5
     result.results = []
 
@@ -470,7 +470,7 @@ def test_evaluation_isolates_threat_processing_errors(handler, mock_responder, m
     threat_1.rule_id = 'rule-1'
     threat_1.severity = 8
     threat_1.account_id = '123456789'
-    threat_1.timestamp = datetime.utcnow()
+    threat_1.timestamp = datetime.now(timezone.utc).replace(tzinfo=None)
     threat_1.message = 'Threat 1'
     threat_1.evidence = []
 
@@ -479,7 +479,7 @@ def test_evaluation_isolates_threat_processing_errors(handler, mock_responder, m
     threat_2.rule_id = 'rule-2'
     threat_2.severity = 5
     threat_2.account_id = '123456789'
-    threat_2.timestamp = datetime.utcnow()
+    threat_2.timestamp = datetime.now(timezone.utc).replace(tzinfo=None)
     threat_2.message = 'Threat 2'
     threat_2.evidence = []
 
@@ -494,7 +494,7 @@ def test_evaluation_isolates_threat_processing_errors(handler, mock_responder, m
     success_response.failed_actions = 0
     success_response.pending_approval_actions = 0
     success_response.approval_status = 'AUTO_APPROVED'
-    success_response.timestamp = datetime.utcnow().isoformat() + 'Z'
+    success_response.timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
     success_response.execution_time_seconds = 0.5
     success_response.results = []
 
@@ -522,7 +522,7 @@ def test_evaluation_with_empty_threat_evidence(handler, mock_detector, sample_ev
     threat.rule_id = 'rule-1'
     threat.severity = 5
     threat.account_id = '123456789'
-    threat.timestamp = datetime.utcnow()
+    threat.timestamp = datetime.now(timezone.utc).replace(tzinfo=None)
     threat.message = 'Threat with no evidence'
     threat.evidence = []
 

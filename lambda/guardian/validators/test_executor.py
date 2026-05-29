@@ -4,7 +4,7 @@ Executes rules against sample logs for testing and validation.
 Provides detailed results on rule matches and threat detection.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, asdict
 import time
@@ -155,7 +155,7 @@ class TestExecutor:
             "rule_id": rule.get("rule_id", "test-rule"),
             "severity": rule.get("priority", 5),
             "account_id": account_id or "test-account",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             "evidence_count": len(matched_logs),
         }
 

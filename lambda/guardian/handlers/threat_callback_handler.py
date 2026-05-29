@@ -1,7 +1,7 @@
 """Threat Callback Handler - Webhook endpoint for real-time threat detection."""
 
 from typing import Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import hmac
 import hashlib
 import json
@@ -34,7 +34,7 @@ class ThreatCallbackHandler:
             }
         """
         result = {
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         try:
@@ -121,7 +121,7 @@ class ThreatCallbackHandler:
         """
         result = {
             'threat_id': threat.get('threat_id'),
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         try:

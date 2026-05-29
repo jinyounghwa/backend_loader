@@ -1,7 +1,7 @@
 """Sprint 39 Phase 2: Resource Waste Detection"""
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 import sys
 from pathlib import Path
@@ -38,7 +38,7 @@ def test_detect_idle_resources():
                         'InstanceId': 'i-idle-123',
                         'InstanceType': 't3.medium',
                         'State': {'Name': 'running'},
-                        'LaunchTime': datetime.utcnow() - timedelta(days=60)
+                        'LaunchTime': datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=60)
                     }
                 ]
             }
@@ -67,7 +67,7 @@ def test_detect_unattached_volumes():
                 'VolumeId': 'vol-unattached-1',
                 'Size': 100,
                 'State': 'available',
-                'CreateTime': datetime.utcnow() - timedelta(days=30)
+                'CreateTime': datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=30)
             },
             {
                 'VolumeId': 'vol-attached-1',
@@ -149,13 +149,13 @@ def test_detect_snapshot_waste():
         'Snapshots': [
             {
                 'SnapshotId': 'snap-old-1',
-                'StartTime': datetime.utcnow() - timedelta(days=180),
+                'StartTime': datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=180),
                 'VolumeSize': 100,
                 'State': 'completed'
             },
             {
                 'SnapshotId': 'snap-recent-1',
-                'StartTime': datetime.utcnow() - timedelta(days=7),
+                'StartTime': datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=7),
                 'VolumeSize': 50,
                 'State': 'completed'
             }
@@ -230,7 +230,7 @@ def test_get_removal_candidates():
                         'InstanceId': 'i-candidate-1',
                         'InstanceType': 't3.small',
                         'State': {'Name': 'stopped'},
-                        'LaunchTime': datetime.utcnow() - timedelta(days=60)
+                        'LaunchTime': datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=60)
                     }
                 ]
             }

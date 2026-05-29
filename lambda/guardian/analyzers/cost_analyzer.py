@@ -3,7 +3,7 @@
 import logging
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 
 logger = logging.getLogger(__name__)
@@ -59,7 +59,7 @@ class CostAnalyzer:
         """
         if date is None:
             # 어제 비용 분석 (실시간 데이터는 1-2일 지연)
-            date = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
+            date = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=1)).strftime("%Y-%m-%d")
 
         try:
             # 특정 날짜 비용 조회
@@ -88,7 +88,7 @@ class CostAnalyzer:
                     increase_percent=increase_percent,
                     message=f"Daily cost ${today_cost:.2f} exceeds threshold ${self.daily_threshold:.2f} "
                             f"({increase_percent:+.1f}% vs yesterday)",
-                    timestamp=datetime.utcnow().isoformat() + "Z"
+                    timestamp=datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
                 )
                 logger.warning(f"Daily cost threat detected: {threat.message}")
                 return threat
@@ -113,7 +113,7 @@ class CostAnalyzer:
             월말 예상 비용이 임계값을 초과하면 CostThreat, 정상이면 None
         """
         try:
-            today = datetime.utcnow()
+            today = datetime.now(timezone.utc).replace(tzinfo=None)
             month_start = today.replace(day=1)
 
             # 월초부터 어제까지 누적 비용
@@ -146,7 +146,7 @@ class CostAnalyzer:
                     increase_percent=((projected_monthly - self.monthly_threshold) / self.monthly_threshold) * 100,
                     message=f"Projected monthly cost ${projected_monthly:.2f} exceeds threshold ${self.monthly_threshold:.2f} "
                             f"(${month_to_date_cost:.2f} so far)",
-                    timestamp=datetime.utcnow().isoformat() + "Z"
+                    timestamp=datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
                 )
                 logger.warning(f"Monthly projection threat detected: {threat.message}")
                 return threat
@@ -168,7 +168,7 @@ class CostAnalyzer:
             [(service, cost), ...] 비용 내림차순 정렬
         """
         if date is None:
-            date = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
+            date = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=1)).strftime("%Y-%m-%d")
 
         try:
             response = self.explorer.get_cost_and_usage(
@@ -227,8 +227,8 @@ class CostAnalyzer:
 
         try:
             # 최근 7일 데이터 기반 분석
-            start_date = (datetime.utcnow() - timedelta(days=7)).strftime("%Y-%m-%d")
-            end_date = (datetime.utcnow() - timedelta(days=1)).strftime("%Y-%m-%d")
+            start_date = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=7)).strftime("%Y-%m-%d")
+            end_date = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=1)).strftime("%Y-%m-%d")
 
             # EC2 인스턴스 비용 분석
             ec2_costs = self._analyze_ec2_usage(start_date, end_date)
@@ -243,7 +243,7 @@ class CostAnalyzer:
                         threshold=0,
                         increase_percent=0,
                         message=f"Unused EC2 instance {instance_id}: ${cost:.2f}/week, CPU {cpu_percent:.1f}%",
-                        timestamp=datetime.utcnow().isoformat() + "Z"
+                        timestamp=datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
                     )
                     threats.append(threat)
                     logger.warning(f"Unused resource detected: {threat.message}")

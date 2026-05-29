@@ -1,6 +1,6 @@
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List
 
 
@@ -226,7 +226,7 @@ class RemediationOrchestrator:
             'resource_type': res_type,
             'action': action,
             'status': status,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         }
 
     def _threat_affects_resource(self, threat: Dict, resource: Dict) -> bool:

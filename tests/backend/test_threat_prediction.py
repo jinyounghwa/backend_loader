@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import sys
 from pathlib import Path
@@ -30,7 +30,7 @@ def test_predict_threats_with_sufficient_data(threat_prediction_model, mock_dyna
     # 30일 치 위협 데이터 생성
     historical_threats = []
     for i in range(30):
-        date = (datetime.utcnow() - timedelta(days=i)).isoformat()
+        date = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=i)).isoformat()
         for j in range(2 + i % 5):  # 일일 2-6개 위협
             historical_threats.append({
                 'threat_id': f'threat-{i}-{j}',
@@ -63,7 +63,7 @@ def test_train_model(threat_prediction_model, mock_dynamodb):
 
     historical_threats = []
     for i in range(20):
-        date = (datetime.utcnow() - timedelta(days=i)).isoformat()
+        date = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=i)).isoformat()
         historical_threats.append({
             'threat_id': f'threat-{i}',
             'account_id': 'test-account',
@@ -91,7 +91,7 @@ def test_predict_with_seasonality(threat_prediction_model, mock_dynamodb):
     # 계절성 패턴을 가진 데이터 (일주일 주기)
     historical_threats = []
     for day in range(30):
-        date = (datetime.utcnow() - timedelta(days=day)).isoformat()
+        date = (datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=day)).isoformat()
         day_of_week = day % 7
         threat_count = 5 if day_of_week < 5 else 2  # 평일 많음, 주말 적음
 
@@ -128,7 +128,7 @@ def test_prediction_confidence_score(threat_prediction_model):
     # 모델 학습 후 신뢰도 증가
     threat_prediction_model.models['test-account'] = {
         'model': Mock(),
-        'trained_at': datetime.utcnow().isoformat(),
+        'trained_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         'data_points': 30
     }
     confidence = threat_prediction_model.get_prediction_confidence('test-account')

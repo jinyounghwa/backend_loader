@@ -2,7 +2,7 @@ import json
 import asyncio
 import logging
 from typing import Dict, List, Any, Set
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ class DashboardBroadcaster:
             'threat_type': threat.get('threat_type'),
             'severity': threat.get('severity'),
             'rule_id': threat.get('rule_id'),
-            'timestamp': threat.get('timestamp', datetime.utcnow().isoformat()),
+            'timestamp': threat.get('timestamp', datetime.now(timezone.utc).replace(tzinfo=None).isoformat()),
             'evidence_count': len(threat.get('evidence', [])),
             'account_id': threat.get('account_id'),
             'recommended_playbooks': threat.get('recommended_playbooks', [])
@@ -81,7 +81,7 @@ class DashboardBroadcaster:
             'playbook_id': action.get('playbook_id'),
             'action_type': action.get('action_type'),
             'status': action.get('status'),
-            'timestamp': action.get('timestamp', datetime.utcnow().isoformat()),
+            'timestamp': action.get('timestamp', datetime.now(timezone.utc).replace(tzinfo=None).isoformat()),
             'cost': action.get('cost', 0)
         }
 
@@ -108,7 +108,7 @@ class DashboardBroadcaster:
             'threat_id': feedback.get('threat_id'),
             'is_correct': feedback.get('is_correct'),
             'severity': feedback.get('severity'),
-            'timestamp': feedback.get('timestamp', datetime.utcnow().isoformat()),
+            'timestamp': feedback.get('timestamp', datetime.now(timezone.utc).replace(tzinfo=None).isoformat()),
             'model_accuracy': round(current_accuracy, 4)
         }
 
@@ -138,7 +138,7 @@ class DashboardBroadcaster:
                 playbook.get('executed_actions', 0) / playbook.get('total_actions', 1) * 100
                 if playbook.get('total_actions', 0) > 0 else 0
             ),
-            'timestamp': playbook.get('timestamp', datetime.utcnow().isoformat())
+            'timestamp': playbook.get('timestamp', datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
         }
 
         await self.broadcast_to_all(message)
@@ -165,7 +165,7 @@ class DashboardBroadcaster:
             'avg_response_time_ms': round(metrics.get('avg_response_time_ms', 0), 2),
             'total_cost_1h': round(metrics.get('total_cost_1h', 0), 2),
             'top_threat_types': metrics.get('top_threat_types', []),
-            'timestamp': metrics.get('timestamp', datetime.utcnow().isoformat())
+            'timestamp': metrics.get('timestamp', datetime.now(timezone.utc).replace(tzinfo=None).isoformat())
         }
 
         await self.broadcast_to_all(message)

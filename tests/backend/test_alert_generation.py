@@ -6,7 +6,7 @@ Covers AlertHandler, AlertFormatter, and integration with responders.
 
 import pytest
 from unittest.mock import MagicMock, patch
-from datetime import datetime
+from datetime import datetime, timezone
 import sys
 from pathlib import Path
 
@@ -48,7 +48,7 @@ class TestAlertFormatter:
             "evidence_count": 3,
             "message": "Auth failures detected",
             "color": "#FFFF00",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
         }
 
         embed = AlertFormatter.format_discord_embed(alert)
@@ -90,7 +90,7 @@ class TestAlertHandler:
             rule_id="rule-1",
             severity=8,
             account_id="acc-1",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
             message="Connection spike detected: 15 connections",
             evidence=[{"event": "connect"}, {"event": "connect"}],
         )
@@ -111,7 +111,7 @@ class TestAlertHandler:
             rule_id="rule-1",
             severity=9,
             account_id="acc-1",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
             message="Critical threat",
             evidence=[],
         )
@@ -126,7 +126,7 @@ class TestAlertHandler:
             rule_id="rule-1",
             severity=7,
             account_id="acc-1",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
             message="High severity threat",
             evidence=[],
         )
@@ -141,7 +141,7 @@ class TestAlertHandler:
             rule_id="rule-1",
             severity=5,
             account_id="acc-1",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
             message="Test threat",
             evidence=[{"id": i} for i in range(10)],
         )
@@ -158,7 +158,7 @@ class TestAlertHandler:
             rule_id="rule-1",
             severity=5,
             account_id="acc-1",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc).replace(tzinfo=None),
             message="Test message",
             evidence=[],
         )

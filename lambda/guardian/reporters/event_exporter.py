@@ -3,6 +3,9 @@
 import csv
 import json
 import logging
+import os
+import tempfile
+import uuid
 from datetime import datetime, timedelta, timezone
 from io import StringIO
 from typing import Any, Dict, List, Optional, Union
@@ -48,15 +51,20 @@ class EventExporter:
             raise ValueError(f"Invalid format. Must be one of: {cls.ALLOWED_FORMATS}")
 
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        # Use the platform temp dir (honours $TMPDIR; /tmp on Lambda) plus a
+        # random suffix so report paths are not predictable and never collide
+        # when two exports happen within the same second.
+        tmp_dir = tempfile.gettempdir()
+        unique = uuid.uuid4().hex[:8]
 
         if format_str == "csv":
-            file_path = f"/tmp/report_{timestamp}.csv"
+            file_path = os.path.join(tmp_dir, f"report_{timestamp}_{unique}.csv")
             content = cls._export_to_csv(events)
         elif format_str == "pdf":
-            file_path = f"/tmp/report_{timestamp}.pdf"
+            file_path = os.path.join(tmp_dir, f"report_{timestamp}_{unique}.pdf")
             content = cls._export_to_pdf(events, summary)
         else:  # json
-            file_path = f"/tmp/report_{timestamp}.json"
+            file_path = os.path.join(tmp_dir, f"report_{timestamp}_{unique}.json")
             content = cls._export_to_json(events)
 
         return file_path, content

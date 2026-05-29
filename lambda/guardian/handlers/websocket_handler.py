@@ -275,3 +275,132 @@ class WebSocketHandler:
         except Exception as e:
             logger.error(f"Error getting active connections: {e}")
             return {"error": str(e)}
+
+
+# ============================================================================
+# API Gateway WebSocket route handlers ($connect / $disconnect / $default)
+#
+# These are the Lambda entry points wired to API Gateway WebSocket routes.
+# Connections are authenticated on $connect via a query-string token before
+# any state is registered, so unauthenticated clients are rejected with 401
+# and never reach the broadcast/subscription paths.
+# ============================================================================
+
+
+def _json_response(status_code: int, body: Dict[str, Any]) -> Dict[str, Any]:
+    """Build an API Gateway proxy response with a JSON body."""
+    return {"statusCode": status_code, "body": json.dumps(body)}
+
+
+async def handle_connect(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """$connect route: authenticate the client before registering the connection.
+
+    A token must be supplied via ``queryStringParameters.token``. Missing or
+    invalid tokens are rejected with HTTP 401 and no connection state is created.
+    """
+    from guardian.responders.websocket_notifier import connect_client
+
+    request_context = event.get("requestContext") or {}
+    connection_id = request_context.get("connectionId")
+
+    query_params = event.get("queryStringParameters") or {}
+    token = query_params.get("token")
+
+    if not token:
+        return _json_response(401, {"status": "unauthorized", "error": "Missing token"})
+
+    result = await connect_client(connection_id, token)
+    if result.get("status") != "connected":
+        return _json_response(401, {"status": "unauthorized", "error": "Invalid token"})
+
+    return _json_response(200, {"status": "connected", "connection_id": connection_id})
+
+
+async def handle_disconnect(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """$disconnect route: clean up connection state."""
+    from guardian.responders.websocket_notifier import disconnect_client
+
+    request_context = event.get("requestContext") or {}
+    connection_id = request_context.get("connectionId")
+
+    await disconnect_client(connection_id)
+    return _json_response(200, {"status": "disconnected", "connection_id": connection_id})
+
+
+async def handle_default(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """$default route: process client messages (subscribe / unsubscribe / ping)."""
+    from guardian.responders.websocket_notifier import handle_client_message
+
+    request_context = event.get("requestContext") or {}
+    connection_id = request_context.get("connectionId")
+
+    raw_body = event.get("body") or "{}"
+    try:
+        message_body = json.loads(raw_body)
+    except (ValueError, TypeError):
+        return _json_response(400, {"status": "error", "error": "Invalid JSON body"})
+
+    result = await handle_client_message(connection_id, message_body)
+    return _json_response(200, result)
+
+
+async def handle_threat_broadcast(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """Broadcast a threat score to all connected clients.
+
+    The threat score is validated to be within the documented 0-10 range to
+    avoid broadcasting malformed/out-of-range data to clients.
+    """
+    from guardian.responders.websocket_notifier import broadcast_threat_update
+
+    raw_body = event.get("body") or "{}"
+    try:
+        payload = json.loads(raw_body)
+    except (ValueError, TypeError):
+        return _json_response(400, {"status": "error", "error": "Invalid JSON body"})
+
+    threat_score = payload.get("threat_score")
+    severity = payload.get("severity", "UNKNOWN")
+
+    if not isinstance(threat_score, (int, float)) or not 0 <= threat_score <= 10:
+        return _json_response(
+            400, {"status": "error", "error": "threat_score must be between 0 and 10"}
+        )
+
+    result = await broadcast_threat_update(float(threat_score), severity)
+    return _json_response(200, result)
+
+
+async def handle_anomaly_alert(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """Send an anomaly alert to a specific connection."""
+    from guardian.responders.websocket_notifier import send_anomaly_alert
+
+    raw_body = event.get("body") or "{}"
+    try:
+        payload = json.loads(raw_body)
+    except (ValueError, TypeError):
+        return _json_response(400, {"status": "error", "error": "Invalid JSON body"})
+
+    connection_id = payload.get("connection_id")
+    anomaly_type = payload.get("anomaly_type", "unknown")
+    details = payload.get("details", {})
+
+    if not connection_id:
+        return _json_response(400, {"status": "error", "error": "connection_id is required"})
+
+    result = await send_anomaly_alert(connection_id, anomaly_type, details)
+    status_code = 200 if result.get("status") == "sent" else 404
+    return _json_response(status_code, result)
+
+
+async def handle_connection_stats(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """Return aggregated stats across the notifier, connection manager and buffer."""
+    from guardian.responders.connection_manager import get_connection_stats
+    from guardian.responders.notification_buffer import get_buffer_stats
+    from guardian.responders.websocket_notifier import _ws_notifier
+
+    stats = {
+        "ws_notifier": {"active_connections": _ws_notifier.get_active_connections()},
+        "conn_manager": get_connection_stats(),
+        "notification_buffer": get_buffer_stats(),
+    }
+    return _json_response(200, stats)

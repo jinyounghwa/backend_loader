@@ -1,7 +1,7 @@
 import logging
 import uuid
 from typing import Dict, List, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ class AdaptiveAutoResponse:
             'confidence': round(adjusted_confidence, 3),
             'estimated_cost': cost,
             'reasoning': reasoning,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         self.decisions.append(result)
@@ -102,7 +102,7 @@ class AdaptiveAutoResponse:
             'outcome': outcome.get('status', 'unknown'),
             'effectiveness_score': effectiveness,
             'user_rating': user_rating,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         self.feedback_history.append(feedback)
@@ -136,7 +136,7 @@ class AdaptiveAutoResponse:
                 'trend': str  # 'improving', 'declining', 'stable'
             }
         """
-        cutoff_time = datetime.utcnow() - timedelta(days=days)
+        cutoff_time = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
 
         # 필터링된 피드백
         filtered = [

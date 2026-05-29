@@ -1,7 +1,7 @@
 """Playbook Execution Engine for orchestrating custom remediation workflows."""
 
 from typing import List, Dict, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 
@@ -64,7 +64,7 @@ class PlaybookExecutionEngine:
             'severity': threat.get('severity'),
             'account_id': threat.get('account_id'),
             'status': 'IN_PROGRESS',
-            'started_at': datetime.utcnow().isoformat(),
+            'started_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'actions_executed': [],
             'actions_failed': [],
             'rollback_actions': []
@@ -84,11 +84,11 @@ class PlaybookExecutionEngine:
                 # Check if we should skip on failure
                 if not action_config.get('skip_on_failure', False):
                     execution['status'] = 'FAILED'
-                    execution['completed_at'] = datetime.utcnow().isoformat()
+                    execution['completed_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
                     return execution
 
         execution['status'] = 'COMPLETED'
-        execution['completed_at'] = datetime.utcnow().isoformat()
+        execution['completed_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         return execution
 
     def execute_action(self, action_config: Dict, threat: Dict, execution: Dict) -> Dict:
@@ -102,7 +102,7 @@ class PlaybookExecutionEngine:
             'order': action_config.get('order', 0),
             'success': False,
             'message': '',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
         try:
@@ -215,7 +215,7 @@ class PlaybookExecutionEngine:
             execution = self.executions[execution_id]
             if execution['status'] == 'IN_PROGRESS':
                 execution['status'] = 'STOPPED'
-                execution['stopped_at'] = datetime.utcnow().isoformat()
+                execution['stopped_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
                 return True
         return False
 
@@ -231,7 +231,7 @@ class PlaybookExecutionEngine:
             self._rollback_action(action)
 
         execution['status'] = 'ROLLED_BACK'
-        execution['rolled_back_at'] = datetime.utcnow().isoformat()
+        execution['rolled_back_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
 
         return {
             'success': True,

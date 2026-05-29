@@ -1,7 +1,7 @@
 """Report Generator - Daily, weekly, and monthly remediation reports."""
 
 from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 
 
@@ -147,7 +147,7 @@ class ReportGenerator:
             },
             'top_threats': top_threats,
             'summary': f"Daily Report ({date}): {total_detected} threats detected, {total_remediated} remediated ({success_rate*100:.0f}% success). Net savings: ${net_savings:.2f}",
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
     def analyze_trends(self, remediation_history: List[Dict], days: int = 7) -> Dict:
@@ -233,7 +233,7 @@ class ReportGenerator:
             },
             'insights': insights,
             'recommendations': recommendations,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
     def calculate_cost_impact(self, remediation_history: List[Dict], start_date: str, end_date: str) -> Dict:
@@ -322,7 +322,7 @@ class ReportGenerator:
             'cost_by_action_type': {k: round(v, 2) for k, v in cost_by_action.items()},
             'prevented_cost_by_severity': {k: round(v, 2) for k, v in prevented_by_severity.items()},
             'summary': f"Cost Impact ({start_date} to {end_date}): ${estimated_prevented:.2f} prevented vs ${total_remediation_cost:.2f} spent. Net savings: ${net_savings:.2f} (ROI: {roi:.0f}%)",
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
         }
 
     def generate_compliance_report(self, remediation_history: List[Dict], account_id: str) -> Dict:
@@ -378,7 +378,7 @@ class ReportGenerator:
         return {
             'report_type': 'compliance',
             'account_id': account_id,
-            'generated_at': datetime.utcnow().isoformat(),
+            'generated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
             'total_threats_processed': total_threats,
             'total_remediations': total_remediations,
             'approval_required_count': approval_required,

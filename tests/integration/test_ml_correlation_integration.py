@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 import sys
 from pathlib import Path
@@ -33,7 +33,7 @@ def ml_pipeline(mock_dynamodb):
 @pytest.fixture
 def sample_threats():
     threats = []
-    base_time = datetime.utcnow()
+    base_time = datetime.now(timezone.utc).replace(tzinfo=None)
 
     # 위협 데이터: 패턴이 있는 시퀀스
     threat_sequence = [
