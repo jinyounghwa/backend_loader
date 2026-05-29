@@ -1,223 +1,259 @@
-"""Sprint 43 Phase 4: Cost Optimization Recommendations"""
+"""Sprint 69 Phase 3: Predictive Cost Management (15 tests)"""
 
 import pytest
-from datetime import datetime, timezone
-from unittest.mock import MagicMock
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from optimizers.cost_optimizer_engine import CostOptimizerEngine
-from calculators.roi_calculator import ROICalculator
+import numpy as np
 
 
-# ==========================================
-# Test Group 1: Resource Utilization Analysis (3 tests)
-# ==========================================
+class TestInstanceSizing:
+    """Test EC2 instance right-sizing."""
 
-def test_cost_optimizer_engine_initialization():
-    """Test cost optimizer engine initialization"""
-    cloudwatch_client = MagicMock()
+    def test_right_size_overprovisioned_instance(self):
+        """✅ Recommend downsizing overprovisioned instance."""
+        from guardian.optimizers.cost_optimizer import InstanceSizer
 
-    optimizer = CostOptimizerEngine(cloudwatch_client)
-
-    assert optimizer is not None
-    assert optimizer.cloudwatch is not None
-
-
-def test_analyze_resource_utilization():
-    """Test analyzing resource utilization metrics"""
-    cloudwatch_client = MagicMock()
-
-    optimizer = CostOptimizerEngine(cloudwatch_client)
-
-    resources = [
-        {
-            'resource_id': 'i-123456',
-            'resource_type': 'EC2',
-            'cpu_utilization': 15.2,
-            'memory_utilization': 20.5,
-            'network_in': 1000,
-            'network_out': 500
-        },
-        {
-            'resource_id': 'i-789012',
-            'resource_type': 'EC2',
-            'cpu_utilization': 85.0,
-            'memory_utilization': 75.0,
-            'network_in': 50000,
-            'network_out': 30000
+        sizer = InstanceSizer()
+        current = {
+            'type': 't3.xlarge',
+            'monthly_cost': 131,
+            'avg_cpu_usage': 15,
+            'avg_memory_usage': 20
         }
-    ]
 
-    analysis = optimizer.analyze_resource_utilization(resources)
+        recommendation = sizer.recommend(current)
 
-    assert analysis is not None
-    assert isinstance(analysis, dict)
+        assert recommendation['recommended_type'] != 't3.xlarge'
+        assert recommendation['monthly_savings'] > 0
 
+    def test_instance_sizing_with_different_families(self):
+        """✅ Recommend across instance families."""
+        from guardian.optimizers.cost_optimizer import InstanceSizer
 
-def test_generate_rightsizing_recommendations():
-    """Test generating right-sizing recommendations"""
-    cloudwatch_client = MagicMock()
-
-    optimizer = CostOptimizerEngine(cloudwatch_client)
-
-    resource = {
-        'resource_id': 'i-123456',
-        'resource_type': 'EC2',
-        'instance_type': 't3.large',
-        'cpu_utilization': 12.0,
-        'memory_utilization': 18.5,
-        'monthly_cost': 45.00
-    }
-
-    recommendations = optimizer.generate_rightsizing_recommendations(resource)
-
-    assert recommendations is not None
-    assert isinstance(recommendations, list)
-
-
-# ==========================================
-# Test Group 2: ROI Calculation (3 tests)
-# ==========================================
-
-def test_roi_calculator_initialization():
-    """Test ROI calculator initialization"""
-    calculator = ROICalculator()
-
-    assert calculator is not None
-
-
-def test_calculate_implementation_cost():
-    """Test calculating implementation cost for optimization"""
-    calculator = ROICalculator()
-
-    optimization = {
-        'optimization_type': 'right_sizing',
-        'resource_id': 'i-123456',
-        'effort_hours': 2,
-        'hourly_rate': 50
-    }
-
-    cost = calculator.calculate_implementation_cost(optimization)
-
-    assert cost is not None
-    assert isinstance(cost, (int, float))
-
-
-def test_calculate_annual_savings():
-    """Test calculating annual savings from optimization"""
-    calculator = ROICalculator()
-
-    optimization = {
-        'current_monthly_cost': 100.0,
-        'optimized_monthly_cost': 60.0,
-        'implementation_cost': 500.0
-    }
-
-    savings = calculator.calculate_annual_savings(optimization)
-
-    assert savings is not None
-    assert isinstance(savings, dict)
-
-
-# ==========================================
-# Test Group 3: Optimization Recommendations (2 tests)
-# ==========================================
-
-def test_calculate_payback_period():
-    """Test calculating payback period for optimization"""
-    calculator = ROICalculator()
-
-    optimization = {
-        'implementation_cost': 500.0,
-        'monthly_savings': 40.0
-    }
-
-    payback_period = calculator.calculate_payback_period(optimization)
-
-    assert payback_period is not None
-    assert isinstance(payback_period, (int, float))
-
-
-def test_prioritize_by_roi():
-    """Test prioritizing optimizations by ROI"""
-    calculator = ROICalculator()
-
-    optimizations = [
-        {
-            'optimization_id': 'opt-001',
-            'annual_savings': 2000,
-            'implementation_cost': 500
-        },
-        {
-            'optimization_id': 'opt-002',
-            'annual_savings': 1000,
-            'implementation_cost': 200
-        },
-        {
-            'optimization_id': 'opt-003',
-            'annual_savings': 5000,
-            'implementation_cost': 1000
+        sizer = InstanceSizer()
+        current = {
+            'type': 'm5.xlarge',
+            'monthly_cost': 192,
+            'avg_cpu_usage': 20,
+            'avg_memory_usage': 25
         }
-    ]
 
-    prioritized = calculator.prioritize_by_roi(optimizations)
+        recommendation = sizer.recommend(current)
 
-    assert prioritized is not None
-    assert isinstance(prioritized, list)
-    assert len(prioritized) <= len(optimizations)
+        assert 'recommended_type' in recommendation
+        assert 'monthly_savings' in recommendation
 
+    def test_no_downsize_needed(self):
+        """✅ Keep current size if well-sized."""
+        from guardian.optimizers.cost_optimizer import InstanceSizer
 
-# ==========================================
-# Test Group 4: Savings Tracking (2 tests)
-# ==========================================
-
-def test_estimate_annual_savings():
-    """Test estimating total annual savings"""
-    cloudwatch_client = MagicMock()
-
-    optimizer = CostOptimizerEngine(cloudwatch_client)
-
-    optimizations = [
-        {
-            'resource_id': 'i-123456',
-            'monthly_savings': 30.0
-        },
-        {
-            'resource_id': 'i-789012',
-            'monthly_savings': 20.0
-        },
-        {
-            'resource_id': 'vol-456789',
-            'monthly_savings': 10.0
+        sizer = InstanceSizer()
+        current = {
+            'type': 't3.medium',
+            'monthly_cost': 32,
+            'avg_cpu_usage': 70,
+            'avg_memory_usage': 75
         }
-    ]
 
-    annual_savings = optimizer.estimate_annual_savings(optimizations)
+        recommendation = sizer.recommend(current)
 
-    assert annual_savings is not None
-    assert isinstance(annual_savings, (int, float))
+        assert recommendation['action'] == 'no_change'
+        assert recommendation['monthly_savings'] == 0
 
 
-def test_track_optimization_impact():
-    """Test tracking optimization impact over time"""
-    cloudwatch_client = MagicMock()
+class TestRIPurchase:
+    """Test Reserved Instance recommendations."""
 
-    optimizer = CostOptimizerEngine(cloudwatch_client)
+    def test_recommend_ri_for_high_uptime(self):
+        """✅ Recommend RI for high uptime instances."""
+        from guardian.optimizers.cost_optimizer import RIPurchaseAdvisor
 
-    optimization = {
-        'optimization_id': 'opt-001',
-        'resource_id': 'i-123456',
-        'optimization_type': 'right_sizing',
-        'implementation_date': datetime.now(timezone.utc).isoformat(),
-        'pre_optimization_cost': 100.0,
-        'post_optimization_cost': 60.0,
-        'status': 'implemented'
-    }
+        advisor = RIPurchaseAdvisor()
+        instances = [{
+            'type': 't3.medium',
+            'monthly_cost': 32,
+            'uptime_percentage': 95
+        }]
 
-    impact = optimizer.track_optimization_impact(optimization)
+        recommendations = advisor.recommend_ri_purchases(instances)
 
-    assert impact is not None
-    assert isinstance(impact, dict)
+        assert len(recommendations) > 0
+        assert recommendations[0]['one_year_savings'] > 0
+
+    def test_no_ri_for_low_uptime(self):
+        """✅ Don't recommend RI for low uptime instances."""
+        from guardian.optimizers.cost_optimizer import RIPurchaseAdvisor
+
+        advisor = RIPurchaseAdvisor()
+        instances = [{
+            'type': 't3.medium',
+            'monthly_cost': 32,
+            'uptime_percentage': 50
+        }]
+
+        recommendations = advisor.recommend_ri_purchases(instances)
+
+        assert len(recommendations) == 0
+
+    def test_three_year_better_than_one_year(self):
+        """✅ Three-year RI provides greater savings."""
+        from guardian.optimizers.cost_optimizer import RIPurchaseAdvisor
+
+        advisor = RIPurchaseAdvisor()
+        instances = [{
+            'type': 't3.medium',
+            'monthly_cost': 32,
+            'uptime_percentage': 90
+        }]
+
+        recommendations = advisor.recommend_ri_purchases(instances)
+
+        assert recommendations[0]['three_year_savings'] > recommendations[0]['one_year_savings']
+
+
+class TestSpotStrategy:
+    """Test Spot instance strategies."""
+
+    def test_spot_instance_savings(self):
+        """✅ Calculate Spot instance savings."""
+        from guardian.optimizers.cost_optimizer import SpotInstanceStrategy
+
+        strategy = SpotInstanceStrategy()
+        instances = [{
+            'type': 't3.medium',
+            'monthly_cost': 32
+        }]
+
+        recommendations = strategy.recommend_spot_instances(instances)
+
+        assert len(recommendations) > 0
+        assert recommendations[0]['monthly_savings'] > 0
+
+    def test_spot_discount_by_family(self):
+        """✅ Apply correct discount rate by instance family."""
+        from guardian.optimizers.cost_optimizer import SpotInstanceStrategy
+
+        strategy = SpotInstanceStrategy()
+        instances = [
+            {'type': 't3.medium', 'monthly_cost': 32},
+            {'type': 'c5.large', 'monthly_cost': 85}
+        ]
+
+        recommendations = strategy.recommend_spot_instances(instances)
+
+        # c5 should have 75% discount, t3 should have 70%
+        assert recommendations[0]['discount_percentage'] == 70.0
+        assert recommendations[1]['discount_percentage'] == 75.0
+
+    def test_blended_spot_strategy(self):
+        """✅ Calculate blended Spot + On-Demand strategy."""
+        from guardian.optimizers.cost_optimizer import SpotInstanceStrategy
+
+        strategy = SpotInstanceStrategy()
+        instances = [
+            {'monthly_cost': 100},
+            {'monthly_cost': 200}
+        ]
+
+        result = strategy.blended_strategy(instances)
+
+        assert result['on_demand_percentage'] == 30
+        assert result['spot_percentage'] == 70
+        assert result['monthly_savings'] > 0
+
+
+class TestAutoScaling:
+    """Test auto-scaling recommendations."""
+
+    def test_predict_peak_load(self):
+        """✅ Predict future peak load."""
+        from guardian.optimizers.scaling_advisor import LoadPredictor
+
+        predictor = LoadPredictor()
+        load_history = [50 + i for i in range(30)]
+
+        predictor.fit(load_history)
+        peak = predictor.predict_peak_load(hours_ahead=24)
+
+        assert peak > 50
+
+    def test_detect_seasonality(self):
+        """✅ Detect seasonal patterns in load."""
+        from guardian.optimizers.scaling_advisor import LoadPredictor
+
+        predictor = LoadPredictor()
+        # Create weekly pattern
+        load_history = []
+        for _ in range(4):
+            load_history.extend([20, 30, 40, 50, 60, 70, 80])
+
+        predictor.fit(load_history)
+        seasonality = predictor.detect_seasonality()
+
+        assert 'has_seasonality' in seasonality
+
+    def test_recommend_scaling_policy(self):
+        """✅ Recommend auto-scaling policy."""
+        from guardian.optimizers.scaling_advisor import AutoScalingAdvisor
+
+        advisor = AutoScalingAdvisor()
+        load_history = [40 + i * 0.5 for i in range(50)]
+
+        policy = advisor.recommend_policy(load_history)
+
+        assert 'min_instances' in policy
+        assert 'max_instances' in policy
+        assert policy['max_instances'] >= policy['min_instances']
+
+
+class TestCostSimulation:
+    """Test cost impact simulation."""
+
+    def test_simulate_instance_resize(self):
+        """✅ Simulate cost of instance resize."""
+        from guardian.optimizers.scaling_advisor import CostSimulator
+
+        simulator = CostSimulator()
+        changes = {
+            'current_monthly_cost': 131,
+            'instance_type': 't3.xlarge',
+            'new_instance_type': 't3.medium',
+            'purchase_model': 'on_demand'
+        }
+
+        result = simulator.simulate(changes)
+
+        assert result['new_cost'] < result['current_cost']
+        assert result['monthly_savings'] > 0
+
+    def test_simulate_reserved_instance_purchase(self):
+        """✅ Simulate RI purchase impact."""
+        from guardian.optimizers.scaling_advisor import CostSimulator
+
+        simulator = CostSimulator()
+        changes = {
+            'current_monthly_cost': 100,
+            'instance_type': 't3.medium',
+            'new_instance_type': 't3.medium',
+            'purchase_model': 'reserved',
+            'term': 3
+        }
+
+        result = simulator.simulate(changes)
+
+        assert result['new_cost'] < result['current_cost']
+
+    def test_simulate_spot_conversion(self):
+        """✅ Simulate Spot instance conversion impact."""
+        from guardian.optimizers.scaling_advisor import CostSimulator
+
+        simulator = CostSimulator()
+        changes = {
+            'current_monthly_cost': 100,
+            'instance_type': 't3.medium',
+            'new_instance_type': 't3.medium',
+            'purchase_model': 'spot'
+        }
+
+        result = simulator.simulate(changes)
+
+        assert result['monthly_savings'] > 0
+        assert result['monthly_savings'] > 50  # Spot is significant savings
