@@ -1,11 +1,17 @@
-"""Third-party platform integrations (SOAR, ticketing, etc)"""
+"""AWS Integration clients for real boto3 API calls."""
 
-from .soar_connector import SOARConnector
-from .splunk_phantom_connector import SplunkPhantomConnector
-from .swimlane_connector import SwimlaneConnector
+from .cost_explorer_client import CostExplorerClient
+from .ec2_manager import EC2Manager
+from .s3_manager import S3Manager
+from .rds_manager import RDSManager
+from .lambda_manager import LambdaManager
+from .dynamodb_manager import DynamoDBManager
 
 __all__ = [
-    'SOARConnector',
-    'SplunkPhantomConnector',
-    'SwimlaneConnector',
+    'CostExplorerClient',
+    'EC2Manager',
+    'S3Manager',
+    'RDSManager',
+    'LambdaManager',
+    'DynamoDBManager',
 ]
