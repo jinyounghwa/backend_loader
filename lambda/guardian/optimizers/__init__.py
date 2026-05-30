@@ -1,11 +1,19 @@
-"""Query Performance and Cost Optimization Modules"""
+"""Cost optimization for AWS Guardian."""
 
-from .query_cache import QueryCache
-from .performance_optimizer import PerformanceOptimizer
-from .cost_optimizer_engine import CostOptimizerEngine
+from .cost_advisor import (
+    RIPurchaseAdvisor,
+    SpotInstanceOptimizer,
+    CostForecastor,
+    OptimizationSimulator,
+    CostSavingsCalculator,
+    CostOptimizationEngine
+)
 
 __all__ = [
-    'QueryCache',
-    'PerformanceOptimizer',
-    'CostOptimizerEngine',
+    'RIPurchaseAdvisor',
+    'SpotInstanceOptimizer',
+    'CostForecastor',
+    'OptimizationSimulator',
+    'CostSavingsCalculator',
+    'CostOptimizationEngine'
 ]
