@@ -88,11 +88,13 @@
 
 ## ✅ Success Criteria
 
-- ✅ 60 tests PASS
-- ✅ K8s 클러스터 위협 탐지 정확도 > 95%
-- ✅ 취약점 스캔 시간 < 2분
-- ✅ Pod 이상 감지 < 10초
-- ✅ Helm 검증 < 5초
+- 60 tests PASS
+- K8s 클러스터 위협 탐지 기능 구현
+- 컨테이너 이미지 스캔 기능 구현
+- Pod 이상 감지 기능 구현
+- Helm 검증 기능 구현
+
+> **Note**: 위 수치는 목표이며, 실제 달성 여부는 구현 후 측정 필요
 
 ---
 
@@ -136,7 +138,7 @@
 
 ---
 
-**Sprint 80 상태:** ✅ **PLAN READY FOR IMPLEMENTATION**
+**Sprint 80 상태:** ⏳ **IN PROGRESS** (Phase 1: K8s Threat Detection 구현됨, Phase 2-4 미구현)
 
 ---
 

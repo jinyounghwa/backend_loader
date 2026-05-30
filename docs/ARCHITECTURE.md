@@ -164,20 +164,34 @@ def _handle_generic_error(self, check_name: str, error: Exception) -> CheckResul
 
 ## Execution Models
 
+### Lazy Initialization (handler.py)
+
+```python
+# lambda/guardian/handler.py
+class _LazyOrchestrator:
+    def _build(self):
+        # Heavy imports only on first invocation
+        from guardian.checkers.cost import CostChecker
+        from guardian.checkers.ec2 import EC2Checker
+        from guardian.checkers.s3 import S3Checker
+        from guardian.orchestrator import GuardianOrchestrator
+        ...
+        self._orchestrator = GuardianOrchestrator(...)
+```
+
 ### Sequential Orchestrator
 
 ```python
 # lambda/guardian/orchestrator.py
-class Orchestrator:
-    def run(self) -> Dict[str, CheckResult]:
+class GuardianOrchestrator:
+    def run_all_checks(self, event) -> Dict:
         results = {}
-        for checker_class in [EC2Checker, S3Checker, ...]:
-            checker = checker_class(...)
+        for name, checker in self.checkers.items():
             results[name] = checker.check()  # Wait for each
         return results
 ```
 
-**Timing**: ~6-7 seconds (EC2 ~1s, S3 ~2s, others ~0.5-1s each)
+**Timing**: Sum of all checker times (mock: ~80ms, real AWS: varies)
 
 **Pros**:
 - Simple logic
@@ -203,7 +217,7 @@ class ParallelOrchestrator:
         return dict(zip(names, results))
 ```
 
-**Timing**: ~2-3 seconds (limited by slowest checker, not sum)
+**Timing**: Max of all checker times (mock: ~20ms, real AWS: varies)
 
 **Pros**:
 - 3-4x faster
@@ -328,6 +342,7 @@ Benefits:
 | CloudTrail | Monitoring | Query API audit log |
 | Cost Explorer | Monitoring | Query daily costs |
 | GuardDuty | Monitoring | Query security findings |
+| RDS | Monitoring | Check database security |
 | DynamoDB | Storage | Persist findings/audit logs |
 | SSM Parameter Store | Config | Secrets management |
 | SNS | Notifications | Alert endpoints |
@@ -366,20 +381,18 @@ Minimal IAM policy (what Lambda needs):
 ### Test Pyramid
 
 ```
-            Unit Tests (42 tests, 2s)
-          /        |        \
-        EC2       S3        Cost
-      /  |  \   /  |  \   /  |  \
-    API  E2E Payload Tests ...
-
-        Integration Tests (10 tests, 5s)
-            /    |    \
-         Multi-region, Cross-account
+              Unit + Integration Tests (2392 tests, ~82s)
+          /        |        |        \
+        EC2       S3        Cost     IAM ...
+      /  |  \   /  |  \   /  |  \   /  |  \
+    API  E2E Payload Mock  Real  ...
 
      Performance Tests (optional)
          /    |    \
       Baseline, Profiling, Benchmarks
 ```
+
+> **Note**: 2327 tests pass, 4 fail, 61 skipped, 2 collection errors (as of 2026-05-30).
 
 ### Mock Strategy
 
@@ -400,11 +413,14 @@ result = checker.check()
 assert result.severity == "INFO"  # No public instances
 ```
 
-**Why not LocalStack?**
-- LocalStack is slower (30-60s startup)
-- LocalStack has API compatibility gaps
+**Why mocks for unit tests?**
 - Mocks are faster (5-10ms per call)
 - Mocks are deterministic
+- No external dependencies needed
+
+> **Note**: The project also includes LocalStack integration for integration testing
+> (see `docker-compose.yml`, `scripts/deploy-localstack.sh`). Unit tests use mocks for speed;
+> LocalStack is available for more realistic integration testing.
 
 ## Caching Strategy
 
@@ -516,8 +532,8 @@ def get_client_for_account(
 | All Checks (Parallel) | 2-3s | Max(checker times) |
 | Responders | 1-2s | Telegram, Discord API |
 | DynamoDB Write | 100-200ms | Persist audit log |
-| **Total** | 7-10s | Sequential |
-| **Total** | 3-5s | Parallel |
+| **Total (8 checkers)** | Sequential: sum of all | Sequential |
+| **Total (8 checkers)** | Parallel: max of all | Parallel |
 
 ### Memory Usage
 
@@ -526,69 +542,90 @@ def get_client_for_account(
 | Lambda Runtime | 20-30 MB | Python 3.12 |
 | Guardian Code | 10-15 MB | Imports, dependencies |
 | Checker State | 5-10 MB | Cached responses |
-| **Total** | <256 MB | Default Lambda size |
+| **Total** | <256 MB | Lambda configured at 512 MB |
 
 ## Key Design Decisions
 
-### 1. Sync-First Checkers
+### 1. Lazy Initialization
+
+**Decision**: Heavy dependencies loaded on first invocation, not at module import
+
+**Rationale**:
+- Lambda cold start optimization
+- Only load needed checkers per invocation type
+- Thread-safe double-checked locking pattern
+
+### 2. Sync-First Checkers
 
 **Decision**: All checkers use sync boto3 by default
 
 **Rationale**:
 - boto3 is mature, stable, widely-documented
-- aioboto3 is less stable and less documented
 - Thread-pool execution in Lambda is fast enough
-- Parallel orchestrator handles concurrency
+- Parallel orchestrator handles concurrency via run_in_executor
 
-### 2. Consolidated Error Handling
+### 3. Consolidated Error Handling
 
 **Decision**: All error handling flows through 2 base methods
 
 **Rationale**:
 - DRY principle: one place to maintain error logic
 - Consistent CheckResult format across all checkers
-- Easier to change error handling globally
 
-### 3. Mock-Based Testing
+### 4. Mock-Based Unit Testing + LocalStack Integration
 
-**Decision**: Tests use unittest.mock.Mock, not LocalStack
+**Decision**: Unit tests use unittest.mock.Mock; integration tests use LocalStack
 
 **Rationale**:
-- Tests run in 2 seconds vs LocalStack's 30-60s
-- No Docker Compose / LocalStack setup required
-- Mocks are deterministic and repeatable
-- Coverage is 100% of code paths
+- Unit tests: fast (mocks), deterministic, no external dependencies
+- Integration tests: more realistic via LocalStack (docker-compose.yml)
 
-### 4. DynamoDB for Persistence
+### 5. DynamoDB for Persistence
 
 **Decision**: DynamoDB instead of RDS/Postgres
 
 **Rationale**:
 - Serverless (no server to manage)
 - On-demand pricing (pay for what you use)
-- Global tables for multi-region
 - TTL auto-expiration for cleanup
 
-## Future Enhancements
+## Current Status & Future Enhancements
 
-### Planned Features
+### Currently Implemented
 
-1. **Machine Learning (ML)**
-   - Anomaly detection for cost spikes
-   - Pattern recognition for security findings
-   - Predictive alerts
+1. **8 Security/Cost Checkers**
+   - EC2, S3, Cost, IAM, CloudTrail, GuardDuty, RDS, IAM Policy Analyzer
 
-2. **Advanced Remediation**
-   - Automated policy updates
-   - Self-healing configurations
-   - Rollback capabilities
+2. **ML & Analytics Modules**
+   - Anomaly detection (IsolationForest, statistical)
+   - Cost forecasting (ARIMA)
+   - Threat correlation & profiling
+   - Behavioral analysis
 
-3. **Real-Time Streaming**
-   - Kinesis Data Streams for events
-   - WebSocket API for live dashboard
-   - Sub-second alerts
+3. **Automated Response**
+   - Auto-remediation (EC2 stop, S3 block)
+   - Incident playbooks
+   - Response orchestration
 
-4. **Compliance Reporting**
+4. **Kubernetes (Phase 1)**
+   - Basic K8s cluster monitoring
+   - API server anomaly detection
+   - RBAC validation
+   - Network policy checking
+
+### Planned Features (Not Yet Implemented)
+
+1. **Kubernetes Full Integration (Sprint 80 Phase 2-4)**
+   - Container image scanning
+   - Pod anomaly detection
+   - Helm chart validation
+
+2. **Production Verification**
+   - Real AWS deployment testing
+   - Performance benchmarking with actual API calls
+   - ML model accuracy validation
+
+3. **Compliance Reporting**
    - CIS Benchmarks
    - PCI-DSS reporting
    - SOC 2 compliance evidence
@@ -624,6 +661,6 @@ def get_client_for_account(
 
 ---
 
-**Last Updated**: May 2024  
-**Version**: 1.0  
+**Last Updated**: May 2026  
+**Version**: Current development (Sprint 80)  
 **Maintainer**: AWS Guardian Contributors

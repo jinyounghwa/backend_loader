@@ -597,6 +597,9 @@ class CheckResult:
 - **Total with orchestration**: ~2000-4000ms
 - **Network latency**: 100-300ms per API call
 
+> **Note**: Real AWS figures are estimates based on typical API latencies.
+> Actual measurements in a real AWS environment have not been conducted.
+
 ### Optimization Tips
 1. **Parallel execution**: Use `ParallelOrchestrator` for ~3x speedup
 2. **Selective checks**: Run only needed check types (cost vs security)

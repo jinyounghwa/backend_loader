@@ -15,17 +15,17 @@ This document covers performance optimization, profiling, and benchmarking strat
 
 ## Performance Targets
 
-### Lambda Execution (v1.1)
+### Lambda Execution
 
 | Scenario | Target | Notes |
 |----------|--------|-------|
 | **Cold Start** | < 2500ms | Python startup + imports + SAM overhead |
 | **Warm Invocation** | < 500ms | Subsequent calls (no startup) |
 | **Single Checker** | < 500ms | Per-checker latency (mock: 10-50ms, real: 200-500ms) |
-| **6 Checkers (Sequential)** | < 8000ms | Sum of individual checkers + overhead |
-| **6 Checkers (Parallel)** | < 2000ms | Max(checker_latencies) + asyncio overhead |
+| **8 Checkers (Sequential)** | < 8000ms | Sum of individual checkers + overhead |
+| **8 Checkers (Parallel)** | < 2000ms | Max(checker_latencies) + asyncio overhead |
 
-### API Endpoints (v1.1)
+### API Endpoints
 
 | Endpoint | Target | Notes |
 |----------|--------|-------|
@@ -344,19 +344,20 @@ checker_count | avg_duration | max_duration
 ### Recommended Lambda Configuration
 
 ```yaml
-# sam.yaml
+# sam.yaml (actual current config)
 Resources:
-  GuardianFunction:
+  GuardianCheckerFunction:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: GuardianChecker
+      CodeUri: lambda/
+      Handler: guardian/handler.lambda_handler
       MemorySize: 512        # Balanced cost/performance
-      Timeout: 30            # 30s timeout (plenty for 6 checkers)
-      EphemeralStorage: 512  # For temp file export
-      ReservedConcurrentExecutions: 10  # Prevent runaway costs
+      Timeout: 300           # 5 min timeout (SAM default)
+      Runtime: python3.12
       Environment:
         Variables:
-          # Use parallel orchestrator in production
-          ORCHESTRATOR: parallel
+          AWS_ENV: localstack  # Set to 'prod' in production
 ```
 
 ### Cost Optimization
@@ -365,9 +366,9 @@ Estimated monthly costs (assuming 1 invocation/hour):
 
 | Configuration | Invocations/mo | Avg Duration | Monthly Cost |
 |--------------|----------------|--------------|--------------|
-| Sequential (512MB) | 720 | 8s | $0.27 |
-| Parallel (512MB) | 720 | 2s | $0.08 |
-| Parallel (1GB) | 720 | 1.2s | $0.16 |
+| Sequential (512MB) | 720 | ~8s | ~$0.27 |
+| Parallel (512MB) | 720 | ~2s | ~$0.08 |
+| Parallel (1GB) | 720 | ~1.2s | ~$0.16 |
 
 **Recommendation**: Use parallel orchestrator with 512MB (cheapest, meets targets).
 
@@ -466,5 +467,9 @@ print(f"Peak memory: {peak / 1024 / 1024:.1f} MB")
 ## References
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — Orchestrator patterns
-- [CONTRIBUTING.md](CONTRIBUTING.md) — Performance baselines
-- [PERFORMANCE_BASELINE_v1.1.md](PERFORMANCE_BASELINE_v1.1.md) — Actual measurements
+- [CONTRIBUTING.md](CONTRIBUTING.md) — Development guide
+- [PERFORMANCE_BASELINE_v1.1.md](PERFORMANCE_BASELINE_v1.1.md) — Mock environment measurements
+
+> **Note**: Performance figures in this document are based on mock environments and design targets.
+> Real AWS environment measurements have not been conducted. All numbers should be verified
+> with actual AWS API calls before production use.
