@@ -1,384 +1,258 @@
-"""Threat hunting automation tests for AWS Guardian."""
-
+"""Tests for AI-powered threat hunting (Phase 1 of Sprint 77)."""
 import pytest
-from datetime import datetime
+from datetime import datetime, timezone
 
 
-class TestThreatHuntingEngine:
-    """Test automated threat hunting."""
+def now_utc() -> datetime:
+    """Get current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
 
-    def test_execute_hunting_playbook(self):
-        """✅ Execute hunting playbook."""
-        from guardian.hunting.threat_hunting import ThreatHuntingEngine
 
-        hunting = ThreatHuntingEngine()
+class TestThreatHunter:
+    """Test AI-based threat hunting."""
 
-        results = hunting.execute_playbook({
-            'playbook': 'ransomware_detection',
-            'lookback_hours': 24
+    def test_hunt_threats_basic(self):
+        """✅ Hunt threats using AI analysis."""
+        from guardian.hunting.threat_hunting import ThreatHunter
+
+        hunter = ThreatHunter()
+        result = hunter.hunt_threats({
+            'lookback_days': 7,
+            'min_confidence': 0.7
         })
 
-        assert 'indicators' in results
-        assert 'correlations' in results
-        assert 'risk_score' in results
+        assert 'threats' in result
+        assert 'hunt_id' in result
+        assert isinstance(result['threats'], list)
 
-    def test_hunting_playbook_lateral_movement(self):
-        """✅ Execute lateral movement hunting playbook."""
-        from guardian.hunting.threat_hunting import ThreatHuntingEngine
+    def test_hunt_with_entity_focus(self):
+        """✅ Hunt threats targeting specific entity."""
+        from guardian.hunting.threat_hunting import ThreatHunter
 
-        hunting = ThreatHuntingEngine()
-
-        results = hunting.execute_playbook({
-            'playbook': 'lateral_movement_detection',
-            'lookback_hours': 48
+        hunter = ThreatHunter()
+        result = hunter.hunt_threats({
+            'target_entity': 'i-12345',
+            'entity_type': 'ec2',
+            'methods': ['behavioral', 'pattern', 'anomaly']
         })
 
-        assert 'threat_chains' in results or 'indicators' in results
+        assert 'threats' in result
+        assert 'entity' in result
 
-    def test_hunting_playbook_data_exfiltration(self):
-        """✅ Execute data exfiltration hunting playbook."""
-        from guardian.hunting.threat_hunting import ThreatHuntingEngine
+    def test_threat_hunting_with_filters(self):
+        """✅ Hunt threats with severity filtering."""
+        from guardian.hunting.threat_hunting import ThreatHunter
 
-        hunting = ThreatHuntingEngine()
-
-        results = hunting.execute_playbook({
-            'playbook': 'data_exfiltration_detection',
-            'lookback_hours': 24
+        hunter = ThreatHunter()
+        result = hunter.hunt_threats({
+            'min_severity': 'high',
+            'max_age_hours': 24,
+            'exclude_known': True
         })
 
-        assert 'suspicious_transfers' in results or 'indicators' in results
+        assert 'threats' in result
+        assert 'filters_applied' in result
 
-    def test_hunting_with_custom_rules(self):
-        """✅ Hunt with custom detection rules."""
-        from guardian.hunting.threat_hunting import ThreatHuntingEngine
 
-        hunting = ThreatHuntingEngine()
+class TestAnomalyScorer:
+    """Test multi-feature anomaly scoring."""
 
-        results = hunting.execute_playbook({
-            'playbook': 'custom_rules',
-            'custom_rules': [
-                {'pattern': 'failed_login_spike', 'threshold': 10},
-                {'pattern': 'privilege_escalation', 'threshold': 5}
-            ],
-            'lookback_hours': 24
+    def test_score_single_anomaly(self):
+        """✅ Score anomaly from single feature."""
+        from guardian.hunting.threat_hunting import AnomalyScorer
+
+        scorer = AnomalyScorer()
+        score = scorer.score_anomaly({
+            'feature': 'api_call_count',
+            'value': 500,
+            'baseline_mean': 100,
+            'baseline_stddev': 20
         })
 
-        assert 'indicators' in results
+        assert 'score' in score
+        assert 0 <= score['score'] <= 1.0
+        assert 'explanation' in score
 
+    def test_score_multi_feature_anomaly(self):
+        """✅ Score anomaly from multiple features."""
+        from guardian.hunting.threat_hunting import AnomalyScorer
 
-class TestIOCGenerator:
-    """Test IOC (Indicator of Compromise) generation."""
-
-    def test_generate_ioc_from_threat(self):
-        """✅ Generate IOC from threat data."""
-        from guardian.hunting.threat_hunting import IOCGenerator
-
-        generator = IOCGenerator()
-
-        ioc = generator.generate({
-            'threat_id': 'threat-123',
-            'threat_type': 'MALWARE',
-            'file_hash': 'abc123def456',
-            'domain': 'malicious.com',
-            'ip_address': '192.0.2.1'
+        scorer = AnomalyScorer()
+        result = scorer.score_multi_feature({
+            'features': {
+                'api_calls': {'value': 500, 'baseline': 100, 'stddev': 20},
+                'failed_logins': {'value': 50, 'baseline': 5, 'stddev': 2},
+                'data_access': {'value': 1000, 'baseline': 100, 'stddev': 50}
+            }
         })
 
-        assert 'ioc_id' in ioc
-        assert 'indicators' in ioc
-        assert len(ioc['indicators']) > 0
+        assert 'total_score' in result
+        assert 'feature_scores' in result
+        assert len(result['feature_scores']) == 3
 
-    def test_ioc_enrichment(self):
-        """✅ Enrich IOC with threat intelligence."""
-        from guardian.hunting.threat_hunting import IOCGenerator
+    def test_anomaly_context_adjustment(self):
+        """✅ Adjust anomaly score with context."""
+        from guardian.hunting.threat_hunting import AnomalyScorer
 
-        generator = IOCGenerator()
-
-        ioc = generator.generate({
-            'threat_id': 'threat-123',
-            'threat_type': 'MALWARE',
-            'file_hash': 'abc123def456',
-            'enrich': True
+        scorer = AnomalyScorer()
+        result = scorer.score_anomaly({
+            'feature': 'api_call_count',
+            'value': 300,
+            'baseline_mean': 100,
+            'baseline_stddev': 20,
+            'context': {'is_admin': True, 'business_hours': False}
         })
 
-        assert 'threat_intel' in ioc or 'reputation' in ioc
-
-    def test_ioc_batch_generation(self):
-        """✅ Generate IOCs in batch."""
-        from guardian.hunting.threat_hunting import IOCGenerator
-
-        generator = IOCGenerator()
-
-        threats = [
-            {'threat_id': 'threat-1', 'threat_type': 'MALWARE'},
-            {'threat_id': 'threat-2', 'threat_type': 'PHISHING'},
-            {'threat_id': 'threat-3', 'threat_type': 'APT'}
-        ]
-
-        iocs = generator.batch_generate(threats)
-
-        assert len(iocs) == 3
-        assert all('ioc_id' in ioc for ioc in iocs)
-
-    def test_ioc_correlation(self):
-        """✅ Correlate IOCs across sources."""
-        from guardian.hunting.threat_hunting import IOCGenerator
-
-        generator = IOCGenerator()
-
-        correlation = generator.correlate_iocs({
-            'ioc_ids': ['ioc-1', 'ioc-2', 'ioc-3'],
-            'correlation_threshold': 0.7
-        })
-
-        assert 'correlated_groups' in correlation or 'correlations' in correlation
-
-
-class TestHuntingPlaybook:
-    """Test hunting playbooks."""
-
-    def test_playbook_execution(self):
-        """✅ Execute hunting playbook."""
-        from guardian.hunting.threat_hunting import HuntingPlaybook
-
-        playbook = HuntingPlaybook()
-
-        result = playbook.execute({
-            'name': 'ransomware_detection',
-            'lookback_hours': 24
-        })
-
-        assert result['status'] == 'completed' or result['status'] == 'executed'
-        assert 'findings' in result or 'results' in result
-
-    def test_playbook_with_timeline(self):
-        """✅ Playbook execution with timeline analysis."""
-        from guardian.hunting.threat_hunting import HuntingPlaybook
-
-        playbook = HuntingPlaybook()
-
-        result = playbook.execute({
-            'name': 'lateral_movement_detection',
-            'analyze_timeline': True,
-            'lookback_hours': 48
-        })
-
-        assert 'timeline' in result or 'chain' in result
-
-    def test_playbook_risk_scoring(self):
-        """✅ Playbook generates risk scores."""
-        from guardian.hunting.threat_hunting import HuntingPlaybook
-
-        playbook = HuntingPlaybook()
-
-        result = playbook.execute({
-            'name': 'ransomware_detection',
-            'score_findings': True,
-            'lookback_hours': 24
-        })
-
-        findings = result.get('findings', []) or result.get('results', [])
-        assert any('risk_score' in f or 'score' in f for f in findings)
-
-    def test_playbook_custom_parameters(self):
-        """✅ Execute playbook with custom parameters."""
-        from guardian.hunting.threat_hunting import HuntingPlaybook
-
-        playbook = HuntingPlaybook()
-
-        result = playbook.execute({
-            'name': 'custom_playbook',
-            'parameters': {
-                'sensitivity': 'high',
-                'min_confidence': 0.85,
-                'include_historical': True
-            },
-            'lookback_hours': 72
-        })
-
-        assert result['status'] in ['completed', 'executed']
-
-
-class TestHuntingReport:
-    """Test hunting report generation."""
-
-    def test_generate_hunting_report(self):
-        """✅ Generate hunting report."""
-        from guardian.hunting.threat_hunting import HuntingReport
-
-        reporter = HuntingReport()
-
-        report = reporter.generate({
-            'hunt_id': 'hunt-123',
-            'playbook': 'ransomware_detection',
-            'findings_count': 5,
-            'duration_hours': 24
-        })
-
-        assert 'report_id' in report
-        assert 'findings' in report
-        assert 'summary' in report or 'statistics' in report
-
-    def test_report_with_timeline(self):
-        """✅ Report includes timeline analysis."""
-        from guardian.hunting.threat_hunting import HuntingReport
-
-        reporter = HuntingReport()
-
-        report = reporter.generate({
-            'hunt_id': 'hunt-123',
-            'playbook': 'lateral_movement_detection',
-            'include_timeline': True
-        })
-
-        assert 'timeline' in report or 'event_sequence' in report
-
-    def test_report_with_recommendations(self):
-        """✅ Report includes remediation recommendations."""
-        from guardian.hunting.threat_hunting import HuntingReport
-
-        reporter = HuntingReport()
-
-        report = reporter.generate({
-            'hunt_id': 'hunt-123',
-            'playbook': 'data_exfiltration_detection',
-            'include_recommendations': True
-        })
-
-        assert 'recommendations' in report or 'remediation' in report
-
-    def test_report_export(self):
-        """✅ Export report in various formats."""
-        from guardian.hunting.threat_hunting import HuntingReport
-
-        reporter = HuntingReport()
-
-        report = reporter.generate({
-            'hunt_id': 'hunt-123',
-            'export_format': 'json'
-        })
-
-        exported = reporter.export(report['report_id'], format='pdf')
-        assert exported['status'] == 'exported' or 'export_url' in exported
-
-
-class TestThreatHuntingIntegration:
-    """End-to-end threat hunting workflows."""
-
-    def test_full_hunting_workflow(self):
-        """✅ Complete hunt: playbook → IOC → correlate → report."""
-        from guardian.hunting.threat_hunting import (
-            ThreatHuntingEngine,
-            IOCGenerator,
-            HuntingReport
-        )
-
-        hunting = ThreatHuntingEngine()
-        generator = IOCGenerator()
-        reporter = HuntingReport()
-
-        # Step 1: Execute playbook
-        hunt_results = hunting.execute_playbook({
-            'playbook': 'ransomware_detection',
-            'lookback_hours': 24
-        })
-
-        assert hunt_results['risk_score'] is not None
-
-        # Step 2: Generate IOCs
-        threat = {
-            'threat_id': 'threat-123',
-            'threat_type': 'RANSOMWARE',
-            'file_hash': 'abc123'
-        }
-
-        ioc = generator.generate(threat)
-        assert 'ioc_id' in ioc
-
-        # Step 3: Generate report
-        report = reporter.generate({
-            'hunt_id': 'hunt-123',
-            'playbook': 'ransomware_detection',
-            'findings_count': 1
-        })
-
-        assert 'report_id' in report
-
-    def test_multi_playbook_hunting(self):
-        """✅ Execute multiple hunting playbooks in sequence."""
-        from guardian.hunting.threat_hunting import ThreatHuntingEngine
-
-        hunting = ThreatHuntingEngine()
-
-        playbooks = [
-            'ransomware_detection',
-            'lateral_movement_detection',
-            'data_exfiltration_detection'
-        ]
-
-        results = []
-        for playbook in playbooks:
-            result = hunting.execute_playbook({
-                'playbook': playbook,
-                'lookback_hours': 24
-            })
-            results.append(result)
-
-        assert len(results) == 3
-        assert all('risk_score' in r for r in results)
-
-    def test_hunting_correlation_analysis(self):
-        """✅ Correlate findings across multiple hunts."""
-        from guardian.hunting.threat_hunting import ThreatHuntingEngine
-
-        hunting = ThreatHuntingEngine()
-
-        # Execute multiple hunts
-        hunt1 = hunting.execute_playbook({
-            'playbook': 'ransomware_detection',
-            'lookback_hours': 24
-        })
-
-        hunt2 = hunting.execute_playbook({
-            'playbook': 'lateral_movement_detection',
-            'lookback_hours': 24
-        })
-
-        # Correlate findings
-        correlation = hunting.correlate_findings({
-            'findings': [hunt1, hunt2],
-            'correlation_window_hours': 4
-        })
-
-        assert 'correlated_events' in correlation or 'correlations' in correlation
-
-    def test_hunting_persistence_detection(self):
-        """✅ Detect threat persistence mechanisms."""
-        from guardian.hunting.threat_hunting import ThreatHuntingEngine
-
-        hunting = ThreatHuntingEngine()
-
-        results = hunting.execute_playbook({
-            'playbook': 'persistence_detection',
-            'lookback_hours': 72,
-            'detect_mechanisms': [
-                'scheduled_tasks',
-                'registry_modifications',
-                'cron_jobs'
+        assert 'score' in result
+        assert 'context_adjusted' in result
+
+
+class TestPatternMatcher:
+    """Test attack pattern matching."""
+
+    def test_match_known_patterns(self):
+        """✅ Match events against known patterns."""
+        from guardian.hunting.threat_hunting import PatternMatcher
+
+        matcher = PatternMatcher()
+        result = matcher.match_patterns({
+            'events': [
+                {'id': 'evt1', 'type': 'unauthorized_login'},
+                {'id': 'evt2', 'type': 'privilege_escalation'},
+                {'id': 'evt3', 'type': 'data_exfiltration'}
             ]
         })
 
-        assert 'persistence_indicators' in results or 'indicators' in results
+        assert 'matches' in result
+        assert isinstance(result['matches'], list)
 
-    def test_hunting_command_execution_analysis(self):
-        """✅ Analyze suspicious command execution."""
-        from guardian.hunting.threat_hunting import ThreatHuntingEngine
+    def test_pattern_confidence_scoring(self):
+        """✅ Score confidence of pattern match."""
+        from guardian.hunting.threat_hunting import PatternMatcher
 
-        hunting = ThreatHuntingEngine()
-
-        results = hunting.execute_playbook({
-            'playbook': 'command_execution_analysis',
-            'lookback_hours': 24,
-            'analyze_commands': True
+        matcher = PatternMatcher()
+        result = matcher.match_patterns({
+            'events': [
+                {'type': 'initial_access', 'timestamp': 1000},
+                {'type': 'lateral_movement', 'timestamp': 1010}
+            ],
+            'pattern': 'apt_lateral_movement'
         })
 
-        assert 'suspicious_commands' in results or 'indicators' in results
+        assert 'matches' in result
+        assert all('confidence' in m for m in result['matches'])
+
+    def test_detect_novel_patterns(self):
+        """✅ Detect potential novel attack patterns."""
+        from guardian.hunting.threat_hunting import PatternMatcher
+
+        matcher = PatternMatcher()
+        result = matcher.detect_novel_patterns({
+            'events': [
+                {'type': 'event_a', 'timestamp': 1},
+                {'type': 'event_b', 'timestamp': 2},
+                {'type': 'event_c', 'timestamp': 3}
+            ]
+        })
+
+        assert 'patterns' in result or 'novel_patterns' in result
+
+
+class TestThreatPrioritizer:
+    """Test threat prioritization."""
+
+    def test_prioritize_threats(self):
+        """✅ Prioritize threats by risk."""
+        from guardian.hunting.threat_hunting import ThreatPrioritizer
+
+        prioritizer = ThreatPrioritizer()
+        result = prioritizer.prioritize_threats({
+            'threats': [
+                {'id': 'thr1', 'score': 0.5, 'severity': 'medium'},
+                {'id': 'thr2', 'score': 0.9, 'severity': 'critical'},
+                {'id': 'thr3', 'score': 0.3, 'severity': 'low'}
+            ]
+        })
+
+        assert 'ranked_threats' in result
+        assert result['ranked_threats'][0]['id'] == 'thr2'
+
+    def test_threat_ranking_with_context(self):
+        """✅ Rank threats considering context."""
+        from guardian.hunting.threat_hunting import ThreatPrioritizer
+
+        prioritizer = ThreatPrioritizer()
+        result = prioritizer.prioritize_threats({
+            'threats': [
+                {'id': 'thr1', 'score': 0.7, 'target': 'prod_db'},
+                {'id': 'thr2', 'score': 0.7, 'target': 'test_env'}
+            ],
+            'criticality': {'prod_db': 'critical', 'test_env': 'low'}
+        })
+
+        assert 'ranked_threats' in result
+        assert result['ranked_threats'][0]['target'] == 'prod_db'
+
+    def test_actionable_threat_extraction(self):
+        """✅ Extract actionable threats."""
+        from guardian.hunting.threat_hunting import ThreatPrioritizer
+
+        prioritizer = ThreatPrioritizer()
+        result = prioritizer.get_actionable_threats({
+            'threats': [
+                {'id': 'thr1', 'score': 0.95, 'actionable': True},
+                {'id': 'thr2', 'score': 0.2, 'actionable': False}
+            ],
+            'min_actionability': 0.5
+        })
+
+        assert 'actionable' in result
+        assert len(result['actionable']) <= 2
+
+
+class TestThreatHuntingIntegration:
+    """Integration tests for threat hunting."""
+
+    def test_end_to_end_hunting_pipeline(self):
+        """✅ Complete hunting pipeline."""
+        from guardian.hunting.threat_hunting import (
+            ThreatHunter,
+            AnomalyScorer,
+            PatternMatcher,
+            ThreatPrioritizer
+        )
+
+        hunter = ThreatHunter()
+        scorer = AnomalyScorer()
+        matcher = PatternMatcher()
+        prioritizer = ThreatPrioritizer()
+
+        # Hunt threats
+        threats = hunter.hunt_threats({'lookback_days': 7})
+        assert 'threats' in threats
+
+    def test_hunting_with_multiple_detection_methods(self):
+        """✅ Hunt using multiple detection methods."""
+        from guardian.hunting.threat_hunting import ThreatHunter
+
+        hunter = ThreatHunter()
+        result = hunter.hunt_threats({
+            'methods': ['behavioral', 'pattern', 'anomaly', 'statistical']
+        })
+
+        assert 'threats' in result
+        assert 'methods_used' in result or 'hunting_methods' in result
+
+    def test_continuous_threat_hunting(self):
+        """✅ Continuous threat hunting mode."""
+        from guardian.hunting.threat_hunting import ThreatHunter
+
+        hunter = ThreatHunter()
+        result = hunter.hunt_threats({
+            'continuous': True,
+            'interval_minutes': 5,
+            'retention_days': 30
+        })
+
+        assert 'hunt_id' in result
+        assert 'status' in result
