@@ -1,1 +1,1 @@
-"""Dashboard builder module for AWS Guardian."""
+"""Guardian dashboards module."""
