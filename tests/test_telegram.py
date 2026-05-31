@@ -164,6 +164,74 @@ class TestTelegramResponder(unittest.TestCase):
         self.assertTrue(result)
 
 
+class TestTelegramHtmlEscaping(unittest.TestCase):
+    """Untrusted AWS-derived data must be HTML-escaped before being placed in
+    Telegram messages sent with parse_mode=HTML, otherwise an attacker who can
+    influence a resource name/tag could forge alert content or break parsing so
+    the alert is silently dropped."""
+
+    def setUp(self):
+        self.responder = TelegramResponder(bot_token="t", chat_id="c")
+
+    def _sent_text(self, mock_post):
+        return mock_post.call_args.kwargs["json"]["text"]
+
+    @patch("guardian.responders.telegram.requests.post")
+    def test_s3_bucket_name_is_escaped(self, mock_post):
+        mock_post.return_value = MagicMock(status_code=200)
+
+        payload = "<b>injected</b>&evil"
+        s3_data = {
+            "public_buckets": [
+                {"bucket_name": payload, "public_reasons": ["<script>x</script>"]}
+            ],
+            "anomalies": [1],
+        }
+        self.responder.send_alert("s3", s3_data)
+
+        text = self._sent_text(mock_post)
+        self.assertNotIn("<b>injected</b>", text)
+        self.assertNotIn("<script>", text)
+        self.assertIn("&lt;b&gt;injected&lt;/b&gt;&amp;evil", text)
+
+    @patch("guardian.responders.telegram.requests.post")
+    def test_cloudtrail_fields_are_escaped(self, mock_post):
+        mock_post.return_value = MagicMock(status_code=200)
+
+        ct_data = {
+            "details": {
+                "anomalies": [
+                    {
+                        "event_name": "<b>Evt</b>",
+                        "username": "<i>admin</i>",
+                        "source_ip": "1.2.3.4<x>",
+                    }
+                ]
+            },
+            "severity": "HIGH",
+        }
+        self.responder.send_alert("cloudtrail", ct_data)
+
+        text = self._sent_text(mock_post)
+        # Structural tags from the renderer remain; injected tags are neutralized.
+        self.assertNotIn("<b>Evt</b>", text)
+        self.assertNotIn("<i>admin</i>", text)
+        self.assertIn("&lt;b&gt;Evt&lt;/b&gt;", text)
+        self.assertIn("&lt;i&gt;admin&lt;/i&gt;", text)
+
+    @patch("guardian.responders.telegram.requests.post")
+    def test_auto_response_resource_id_is_escaped(self, mock_post):
+        mock_post.return_value = MagicMock(status_code=200)
+
+        self.responder.send_auto_response_notification(
+            "stop_ec2", "i-1<code>evil</code>", "success", region="us-<x>"
+        )
+
+        text = self._sent_text(mock_post)
+        self.assertNotIn("<code>evil</code>", text)
+        self.assertIn("&lt;code&gt;evil&lt;/code&gt;", text)
+
+
 class TestTelegramResponderInit(unittest.TestCase):
     """Test TelegramResponder initialization"""
 

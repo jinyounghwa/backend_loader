@@ -9,6 +9,7 @@ from guardian.responders.alert_formatter import (
     EMOJI,
     AlertMessage,
     check_emoji,
+    esc,
     format_account_info,
     severity_icon,
 )
@@ -91,14 +92,15 @@ class TelegramResponder:
             items.append(
                 {
                     "type": "anomaly",
-                    "label": f"🔍 <b>{a.get('event_name')}</b>",
+                    "label": f"🔍 <b>{esc(a.get('event_name'))}</b>",
                     "details": [
-                        f"👤 <code>{a.get('username')}</code>",
-                        f"🌐 <code>{a.get('source_ip')}</code>",
+                        f"👤 <code>{esc(a.get('username'))}</code>",
+                        f"🌐 <code>{esc(a.get('source_ip'))}</code>",
                     ],
                 }
             )
 
+        suggested = data.get("suggested_action")
         alert = AlertMessage(
             title="CloudTrail: Suspicious API Calls",
             severity=data.get("severity", "MEDIUM"),
@@ -106,7 +108,7 @@ class TelegramResponder:
             account_info=account_info,
             items=items,
             summary_line=f"Detected {len(anomalies)} suspicious events",
-            suggested_action=data.get("suggested_action"),
+            suggested_action=esc(suggested) if suggested else None,
         )
         return self._render_alert(alert)
 
@@ -119,11 +121,12 @@ class TelegramResponder:
             items.append(
                 {
                     "type": "change",
-                    "label": f"{icon} <b>{c.get('type')}</b>",
-                    "details": [c.get("detail", "")],
+                    "label": f"{icon} <b>{esc(c.get('type'))}</b>",
+                    "details": [esc(c.get("detail", ""))],
                 }
             )
 
+        suggested = data.get("suggested_action")
         alert = AlertMessage(
             title="IAM: Permission Changes Detected",
             severity=data.get("severity", "MEDIUM"),
@@ -131,7 +134,7 @@ class TelegramResponder:
             account_info=account_info,
             items=items,
             summary_line=f"{len(changes)} changes detected",
-            suggested_action=data.get("suggested_action"),
+            suggested_action=esc(suggested) if suggested else None,
         )
         return self._render_alert(alert)
 
@@ -146,7 +149,7 @@ class TelegramResponder:
                     "type": "high",
                     "label": f"🔴 High Severity ({len(high)})",
                     "details": [
-                        f"<b>{f.get('type')}</b> → <code>{f.get('resource_id', '')}</code>"
+                        f"<b>{esc(f.get('type'))}</b> → <code>{esc(f.get('resource_id', ''))}</code>"
                         for f in high[:3]
                     ],
                 }
@@ -156,10 +159,11 @@ class TelegramResponder:
                 {
                     "type": "medium",
                     "label": f"🟡 Medium Severity ({len(med)})",
-                    "details": [f"<b>{f.get('type')}</b>" for f in med[:2]],
+                    "details": [f"<b>{esc(f.get('type'))}</b>" for f in med[:2]],
                 }
             )
 
+        suggested = data.get("suggested_action")
         alert = AlertMessage(
             title="GuardDuty: Threat Detected",
             severity=data.get("severity", "MEDIUM"),
@@ -167,7 +171,7 @@ class TelegramResponder:
             account_info=account_info,
             items=items,
             summary_line=f"Total threats: {details.get('total', 0)}",
-            suggested_action=data.get("suggested_action"),
+            suggested_action=esc(suggested) if suggested else None,
         )
         return self._render_alert(alert)
 
@@ -192,22 +196,22 @@ class TelegramResponder:
             "stop_ec2": "Stopped EC2 instance",
             "block_bucket": "Blocked S3 public access",
             "block_s3_public": "Blocked S3 public access",
-        }.get(action_type, f"Executed {action_type}")
+        }.get(action_type, f"Executed {esc(action_type)}")
 
         msg = f"""
 {status_icon} <b>Auto-Response Action Executed</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📋 Action: {action_desc}
-🎯 Resource: <code>{resource_id}</code>"""
+📋 Action: {esc(action_desc)}
+🎯 Resource: <code>{esc(resource_id)}</code>"""
 
         if region:
-            msg += f"\n🌍 Region: <code>{region}</code>"
+            msg += f"\n🌍 Region: <code>{esc(region)}</code>"
 
         if rule_id:
-            msg += f"\n📜 Rule ID: <code>{rule_id}</code>"
+            msg += f"\n📜 Rule ID: <code>{esc(rule_id)}</code>"
 
         msg += f"""
-📊 Status: <b>{status.upper()}</b>
+📊 Status: <b>{esc(status.upper())}</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
 
         return self.send_message(msg)
@@ -218,11 +222,11 @@ class TelegramResponder:
         by_severity = summary_data.get("by_severity", {})
         msg = f"\n📊 <b>AWS Guardian Daily Summary</b>\n━━━━━━━━━━━━━━━━━━━\n📈 Total Events: {total}\n\n<b>By Type:</b>"
         for t, c in by_type.items():
-            msg += f"\n• {t}: {c}"
+            msg += f"\n• {esc(t)}: {esc(c)}"
         msg += "\n\n<b>By Severity:</b>"
         for s, c in by_severity.items():
             si = "🔴" if s == "critical" else "🟡" if s == "warning" else "ℹ️"
-            msg += f"\n{si} {s}: {c}"
+            msg += f"\n{si} {esc(s)}: {esc(c)}"
         msg += "\n━━━━━━━━━━━━━━━━━━━"
         return self.send_message(msg)
 

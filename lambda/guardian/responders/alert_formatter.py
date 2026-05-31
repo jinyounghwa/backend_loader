@@ -4,8 +4,23 @@ Provides a unified AlertMessage model that both Telegram and Discord
 responders use to render alerts, eliminating per-channel formatting duplication.
 """
 
+import html
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+
+
+def esc(value: Any) -> str:
+    """Escape an untrusted value for safe embedding in Telegram HTML messages.
+
+    Telegram's HTML parse mode treats ``<``, ``>`` and ``&`` as markup, so any
+    dynamic value derived from AWS resources (bucket names, instance IDs, IAM
+    usernames, source IPs, finding types, etc.) must be escaped before it is
+    placed inside structural tags like ``<b>`` or ``<code>``. Without this an
+    attacker who controls a resource name/tag could forge alert content or
+    break message parsing so the alert is silently dropped.
+    """
+    return html.escape(str(value), quote=False)
+
 
 SEVERITY_ICONS = {
     "CRITICAL": "🔴",
@@ -38,8 +53,8 @@ def check_emoji(check_name: str) -> str:
 def format_account_info(account_id: str, account_name: Optional[str]) -> str:
     if account_id == "current" and not account_name:
         return ""
-    label = account_name or account_id
-    return f"{label} ({account_id})" if account_id != "current" else label
+    label = esc(account_name or account_id)
+    return f"{label} ({esc(account_id)})" if account_id != "current" else label
 
 
 @dataclass
@@ -66,7 +81,7 @@ class AlertMessage:
                     "Today Cost": f"${data.get('today_cost', 0):.2f}",
                     "Threshold": f"${data.get('threshold', 0):.2f}",
                     "Increase": f"{data.get('increase_percent', 0)}%",
-                    "Date": data.get("date", "N/A"),
+                    "Date": esc(data.get("date", "N/A")),
                     "Yesterday": f"${data.get('yesterday_cost', 0):.2f}",
                     "Monthly": f"${data.get('monthly_cost', 0):.2f}",
                 }
@@ -84,9 +99,9 @@ class AlertMessage:
                 items.append(
                     {
                         "type": "unauthorized_region",
-                        "label": f"🌍 Unauthorized Region: {region}",
+                        "label": f"🌍 Unauthorized Region: {esc(region)}",
                         "count": len(instances),
-                        "details": [inst.get("InstanceId", "?") for inst in instances[:3]],
+                        "details": [esc(inst.get("InstanceId", "?")) for inst in instances[:3]],
                     }
                 )
 
@@ -94,9 +109,9 @@ class AlertMessage:
             items.append(
                 {
                     "type": "exposed",
-                    "label": f"🔓 {exp['instance_id']} ({exp['region']})",
+                    "label": f"🔓 {esc(exp['instance_id'])} ({esc(exp['region'])})",
                     "details": [
-                        f"Port {r.get('from_port', '?')}/{r.get('protocol', '?')}"
+                        f"Port {esc(r.get('from_port', '?'))}/{esc(r.get('protocol', '?'))}"
                         for r in exp.get("exposed_rules", [])[:2]
                     ],
                 }
@@ -106,7 +121,7 @@ class AlertMessage:
             items.append(
                 {
                     "type": "new",
-                    "label": f"🆕 {inst['instance_id']} ({inst['region']})",
+                    "label": f"🆕 {esc(inst['instance_id'])} ({esc(inst['region'])})",
                 }
             )
 
@@ -127,15 +142,15 @@ class AlertMessage:
             items.append(
                 {
                     "type": "public_bucket",
-                    "label": f"🌐 {bucket['bucket_name']}",
-                    "details": bucket.get("public_reasons", []),
+                    "label": f"🌐 {esc(bucket['bucket_name'])}",
+                    "details": [esc(r) for r in bucket.get("public_reasons", [])],
                 }
             )
         for bucket in data.get("new_buckets", [])[:3]:
             items.append(
                 {
                     "type": "new_bucket",
-                    "label": f"🆕 {bucket['bucket_name']}",
+                    "label": f"🆕 {esc(bucket['bucket_name'])}",
                 }
             )
         return cls(
@@ -152,13 +167,14 @@ class AlertMessage:
     def from_generic(
         cls, check_name: str, data: Dict[str, Any], account_info: str = ""
     ) -> "AlertMessage":
+        suggested = data.get("suggested_action")
         return cls(
-            title=f"{check_name.upper()} Alert",
+            title=f"{esc(check_name.upper())} Alert",
             severity=data.get("severity", "INFO"),
             check_name=check_name,
             account_info=account_info,
-            summary_line=data.get("message", ""),
-            suggested_action=data.get("suggested_action"),
+            summary_line=esc(data.get("message", "")),
+            suggested_action=esc(suggested) if suggested else None,
         )
 
     @classmethod

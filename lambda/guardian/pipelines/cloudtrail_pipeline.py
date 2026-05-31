@@ -1,9 +1,8 @@
 """CloudTrail event processing pipeline."""
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
-import json
 
 from guardian.integrations.cloudtrail_analyzer import (
     CloudTrailEventParser,
@@ -32,15 +31,21 @@ class CloudTrailPipeline:
         # Parse event
         normalized = self.parser.parse(event)
 
-        # Store in history for pattern detection
+        # Store in history for pattern detection. Retention is keyed off the
+        # ingestion time (when we observed the event), not the event's own
+        # eventTime — otherwise a burst of events whose eventTime is older than
+        # the window (replayed, delayed, or back-dated by an attacker) would be
+        # purged before frequency analysis could flag it.
+        now = datetime.now(timezone.utc)
         event_key = f"{normalized['principal']}:{normalized['event_name']}"
+        normalized['_ingested_at'] = now
         self.event_history[event_key].append(normalized)
 
-        # Keep only recent history (1 hour)
-        cutoff_time = datetime.now(timezone.utc) - timedelta(hours=1)
+        # Keep only recently-ingested history (1 hour)
+        cutoff_time = now - timedelta(hours=1)
         self.event_history[event_key] = [
             e for e in self.event_history[event_key]
-            if e.get('timestamp', datetime.now(timezone.utc)) > cutoff_time
+            if e.get('_ingested_at', now) > cutoff_time
         ]
 
         # Calculate anomaly score

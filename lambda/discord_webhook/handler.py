@@ -32,7 +32,6 @@ action_executor = AWSActionExecutor()
 
 def verify_discord_request(request_body: str, signature: str, timestamp: str) -> bool:
     try:
-        from nacl.exceptions import BadSignatureError
         from nacl.signing import VerifyKey
 
         public_key = os.getenv("DISCORD_PUBLIC_KEY", "")
@@ -43,7 +42,9 @@ def verify_discord_request(request_body: str, signature: str, timestamp: str) ->
         message = (timestamp + request_body).encode("utf-8")
         verify_key.verify(message, bytes.fromhex(signature))
         return True
-    except (BadSignatureError, ValueError, Exception) as e:
+    except Exception as e:
+        # Fail closed: any error (bad signature, malformed hex, missing nacl)
+        # means the request is not trusted.
         logger.warning("Discord signature verification failed: %s", e)
         return False
 
