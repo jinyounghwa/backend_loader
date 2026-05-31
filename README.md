@@ -4,7 +4,9 @@
 
 AWS 계정을 자동으로 감시하고 위협 탐지 시 텔레그램 알림, 자동 대응, 디스코드 대시보드 제어를 제공하는 서버리스 보안 및 비용 감시 시스템입니다.
 
-**상태:** 🛠️ **개발 진행 중 (Sprint 80)** | **테스트:** ✅ **2,353/2,353 통과 (100%)** | **버전:** 개발 버전
+**상태:** 🛠️ **개발 진행 중** | **테스트:** ✅ **2,356 통과 / 61 스킵 / 0 실패 (2,417 수집)** | **버전:** 개발 버전
+
+> ⚠️ **범위 안내:** **모바일 앱(iOS/Android)** 과 **쿠버네티스/컨테이너 보안**은 **진행하지 않기로 결정된 비범위 항목**입니다. 관련 잔존 코드/스캐폴드는 평가·완성도 산정에서 제외합니다. 자세한 내용은 [스프린트 문서 종합 평가](docs/SPRINT_DOCS_COMPREHENSIVE_REVIEW.md)를 참고하세요.
 
 ## 빠른 시작
 
@@ -49,7 +51,7 @@ chmod +x start.sh
 
 ### 보안 & 탐지
 ✅ CloudTrail 분석 | ✅ IAM 이상 탐지 | ✅ GuardDuty 통합  
-✅ EC2/S3 위협 모니터링 | ✅ 실시간 경고 | ✅ Kubernetes 위협 탐지
+✅ EC2/S3 위협 모니터링 | ✅ 실시간 경고 | ✅ RDS 보안 감사
 
 ### 지능형 분석
 ✅ 고급 위협 프로파일링 | ✅ ML 이상 탐지 (5+ 알고리즘)  
@@ -73,12 +75,13 @@ chmod +x start.sh
 
 | 항목 | 수치 | 상태 |
 |------|------|------|
-| **테스트** | 2,353/2,353 (100%) | ✅ PASS |
-| **스프린트** | 80 (Sprint 1-80) | ✅ IN PROGRESS |
+| **테스트** | 2,356 통과 / 61 스킵 / 0 실패 (2,417 수집) | ✅ PASS |
+| **스프린트** | Sprint 1~79 완료 (메인 시리즈) | ✅ DONE |
 | **기능** | 70+ | ✅ IMPLEMENTED |
 | **모듈** | 40+ | ✅ BUILT |
 | **코드량** | ~64,700 LOC | ✅ CLEAN |
 | **버전** | 개발 버전 | 🛠️ DEVELOPMENT |
+| **비범위(제외)** | 모바일(iOS/Android), 쿠버네티스 | 🚫 OUT OF SCOPE |
 
 ## 기술 스택
 
@@ -92,7 +95,6 @@ chmod +x start.sh
 | 설정 관리 | SSM Parameter Store |
 | 알림 채널 | Telegram, Discord |
 | ML/AI | ARIMA, Prophet, Isolation Forest, LOF |
-| 컨테이너 | Kubernetes (v3.0 Preview) |
 | 실시간 | WebSocket Streaming |
 
 ## 로컬 테스트
@@ -127,8 +129,10 @@ terraform apply
 
 | 문서 | 설명 |
 |------|------|
-| [FINAL_COMPLETION.md](docs/FINAL_COMPLETION.md) | **📋 프로젝트 최종 완료 현황** |
-| [SPRINT_73-80_PLAN.md](docs) | Sprint 계획서 모음 |
+| [SPRINT_DOCS_COMPREHENSIVE_REVIEW.md](docs/SPRINT_DOCS_COMPREHENSIVE_REVIEW.md) | **🧭 스프린트 문서 종합 평가 (범위·제외 항목 포함)** |
+| [SECURITY_REVIEW_2026-06-01.md](docs/SECURITY_REVIEW_2026-06-01.md) | **🔒 보안 검토 및 리팩토링 보고서** |
+| [FINAL_COMPLETION.md](docs/FINAL_COMPLETION.md) | 📋 프로젝트 현재 상태 |
+| [SPRINT_*_PLAN/COMPLETION.md](docs) | Sprint 계획서·완료 문서 모음 |
 | [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) | AWS 배포 가이드 |
 | [CLAUDE.md](CLAUDE.md) | 프로젝트 지침 및 아키텍처 |
 
@@ -145,7 +149,8 @@ terraform apply
 | 77 | AI & 오케스트레이션 | 63 | 347 | ✅ |
 | 78 | 최종 앙상블 | 16 | 363 | ✅ |
 | 79 | 대시보드 & 시각화 | 64 | 427 | ✅ |
-| 80 | Kubernetes (Phase 1) | 16 | 443 | ✅ |
+
+> Sprint 80(쿠버네티스/컨테이너)은 **진행하지 않기로 결정**되어 메인 진행 현황에서 제외합니다.
 
 ### 버전 히스토리
 
@@ -157,13 +162,14 @@ terraform apply
 - **v2.7** - AI 위협 사냥 & 응답 오케스트레이션
 - **v2.8** - 최종 앙상블 & 실시간 업데이트
 - **v2.9** - 고급 대시보드 & 시각화 ✅ **CURRENT**
-- **v3.0** - Kubernetes 위협 탐지 (Preview)
+
+> 모바일(iOS/Android)과 쿠버네티스(v3.0 프리뷰)는 진행하지 않기로 결정되어 로드맵에서 제외되었습니다.
 
 ## 📈 성능 메트릭
 
-- ✅ **테스트 커버리지:** 443 테스트 (362 목표 대비 122%)
-- ✅ **코드 품질:** 깔끔한 아키텍처, 일관된 패턴
-- ✅ **배포 준비:** 모든 기능 테스트됨, 프로덕션 준비 완료
+- ✅ **테스트:** 2,356 통과 / 61 스킵 / 0 실패 (2,417 수집)
+- ✅ **코드 품질:** 깔끔한 아키텍처, 일관된 패턴 (flake8 통과)
+- ✅ **보안:** HTML 인젝션 방어, SSM 시크릿 관리, 서명·권한 검증 ([보안 보고서](docs/SECURITY_REVIEW_2026-06-01.md))
 - ✅ **성능:** WebSocket 실시간 스트리밍, <3초 응답 시간
 
 ## 🛠️ 개발 환경 설정
@@ -191,9 +197,8 @@ backend_loader/
 │   ├── hunting/               # 위협 사냥 엔진
 │   ├── dashboards/            # 대시보드 모듈
 │   ├── visualization/         # 시각화 엔진
-│   ├── k8s/                   # Kubernetes 통합 (v3.0)
 │   └── ...
-├── tests/backend/             # 테스트 스위트 (443 tests)
+├── tests/                     # 테스트 스위트 (2,417 수집)
 ├── terraform/                 # 인프라 코드
 ├── docs/                      # 문서
 │   ├── FINAL_COMPLETION.md    # 최종 완료 현황
@@ -213,6 +218,6 @@ MIT License
 
 ---
 
-**프로젝트 완료 일자:** 2026-05-30  
-**최종 상태:** ✅ **PRODUCTION READY & FULLY TESTED**  
-**다음 단계:** Sprint 80 Phase 2-4 (선택 사항) 또는 커뮤니티 배포
+**최종 갱신:** 2026-06-01  
+**상태:** 🛠️ 개발 진행 중 · 2,356 테스트 통과 · 보안 검토 완료  
+**범위:** 서버리스 보안/비용 감시 백엔드 + 웹 대시보드 (모바일·쿠버네티스 제외)
