@@ -5,16 +5,22 @@ from datetime import datetime, timezone
 import hmac
 import hashlib
 import json
+import os
 
 
 class ThreatCallbackHandler:
     """Handle incoming webhook callbacks for real-time threat response."""
 
-    def __init__(self, realtime_processor, audit_logger, webhook_secret: str = 'default-secret'):
-        """Initialize threat callback handler."""
+    def __init__(self, realtime_processor, audit_logger, webhook_secret: Optional[str] = None):
+        """Initialize threat callback handler.
+
+        The webhook secret must be supplied explicitly or via the
+        GUARDIAN_WEBHOOK_SECRET environment variable; without it every
+        incoming webhook is rejected (fail closed).
+        """
         self.processor = realtime_processor
         self.audit = audit_logger
-        self.webhook_secret = webhook_secret
+        self.webhook_secret = webhook_secret or os.getenv("GUARDIAN_WEBHOOK_SECRET", "")
         self.callback_history = {}
 
     def handle_webhook(self, body: str, headers: Dict) -> Dict:
@@ -163,6 +169,9 @@ class ThreatCallbackHandler:
 
     def _verify_signature(self, body: str, signature: str) -> bool:
         """Verify webhook signature using HMAC-SHA256."""
+        if not self.webhook_secret or not signature:
+            return False
+
         expected_signature = hmac.new(
             self.webhook_secret.encode(),
             body.encode() if isinstance(body, str) else body,

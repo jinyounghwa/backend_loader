@@ -3,8 +3,11 @@
 Automated compliance reporting, validation, digital signing,
 and immutable audit logging for enterprise governance.
 """
-import uuid
 import hashlib
+import hmac
+import os
+import secrets
+import uuid
 from datetime import datetime, timezone
 from typing import Any, List, Dict
 
@@ -140,6 +143,10 @@ class DigitalSignature:
     def __init__(self):
         """Initialize digital signature manager."""
         self.signatures = {}
+        # 서명 키: 환경 변수 우선, 없으면 인스턴스별 랜덤 키 (키 없는 해시는 위조 가능)
+        self._signing_key = (
+            os.getenv("REPORT_SIGNING_SECRET", "") or secrets.token_hex(32)
+        ).encode()
 
     def sign(self, params: dict) -> dict:
         """Digitally sign report.
@@ -165,9 +172,8 @@ class DigitalSignature:
         signer_name = params.get('signer_name')
         signer_role = params.get('signer_role')
 
-        # Generate signature (mock)
         signature_input = f"{report_id}{content}{now_utc().isoformat()}"
-        signature = hashlib.sha256(signature_input.encode()).hexdigest()
+        signature = hmac.new(self._signing_key, signature_input.encode(), hashlib.sha256).hexdigest()
 
         result = {
             'signature': signature,

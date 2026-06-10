@@ -10,6 +10,7 @@ import unittest
 from pathlib import Path
 
 os.environ["AWS_ENV"] = "localstack"
+os.environ["WEBSOCKET_AUTH_TOKEN"] = "valid_token"
 
 lambda_dir = Path(__file__).parent.parent.parent / "lambda"
 sys.path.insert(0, str(lambda_dir))
@@ -57,8 +58,8 @@ class TestWebSocketNotifier(unittest.TestCase):
 
     def test_broadcast_threat_update(self):
         """위협 점수 브로드캐스트"""
-        asyncio.run(self.notifier.connect_client("conn-1", "token1"))
-        asyncio.run(self.notifier.connect_client("conn-2", "token2"))
+        asyncio.run(self.notifier.connect_client("conn-1", "valid_token"))
+        asyncio.run(self.notifier.connect_client("conn-2", "valid_token"))
 
         result = asyncio.run(self.notifier.broadcast_threat_update(7.5, "HIGH"))
 
@@ -69,7 +70,7 @@ class TestWebSocketNotifier(unittest.TestCase):
 
     def test_send_anomaly_alert(self):
         """이상 탐지 알림"""
-        asyncio.run(self.notifier.connect_client("conn-123", "token"))
+        asyncio.run(self.notifier.connect_client("conn-123", "valid_token"))
 
         result = asyncio.run(
             self.notifier.send_anomaly_alert(
@@ -81,7 +82,7 @@ class TestWebSocketNotifier(unittest.TestCase):
 
     def test_handle_client_subscribe(self):
         """클라이언트 구독 처리"""
-        asyncio.run(self.notifier.connect_client("conn-123", "token"))
+        asyncio.run(self.notifier.connect_client("conn-123", "valid_token"))
 
         result = asyncio.run(
             self.notifier.handle_client_message(
@@ -94,8 +95,8 @@ class TestWebSocketNotifier(unittest.TestCase):
 
     def test_get_active_connections(self):
         """활성 연결 수"""
-        asyncio.run(self.notifier.connect_client("conn-1", "token1"))
-        asyncio.run(self.notifier.connect_client("conn-2", "token2"))
+        asyncio.run(self.notifier.connect_client("conn-1", "valid_token"))
+        asyncio.run(self.notifier.connect_client("conn-2", "valid_token"))
 
         self.assertEqual(self.notifier.get_active_connections(), 2)
 

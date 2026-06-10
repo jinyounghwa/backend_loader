@@ -213,12 +213,26 @@ class TestDashboardAuthentication:
 
         auth = DashboardAuthentication()
 
+        session = auth.authenticate({
+            'user_id': 'user-123',
+            'password_hash': 'abc123def456'
+        })
+
         authorized = auth.authorize({
-            'session_token': 'token-123',
+            'session_token': session['session_token'],
             'required_role': 'viewer'
         })
 
         assert authorized['authorized'] is True or authorized['status'] == 'authorized'
+
+        # Unknown tokens must be rejected
+        denied = auth.authorize({
+            'session_token': 'forged-token',
+            'required_role': 'viewer'
+        })
+
+        assert denied['authorized'] is False
+        assert denied['status'] == 'denied'
 
     def test_dashboard_role_based_access(self):
         """✅ Enforce role-based dashboard access."""

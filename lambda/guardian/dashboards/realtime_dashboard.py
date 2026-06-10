@@ -1,7 +1,8 @@
 """Real-time dashboards for AWS Guardian."""
 
 from typing import Dict, List, Any, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import secrets
 import uuid
 
 
@@ -268,21 +269,66 @@ class DashboardAuthentication:
         }
 
     def authenticate(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Authenticate user."""
+        """Authenticate user and issue a session token."""
         user_id = params.get('user_id')
-        session_token = f"token_{uuid.uuid4().hex[:8]}"
+        credential = params.get('password_hash') or params.get('credential')
+
+        if not user_id or not credential:
+            return {
+                'status': 'failed',
+                'authorized': False,
+                'error': 'Missing credentials'
+            }
+
+        session_token = secrets.token_urlsafe(32)
+        authenticated_at = now_utc()
+
+        self.sessions[session_token] = {
+            'user_id': user_id,
+            'role': params.get('role', 'viewer'),
+            'created_at': authenticated_at.isoformat(),
+            'expires_at': (authenticated_at + timedelta(minutes=30)).isoformat()
+        }
 
         return {
             'status': 'authenticated',
             'user_id': user_id,
             'session_token': session_token,
-            'authenticated_at': now_utc().isoformat()
+            'authenticated_at': authenticated_at.isoformat()
         }
 
     def authorize(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Check authorization."""
-        session_token = params.get('session_token')
+        """Check authorization against an issued, unexpired session."""
+        session_token = params.get('session_token', '')
         required_role = params.get('required_role', 'viewer')
+
+        session = self.sessions.get(session_token)
+        if not session:
+            return {
+                'authorized': False,
+                'status': 'denied',
+                'required_role': required_role,
+                'error': 'Invalid session token'
+            }
+
+        if now_utc().isoformat() > session['expires_at']:
+            del self.sessions[session_token]
+            return {
+                'authorized': False,
+                'status': 'denied',
+                'required_role': required_role,
+                'error': 'Session expired'
+            }
+
+        required_actions = self.roles.get(required_role, [])
+        granted_actions = self.roles.get(session['role'], [])
+        if not set(required_actions).issubset(granted_actions):
+            return {
+                'authorized': False,
+                'status': 'denied',
+                'required_role': required_role,
+                'error': 'Insufficient role'
+            }
 
         return {
             'authorized': True,
@@ -308,14 +354,15 @@ class DashboardAuthentication:
 
     def create_session(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Create authenticated session."""
-        session_id = f"session_{uuid.uuid4().hex[:8]}"
+        session_id = f"session_{secrets.token_urlsafe(16)}"
         user_id = params.get('user_id')
         timeout_minutes = params.get('timeout_minutes', 30)
+        created_at = now_utc()
 
         return {
             'session_id': session_id,
             'user_id': user_id,
             'timeout_minutes': timeout_minutes,
-            'expires_at': now_utc().isoformat(),
-            'created_at': now_utc().isoformat()
+            'expires_at': (created_at + timedelta(minutes=timeout_minutes)).isoformat(),
+            'created_at': created_at.isoformat()
         }

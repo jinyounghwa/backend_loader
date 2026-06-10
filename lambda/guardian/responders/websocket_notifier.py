@@ -2,8 +2,13 @@
 WebSocket 기반 실시간 양방향 알림 시스템
 """
 
+import hmac
+import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 
 class WebSocketNotifier:
@@ -24,8 +29,15 @@ class WebSocketNotifier:
         Returns:
             연결 결과
         """
-        # 간단한 토큰 검증 (실제로는 JWT 검증)
-        if not auth_token or auth_token == "invalid":
+        # WEBSOCKET_AUTH_TOKEN 환경 변수와 일치해야만 연결 허용 (미설정 시 전체 거부)
+        expected_token = os.getenv("WEBSOCKET_AUTH_TOKEN", "")
+        if not expected_token:
+            logger.warning(
+                "WEBSOCKET_AUTH_TOKEN is not configured; rejecting connection %s", connection_id
+            )
+            return {"status": "unauthorized", "error": "Invalid token"}
+
+        if not auth_token or not hmac.compare_digest(auth_token, expected_token):
             return {"status": "unauthorized", "error": "Invalid token"}
 
         self.connections[connection_id] = {
