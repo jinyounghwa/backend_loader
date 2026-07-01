@@ -4,10 +4,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-import boto3
 from botocore.exceptions import ClientError
 from guardian.checkers.base import BaseChecker, CheckResult
-from guardian.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +21,7 @@ class RDSChecker(BaseChecker):
         credentials: Optional[Dict[str, str]] = None,
     ):
         super().__init__(clients or {}, config or {}, account_id, credentials)
-        self.rds_client = self.clients.get("rds")
-        if self.rds_client is None:
-            self.rds_client = boto3.client("rds", **Config.get_boto3_kwargs())
+        self.rds_client = self._get_or_create_client("rds")
 
     def check(self) -> CheckResult:
         """Check all RDS instances for security anomalies."""

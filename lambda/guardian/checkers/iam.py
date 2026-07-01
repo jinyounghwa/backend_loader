@@ -5,10 +5,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-import boto3
 from botocore.exceptions import ClientError
 from guardian.checkers.base import BaseChecker, CheckResult
-from guardian.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -30,9 +28,7 @@ class IAMChecker(BaseChecker):
         self.baseline_key = "iam-baseline"
         self.table_name = effective_config.get("iam_baseline_table", "guardian-iam-baseline")
 
-        self.iam_client = (clients or {}).get("iam")
-        if self.iam_client is None:
-            self.iam_client = boto3.client("iam", **Config.get_boto3_kwargs())
+        self.iam_client = self._get_or_create_client("iam")
         # Backward compatibility alias
         self.iam = self.iam_client
 

@@ -3,12 +3,12 @@ Sprint 32 Phase 5: Statistics and Analytics Handler
 Provides aggregated audit log statistics and analytics
 """
 
-import json
 import logging
 import os
 from typing import Any, Dict, List
 from datetime import datetime, timedelta
 from collections import defaultdict
+from guardian.http_response import success_response, error_response
 
 logger = logging.getLogger(__name__)
 logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
@@ -33,7 +33,7 @@ def handle_get_statistics(event: Dict[str, Any], context: Any) -> Dict[str, Any]
         end_time = query_params.get('end_time')
 
         if not account_id and not connection_id:
-            return error_response('Missing required parameter: account_id or connection_id', 400)
+            return error_response(400, 'Missing required parameter: account_id or connection_id')
 
         stats = calculate_statistics(
             account_id=account_id,
@@ -46,7 +46,7 @@ def handle_get_statistics(event: Dict[str, Any], context: Any) -> Dict[str, Any]
 
     except Exception as e:
         logger.error(f'Error getting statistics: {str(e)}')
-        return error_response('Failed to get statistics', 500)
+        return error_response(500, 'Failed to get statistics')
 
 
 def calculate_statistics(
@@ -222,25 +222,3 @@ def calculate_success_rate(logs: List[Dict[str, Any]]) -> float:
 
     successful = sum(1 for log in logs if log.get('status') == 'success')
     return (successful / len(logs)) * 100.0
-
-
-def success_response(data: Dict[str, Any]) -> Dict[str, Any]:
-    """Build successful response."""
-    return {
-        'statusCode': 200,
-        'body': json.dumps(data),
-        'headers': {
-            'Content-Type': 'application/json'
-        }
-    }
-
-
-def error_response(message: str, status_code: int) -> Dict[str, Any]:
-    """Build error response."""
-    return {
-        'statusCode': status_code,
-        'body': json.dumps({'error': message}),
-        'headers': {
-            'Content-Type': 'application/json'
-        }
-    }

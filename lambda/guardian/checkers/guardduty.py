@@ -4,10 +4,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-import boto3
 from botocore.exceptions import ClientError
 from guardian.checkers.base import BaseChecker, CheckResult
-from guardian.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +27,10 @@ class GuardDutyChecker(BaseChecker):
 
         self.lookback_hours = effective_config.get("guardduty_lookback_hours", 24)
 
-        self.guardduty_client = (clients or {}).get("guardduty")
-        if self.guardduty_client is None:
-            self.guardduty_client = boto3.client("guardduty", **Config.get_boto3_kwargs())
+        self.guardduty_client = self._get_or_create_client("guardduty")
         # Backward compatibility alias
         self.guardduty = self.guardduty_client
-        self.ec2 = (clients or {}).get("ec2")
+        self.ec2 = self.clients.get("ec2")
 
     # ------------------------------------------------------------------
     # Main check entry (sync-first)

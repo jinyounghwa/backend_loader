@@ -4,10 +4,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-import boto3
 from botocore.exceptions import ClientError
 from guardian.checkers.base import BaseChecker, CheckResult
-from guardian.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -56,12 +54,10 @@ class CloudTrailChecker(BaseChecker):
             effective_config.get("authorized_regions", ["us-east-1", "us-west-2", "eu-west-1"])
         )
 
-        self.cloudtrail_client = (clients or {}).get("cloudtrail")
-        if self.cloudtrail_client is None:
-            self.cloudtrail_client = boto3.client("cloudtrail", **Config.get_boto3_kwargs())
+        self.cloudtrail_client = self._get_or_create_client("cloudtrail")
         # Backward compatibility alias
         self.cloudtrail = self.cloudtrail_client
-        self.sts = (clients or {}).get("sts")
+        self.sts = self.clients.get("sts")
 
     # ------------------------------------------------------------------
     # Main check entry (sync-first)

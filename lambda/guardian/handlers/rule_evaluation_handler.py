@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import List, Dict, Any
 from dataclasses import dataclass, asdict
 
+from guardian.http_response import success_response
 from storage.security_rules import SecurityRuleRepository
 from detectors.anomaly_detector import AnomalyDetector
 from responders.remediation_orchestrator import RemediationOrchestrator
@@ -270,11 +271,7 @@ def lambda_handler(event, context):
         handler = RuleEvaluationHandler(rules_repo, detector, responder, audit_repo)
         result = handler.handle_evaluation(event)
 
-        return {
-            'statusCode': 200,
-            'body': json.dumps(asdict(result)),
-            'headers': {'Content-Type': 'application/json'}
-        }
+        return success_response(asdict(result))
 
     except Exception as e:
         logger.error(f"Lambda handler error: {str(e)}")

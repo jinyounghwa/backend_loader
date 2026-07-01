@@ -11,6 +11,7 @@ from typing import Any, Dict
 lambda_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(lambda_dir))
 
+from guardian.http_response import success_response, error_response
 from handlers.audit_logger import AuditLogger
 
 
@@ -47,12 +48,7 @@ def handle_get_audit_logs(event: Dict[str, Any], context: Any) -> Dict[str, Any]
 
         # Validate: at least one filter required
         if not account_id and not connection_id:
-            return {
-                "statusCode": 400,
-                "body": json.dumps(
-                    {"error": "Missing required parameter: account_id or connection_id"}
-                ),
-            }
+            return error_response(400, "Missing required parameter: account_id or connection_id")
 
         # Query audit logs with filters
         logs = AuditLogger.query_with_filters(
@@ -63,24 +59,18 @@ def handle_get_audit_logs(event: Dict[str, Any], context: Any) -> Dict[str, Any]
             event_type=event_type,
         )
 
-        return {
-            "statusCode": 200,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps(
-                {
-                    "items": logs,
-                    "count": len(logs),
-                    "total": len(logs),
-                    "account_id": account_id,
-                    "connection_id": connection_id,
-                    "filters": {
-                        "start_time": start_time,
-                        "end_time": end_time,
-                        "event_type": event_type,
-                    },
-                }
-            ),
-        }
+        return success_response({
+            "items": logs,
+            "count": len(logs),
+            "total": len(logs),
+            "account_id": account_id,
+            "connection_id": connection_id,
+            "filters": {
+                "start_time": start_time,
+                "end_time": end_time,
+                "event_type": event_type,
+            },
+        })
 
     except Exception as e:
         print(f"Error handling audit logs query: {e}")

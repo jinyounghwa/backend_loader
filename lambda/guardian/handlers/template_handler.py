@@ -11,6 +11,7 @@ Handles REST API operations for rule templates:
 import json
 import os
 from typing import Dict, Any
+from guardian.http_response import success_response, error_response
 from storage.rule_template import TemplateRepository, RuleTemplate, BUILTIN_TEMPLATES
 
 
@@ -196,21 +197,3 @@ def delete_template(repo: TemplateRepository, template_id: str) -> Dict[str, Any
     except Exception as e:
         print(f"Error deleting template: {e}")
         return error_response(500, str(e))
-
-
-def success_response(data: Dict[str, Any], status_code: int = 200) -> Dict[str, Any]:
-    """Format success response"""
-    return {
-        "statusCode": status_code,
-        "body": json.dumps(data),
-        "headers": {"Content-Type": "application/json"},
-    }
-
-
-def error_response(status_code: int, message: str) -> Dict[str, Any]:
-    """Format error response"""
-    return {
-        "statusCode": status_code,
-        "body": json.dumps({"error": message}),
-        "headers": {"Content-Type": "application/json"},
-    }

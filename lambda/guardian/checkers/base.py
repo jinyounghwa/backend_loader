@@ -13,7 +13,9 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional
 
+import boto3
 from botocore.exceptions import ClientError
+from guardian.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +118,22 @@ class BaseChecker(ABC):
         self.config = config
         self.account_id = account_id
         self.credentials = credentials
+
+    # ------------------------------------------------------------------
+    # Shared client construction
+    # ------------------------------------------------------------------
+
+    def _get_or_create_client(self, service_name: str) -> Any:
+        """Return the injected client from ``self.clients`` or create one.
+
+        Replaces the identical
+        ``self.clients.get(name) or boto3.client(name, **Config.get_boto3_kwargs())``
+        boilerplate previously copy-pasted in every checker's ``__init__``.
+        """
+        client = self.clients.get(service_name)
+        if client is None:
+            client = boto3.client(service_name, **Config.get_boto3_kwargs())
+        return client
 
     # ------------------------------------------------------------------
     # Execution contract: subclasses implement EITHER check() OR check_async()

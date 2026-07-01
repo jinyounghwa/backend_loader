@@ -2,6 +2,7 @@
 
 import json
 from typing import Dict, Any
+from guardian.http_response import success_response, error_response
 
 
 class PlaybookHandler:
@@ -262,16 +263,8 @@ class PlaybookHandler:
 
     def _success_response(self, data: Dict) -> Dict:
         """Return success response."""
-        return {
-            'statusCode': 200,
-            'body': json.dumps(data),
-            'headers': {'Content-Type': 'application/json'}
-        }
+        return success_response(data)
 
     def _error_response(self, status_code: int, message: str) -> Dict:
         """Return error response."""
-        return {
-            'statusCode': status_code,
-            'body': json.dumps({'error': message}),
-            'headers': {'Content-Type': 'application/json'}
-        }
+        return error_response(status_code, message)

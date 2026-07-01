@@ -5,7 +5,6 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
-import boto3
 from botocore.exceptions import ClientError
 from guardian.checkers.base import BaseChecker, CheckResult
 from guardian.config import Config
@@ -35,18 +34,14 @@ class CostChecker(BaseChecker):
         self.threshold = self.config["cost_threshold"]
         self.is_localstack = Config.is_localstack()
 
-        # Get from clients dict (tests) or create new (production)
-        self.ssm_client = self.clients.get("ssm")
-        if self.ssm_client is None:
-            self.ssm_client = boto3.client("ssm", **Config.get_boto3_kwargs())
-
+        self.ssm_client = self._get_or_create_client("ssm")
         self._ce_client = self.clients.get("ce")
 
     @property
     def ce_client(self):
         """Lazy Cost Explorer client (only created when needed)."""
         if self._ce_client is None:
-            self._ce_client = boto3.client("ce", **Config.get_boto3_kwargs())
+            self._ce_client = self._get_or_create_client("ce")
         return self._ce_client
 
     # ------------------------------------------------------------------

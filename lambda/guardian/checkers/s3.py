@@ -6,7 +6,6 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-import boto3
 from botocore.exceptions import ClientError
 from guardian.checkers.base import BaseChecker, CheckResult
 from guardian.config import Config
@@ -27,9 +26,7 @@ class S3Checker(BaseChecker):
         super().__init__(clients or {}, config or {}, account_id, credentials)
         self.is_localstack = Config.is_localstack()
 
-        self.s3_client = self.clients.get("s3")
-        if self.s3_client is None:
-            self.s3_client = boto3.client("s3", **Config.get_boto3_kwargs())
+        self.s3_client = self._get_or_create_client("s3")
 
     # ------------------------------------------------------------------
     # Main check entry (sync-first)

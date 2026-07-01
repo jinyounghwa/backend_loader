@@ -8,6 +8,7 @@ Handles REST API operations for rule validation:
 import json
 import os
 from typing import Dict, Any
+from guardian.http_response import success_response, error_response
 from validators.rule_validator import RuleValidator
 from storage.rule_template import TemplateRepository
 from detectors.anomaly_detector import AnomalyDetector
@@ -98,21 +99,3 @@ def test_rule(validator: RuleValidator, body: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         print(f"Error testing rule: {e}")
         return error_response(500, str(e))
-
-
-def success_response(data: Dict[str, Any], status_code: int = 200) -> Dict[str, Any]:
-    """Format success response"""
-    return {
-        "statusCode": status_code,
-        "body": json.dumps(data),
-        "headers": {"Content-Type": "application/json"},
-    }
-
-
-def error_response(status_code: int, message: str) -> Dict[str, Any]:
-    """Format error response"""
-    return {
-        "statusCode": status_code,
-        "body": json.dumps({"error": message}),
-        "headers": {"Content-Type": "application/json"},
-    }

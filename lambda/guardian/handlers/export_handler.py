@@ -10,6 +10,7 @@ import csv
 import io
 from typing import Any, Dict, List
 from datetime import datetime
+from guardian.http_response import error_response
 
 logger = logging.getLogger(__name__)
 logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
@@ -35,10 +36,10 @@ def handle_export_logs(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         end_time = query_params.get('end_time')
 
         if format_type not in ['json', 'csv']:
-            return error_response('Invalid format. Use "json" or "csv"', 400)
+            return error_response(400, 'Invalid format. Use "json" or "csv"')
 
         if not account_id and not connection_id:
-            return error_response('Missing required parameter: account_id or connection_id', 400)
+            return error_response(400, 'Missing required parameter: account_id or connection_id')
 
         # Get logs
         logs = get_filtered_logs(account_id, connection_id, start_time, end_time)
@@ -64,7 +65,7 @@ def handle_export_logs(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     except Exception as e:
         logger.error(f'Error exporting logs: {str(e)}')
-        return error_response('Failed to export logs', 500)
+        return error_response(500, 'Failed to export logs')
 
 
 def get_filtered_logs(
@@ -160,14 +161,3 @@ def get_csv_fieldnames(logs: List[Dict[str, Any]]) -> List[str]:
     result.extend(sorted(additional_fields - set(standard_fields)))
 
     return result
-
-
-def error_response(message: str, status_code: int) -> Dict[str, Any]:
-    """Build error response."""
-    return {
-        'statusCode': status_code,
-        'body': json.dumps({'error': message}),
-        'headers': {
-            'Content-Type': 'application/json'
-        }
-    }

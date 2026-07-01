@@ -5,10 +5,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set
 
-import boto3
 from botocore.exceptions import ClientError
 from guardian.checkers.base import BaseChecker, CheckResult
-from guardian.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +30,7 @@ class IAMPolicyAnalyzer(BaseChecker):
         credentials: Optional[Dict[str, str]] = None,
     ):
         super().__init__(clients or {}, config or {}, account_id, credentials)
-        self.iam_client = self.clients.get("iam")
-        if self.iam_client is None:
-            self.iam_client = boto3.client("iam", **Config.get_boto3_kwargs())
+        self.iam_client = self._get_or_create_client("iam")
 
     def check(self) -> CheckResult:
         """Analyze IAM policies for risky patterns."""

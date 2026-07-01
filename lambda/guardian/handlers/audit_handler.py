@@ -2,6 +2,7 @@
 
 import json
 from typing import Dict, Any
+from guardian.http_response import success_response, error_response
 
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -28,29 +29,23 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             start_time = query_params.get('start_time', '2026-05-25T00:00:00Z')
             end_time = query_params.get('end_time', '2026-05-26T00:00:00Z')
 
-            return {
-                'statusCode': 200,
-                'body': json.dumps({
-                    'message': 'Audit trail events retrieved',
-                    'start_time': start_time,
-                    'end_time': end_time,
-                    'event_count': 0,
-                    'implementation': 'pending'
-                })
-            }
+            return success_response({
+                'message': 'Audit trail events retrieved',
+                'start_time': start_time,
+                'end_time': end_time,
+                'event_count': 0,
+                'implementation': 'pending'
+            })
 
         elif path.startswith('/audit/trail/') and method == 'GET':
             threat_id = path.replace('/audit/trail/', '')
 
-            return {
-                'statusCode': 200,
-                'body': json.dumps({
-                    'message': 'Threat audit chain retrieved',
-                    'threat_id': threat_id,
-                    'event_count': 0,
-                    'implementation': 'pending'
-                })
-            }
+            return success_response({
+                'message': 'Threat audit chain retrieved',
+                'threat_id': threat_id,
+                'event_count': 0,
+                'implementation': 'pending'
+            })
 
         elif path == '/audit/export' and method == 'POST':
             body = json.loads(event.get('body', '{}'))
@@ -58,98 +53,74 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             end_time = body.get('end_time', '2026-05-26T00:00:00Z')
             format_type = body.get('format', 'json')
 
-            return {
-                'statusCode': 200,
-                'body': json.dumps({
-                    'message': 'Audit log exported',
-                    'format': format_type,
-                    'start_time': start_time,
-                    'end_time': end_time,
-                    'implementation': 'pending'
-                })
-            }
+            return success_response({
+                'message': 'Audit log exported',
+                'format': format_type,
+                'start_time': start_time,
+                'end_time': end_time,
+                'implementation': 'pending'
+            })
 
         elif path == '/compliance/soc2' and method == 'GET':
             query_params = event.get('queryStringParameters', {}) or {}
             period_days = int(query_params.get('period_days', 30))
 
-            return {
-                'statusCode': 200,
-                'body': json.dumps({
-                    'message': 'SOC 2 compliance report generated',
-                    'report_type': 'SOC2_TYPE_II',
-                    'period_days': period_days,
-                    'compliance_status': 'COMPLIANT',
-                    'implementation': 'pending'
-                })
-            }
+            return success_response({
+                'message': 'SOC 2 compliance report generated',
+                'report_type': 'SOC2_TYPE_II',
+                'period_days': period_days,
+                'compliance_status': 'COMPLIANT',
+                'implementation': 'pending'
+            })
 
         elif path == '/compliance/cis' and method == 'GET':
             query_params = event.get('queryStringParameters', {}) or {}
             period_days = int(query_params.get('period_days', 30))
 
-            return {
-                'statusCode': 200,
-                'body': json.dumps({
-                    'message': 'CIS Benchmark report generated',
-                    'report_type': 'CIS_BENCHMARK',
-                    'period_days': period_days,
-                    'cis_score': 89,
-                    'implementation': 'pending'
-                })
-            }
+            return success_response({
+                'message': 'CIS Benchmark report generated',
+                'report_type': 'CIS_BENCHMARK',
+                'period_days': period_days,
+                'cis_score': 89,
+                'implementation': 'pending'
+            })
 
         elif path == '/compliance/pci' and method == 'GET':
             query_params = event.get('queryStringParameters', {}) or {}
             period_days = int(query_params.get('period_days', 30))
 
-            return {
-                'statusCode': 200,
-                'body': json.dumps({
-                    'message': 'PCI-DSS compliance report generated',
-                    'report_type': 'PCI_DSS',
-                    'period_days': period_days,
-                    'compliance_level': 1,
-                    'implementation': 'pending'
-                })
-            }
+            return success_response({
+                'message': 'PCI-DSS compliance report generated',
+                'report_type': 'PCI_DSS',
+                'period_days': period_days,
+                'compliance_level': 1,
+                'implementation': 'pending'
+            })
 
         elif path == '/compliance/metrics' and method == 'GET':
             query_params = event.get('queryStringParameters', {}) or {}
             framework = query_params.get('framework', 'SOC2')
 
-            return {
-                'statusCode': 200,
-                'body': json.dumps({
-                    'message': 'Compliance metrics retrieved',
-                    'framework': framework,
-                    'compliance_score': 85,
-                    'status': 'COMPLIANT',
-                    'implementation': 'pending'
-                })
-            }
+            return success_response({
+                'message': 'Compliance metrics retrieved',
+                'framework': framework,
+                'compliance_score': 85,
+                'status': 'COMPLIANT',
+                'implementation': 'pending'
+            })
 
         elif path.startswith('/audit/timeline/') and method == 'GET':
             threat_id = path.replace('/audit/timeline/', '')
 
-            return {
-                'statusCode': 200,
-                'body': json.dumps({
-                    'message': 'Audit timeline retrieved',
-                    'threat_id': threat_id,
-                    'event_count': 0,
-                    'implementation': 'pending'
-                })
-            }
+            return success_response({
+                'message': 'Audit timeline retrieved',
+                'threat_id': threat_id,
+                'event_count': 0,
+                'implementation': 'pending'
+            })
 
         else:
-            return {
-                'statusCode': 404,
-                'body': json.dumps({'error': 'Route not found'})
-            }
+            return error_response(404, 'Route not found')
 
     except Exception as e:
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'error': str(e)})
-        }
+        return error_response(500, str(e))
