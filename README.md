@@ -1,10 +1,10 @@
-# AWS Guardian - v2.9 (Production Ready)
+# AWS Guardian - v2.10
 
 > **"잠자는 동안에도 AWS를 지킨다"**
 
-AWS 계정을 자동으로 감시하고 위협 탐지 시 텔레그램 알림, 자동 대응, 디스코드 대시보드 제어를 제공하는 서버리스 보안 및 비용 감시 시스템입니다.
+**여러 AWS 계정**을 자동으로 감시하고 위협 탐지 시 텔레그램 알림, 자동 대응, 디스코드 대시보드 제어를 제공하는 서버리스 보안 및 비용 감시 시스템입니다.
 
-**상태:** 🛠️ **개발 진행 중** | **테스트:** ✅ **2,356 통과 / 61 스킵 / 0 실패 (2,417 수집)** | **버전:** 개발 버전
+**상태:** 🛠️ **개발 진행 중** | **테스트:** ✅ **2,372 통과 / 61 스킵 / 0 실패 (2,433 수집)** | **버전:** 개발 버전
 
 > ⚠️ **범위 안내:** **모바일 앱(iOS/Android)** 과 **쿠버네티스/컨테이너 보안**은 **진행하지 않기로 결정된 비범위 항목**입니다. 관련 잔존 코드/스캐폴드는 평가·완성도 산정에서 제외합니다. 자세한 내용은 [스프린트 문서 종합 평가](docs/SPRINT_DOCS_COMPREHENSIVE_REVIEW.md)를 참고하세요.
 
@@ -33,25 +33,30 @@ chmod +x start.sh
 ## 아키텍처
 
 ```
-[LocalStack / AWS]
+[LocalStack / AWS 허브 계정]
        ↓
 [EventBridge (1시간 주기)]
        ↓
-[Guardian Lambda] ───┐
-    ├── Cost Checker (Mock/Explorer)
-    ├── EC2 Checker
-    └── S3 Checker
+[Guardian Lambda] ── sts:AssumeRole ──→ [멤버 계정 A, B, ...]
+    ├── Cost Checker (계정별)
+    ├── EC2 Checker (계정별)
+    └── S3 Checker (계정별)
        ↓
-[Telegram / Discord Webhook]
+[Telegram / Discord Webhook (계정 표기)]
        ↓
 [Next.js Dashboard (apps/web)]
 ```
+
+멀티 계정 구성은 [멀티 계정 감시 가이드](docs/MULTI_ACCOUNT_GUIDE.md)를 참고하세요.
+`GUARDIAN_ACCOUNTS` 환경변수로 수동 등록하거나 AWS Organizations 자동 탐색을 사용할 수 있으며,
+멤버 계정에는 동봉된 [CloudFormation 역할 템플릿](docs/templates/guardian-member-role.yaml) 하나만 배포하면 됩니다.
 
 ## 🎯 핵심 기능 (70+)
 
 ### 보안 & 탐지
 ✅ CloudTrail 분석 | ✅ IAM 이상 탐지 | ✅ GuardDuty 통합  
-✅ EC2/S3 위협 모니터링 | ✅ 실시간 경고 | ✅ RDS 보안 감사
+✅ EC2/S3 위협 모니터링 | ✅ 실시간 경고 | ✅ RDS 보안 감사  
+✅ **멀티 계정 감시** (수동 등록 / Organizations 자동 탐색, ExternalId 지원)
 
 ### 지능형 분석
 ✅ 고급 위협 프로파일링 | ✅ ML 이상 탐지 (5+ 알고리즘)  
@@ -75,7 +80,7 @@ chmod +x start.sh
 
 | 항목 | 수치 | 상태 |
 |------|------|------|
-| **테스트** | 2,356 통과 / 61 스킵 / 0 실패 (2,417 수집) | ✅ PASS |
+| **테스트** | 2,372 통과 / 61 스킵 / 0 실패 (2,433 수집) | ✅ PASS |
 | **스프린트** | Sprint 1~79 완료 (메인 시리즈) | ✅ DONE |
 | **기능** | 70+ | ✅ IMPLEMENTED |
 | **모듈** | 40+ | ✅ BUILT |
@@ -123,12 +128,14 @@ terraform init
 terraform apply
 ```
 
-상세한 배포 방법은 [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)를 참고하세요.
+상세한 배포 방법은 [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)를,
+여러 계정을 한 번에 감시하는 구성은 [멀티 계정 감시 가이드](docs/MULTI_ACCOUNT_GUIDE.md)를 참고하세요.
 
 ## 📚 문서
 
 | 문서 | 설명 |
 |------|------|
+| [MULTI_ACCOUNT_GUIDE.md](docs/MULTI_ACCOUNT_GUIDE.md) | **🏢 멀티 계정 감시 가이드 (등록부터 사용까지)** |
 | [SPRINT_DOCS_COMPREHENSIVE_REVIEW.md](docs/SPRINT_DOCS_COMPREHENSIVE_REVIEW.md) | **🧭 스프린트 문서 종합 평가 (범위·제외 항목 포함)** |
 | [SECURITY_REVIEW_2026-06-01.md](docs/SECURITY_REVIEW_2026-06-01.md) | **🔒 보안 검토 및 리팩토링 보고서** |
 | [FINAL_COMPLETION.md](docs/FINAL_COMPLETION.md) | 📋 프로젝트 현재 상태 |
@@ -161,15 +168,16 @@ terraform apply
 - **v2.5** - 실시간 대시보드 & ML 앙상블
 - **v2.7** - AI 위협 사냥 & 응답 오케스트레이션
 - **v2.8** - 최종 앙상블 & 실시간 업데이트
-- **v2.9** - 고급 대시보드 & 시각화 ✅ **CURRENT**
+- **v2.9** - 고급 대시보드 & 시각화
+- **v2.10** - 보안/유지보수 리팩토링 & 멀티 계정 감시 ✅ **CURRENT**
 
 > 모바일(iOS/Android)과 쿠버네티스(v3.0 프리뷰)는 진행하지 않기로 결정되어 로드맵에서 제외되었습니다.
 
 ## 📈 성능 메트릭
 
-- ✅ **테스트:** 2,356 통과 / 61 스킵 / 0 실패 (2,417 수집)
-- ✅ **코드 품질:** 깔끔한 아키텍처, 일관된 패턴 (flake8 통과)
-- ✅ **보안:** HTML 인젝션 방어, SSM 시크릿 관리, 서명·권한 검증 ([보안 보고서](docs/SECURITY_REVIEW_2026-06-01.md))
+- ✅ **테스트:** 2,372 통과 / 61 스킵 / 0 실패 (2,433 수집)
+- ✅ **코드 품질:** `guardian.*` 단일 import 규약, sys.path 핵 제거, 일관된 패턴
+- ✅ **보안:** HTML 인젝션 방어, SSM 시크릿 관리, 서명·권한 검증, 최소권한 IAM(terraform·SAM 일치) ([보안 보고서](docs/SECURITY_REVIEW_2026-06-01.md))
 - ✅ **성능:** WebSocket 실시간 스트리밍, <3초 응답 시간
 
 ## 🛠️ 개발 환경 설정
@@ -218,6 +226,6 @@ MIT License
 
 ---
 
-**최종 갱신:** 2026-06-01  
-**상태:** 🛠️ 개발 진행 중 · 2,356 테스트 통과 · 보안 검토 완료  
+**최종 갱신:** 2026-07-04  
+**상태:** 🛠️ 개발 진행 중 · 2,372 테스트 통과 · 보안 리팩토링 & 멀티 계정 감시 추가  
 **범위:** 서버리스 보안/비용 감시 백엔드 + 웹 대시보드 (모바일·쿠버네티스 제외)
