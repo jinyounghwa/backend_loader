@@ -1,0 +1,93 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  AWS Guardian member-account role. Deploy this stack in EACH account you
+  want Guardian (running in the hub account) to monitor. Grants read-only
+  inspection plus the two remediation actions (EC2 stop / S3 public-access
+  block), mirroring the hub's least-privilege policy.
+
+Parameters:
+  HubAccountId:
+    Type: String
+    AllowedPattern: '^\d{12}$'
+    Description: AWS account ID where the Guardian Lambda runs (hub account)
+  RoleName:
+    Type: String
+    Default: aws-guardian-cross-account-role
+    Description: Must match CROSS_ACCOUNT_ROLE_NAME configured on the hub Lambda
+  ExternalId:
+    Type: String
+    Default: ''
+    Description: (Optional) ExternalId required to assume this role. Leave empty to disable.
+
+Conditions:
+  UseExternalId: !Not [!Equals [!Ref ExternalId, '']]
+
+Resources:
+  GuardianCrossAccountRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref RoleName
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${HubAccountId}:root'
+            Action: 'sts:AssumeRole'
+            Condition: !If
+              - UseExternalId
+              - StringEquals:
+                  sts:ExternalId: !Ref ExternalId
+              - !Ref 'AWS::NoValue'
+      Policies:
+        - PolicyName: guardian-monitoring
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: Describe
+                Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                  - ec2:DescribeRegions
+                  - ec2:DescribeSecurityGroups
+                  - ce:GetCostAndUsage
+                Resource: '*'
+              - Sid: EC2Stop
+                Effect: Allow
+                Action:
+                  - ec2:StopInstances
+                Resource: 'arn:aws:ec2:*:*:instance/*'
+              - Sid: S3Inspect
+                Effect: Allow
+                Action:
+                  - s3:ListAllMyBuckets
+                  - s3:GetBucketAcl
+                  - s3:GetBucketPolicy
+                  - s3:GetBucketLocation
+                  - s3:GetBucketPublicAccessBlock
+                  - s3:PutBucketPublicAccessBlock
+                Resource: 'arn:aws:s3:::*'
+              - Sid: CloudTrail
+                Effect: Allow
+                Action:
+                  - cloudtrail:LookupEvents
+                Resource: 'arn:aws:cloudtrail:*:*:trail/*'
+              - Sid: IAMRead
+                Effect: Allow
+                Action:
+                  - iam:ListUsers
+                  - iam:ListAccessKeys
+                  - iam:GetUser
+                Resource: 'arn:aws:iam::*:user/*'
+              - Sid: GuardDutyRead
+                Effect: Allow
+                Action:
+                  - guardduty:ListDetectors
+                  - guardduty:ListFindings
+                  - guardduty:GetFindings
+                Resource: 'arn:aws:guardduty:*:*:detector/*'
+
+Outputs:
+  RoleArn:
+    Description: ARN the hub account will assume
+    Value: !GetAtt GuardianCrossAccountRole.Arn

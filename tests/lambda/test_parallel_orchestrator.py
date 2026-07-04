@@ -15,9 +15,6 @@ from unittest.mock import Mock
 os.environ["AWS_ENV"] = "localstack"
 
 # Add lambda directory to path
-lambda_dir = Path(__file__).parent.parent.parent / "lambda"
-sys.path.insert(0, str(lambda_dir))
-
 from guardian.checkers.base import CheckResult
 from guardian.parallel_orchestrator import ParallelOrchestrator
 

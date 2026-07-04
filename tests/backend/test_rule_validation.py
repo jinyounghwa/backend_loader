@@ -9,12 +9,9 @@ from unittest.mock import MagicMock, patch
 from datetime import datetime, timezone
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from validators.rule_validator import RuleValidator
-from validators.validation_result import ValidationResult
-from storage.rule_template import RuleTemplate, TemplateRepository
+from guardian.validators.rule_validator import RuleValidator
+from guardian.validators.validation_result import ValidationResult
+from guardian.storage.rule_template import RuleTemplate, TemplateRepository
 
 
 class TestValidationResult:
@@ -260,8 +257,8 @@ class TestValidationHandler:
 
     def test_validate_rule_handler_valid(self):
         """Test validation handler with valid rule"""
-        from handlers.validation_handler import validate_rule
-        from validators.rule_validator import RuleValidator
+        from guardian.handlers.validation_handler import validate_rule
+        from guardian.validators.rule_validator import RuleValidator
 
         mock_template_repo = MagicMock()
         mock_anomaly_detector = MagicMock()
@@ -286,8 +283,8 @@ class TestValidationHandler:
 
     def test_validate_rule_handler_missing_field(self):
         """Test validation handler with missing rule field"""
-        from handlers.validation_handler import validate_rule
-        from validators.rule_validator import RuleValidator
+        from guardian.handlers.validation_handler import validate_rule
+        from guardian.validators.rule_validator import RuleValidator
 
         mock_template_repo = MagicMock()
         mock_anomaly_detector = MagicMock()

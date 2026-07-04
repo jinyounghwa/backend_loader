@@ -9,10 +9,7 @@ from datetime import datetime
 from unittest.mock import MagicMock, patch
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from validators.test_executor import TestExecutor, TestResult
+from guardian.validators.test_executor import TestExecutor, TestResult
 
 
 class TestTestResult:

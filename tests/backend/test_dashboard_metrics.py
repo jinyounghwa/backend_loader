@@ -1,7 +1,6 @@
 import pytest
 from datetime import datetime
 import sys
-sys.path.insert(0, '/Users/younghwa.jin/Documents/backend_loader/lambda')
 from guardian.ml.dashboard_metrics import DashboardMetrics
 
 

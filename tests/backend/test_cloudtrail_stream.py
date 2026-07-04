@@ -5,11 +5,8 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from handlers.cloudtrail_stream_handler import CloudTrailStreamHandler
-from processors.event_normalizer import EventNormalizer
+from guardian.handlers.cloudtrail_stream_handler import CloudTrailStreamHandler
+from guardian.processors.event_normalizer import EventNormalizer
 
 
 # ==========================================

@@ -5,10 +5,6 @@ from pathlib import Path
 from datetime import datetime
 from unittest.mock import Mock
 import pytest
-
-lambda_path = Path(__file__).parent.parent.parent / "lambda"
-sys.path.insert(0, str(lambda_path))
-
 from guardian.services.playbook_definition_service import PlaybookDefinitionService
 from guardian.engines.playbook_execution_engine import PlaybookExecutionEngine
 from guardian.services.playbook_builder_service import PlaybookBuilderService

@@ -6,10 +6,7 @@ from datetime import datetime, timezone
 from unittest.mock import Mock, patch, MagicMock
 import sys
 import os
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../lambda/guardian'))
-
-from orchestrators.incident_orchestrator import IncidentOrchestrator
+from guardian.orchestrators.incident_orchestrator import IncidentOrchestrator
 
 
 class TestIncidentOrchestrationBasics:

@@ -9,10 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from handlers.audit_logger import AuditLogger
+from guardian.handlers.audit_logger import AuditLogger
 
 
 class TestAuditLoggerAccountIdSupport:
@@ -142,7 +139,7 @@ class TestAuditLoggerAccountIdSupport:
             ]
 
             # Use query_connection_logs which doesn't need mocking in this context
-            with patch('handlers.audit_logger.AuditLogger.query_connection_logs', return_value=mock_logs):
+            with patch('guardian.handlers.audit_logger.AuditLogger.query_connection_logs', return_value=mock_logs):
                 logs = AuditLogger.query_with_filters(
                     connection_id='conn-123',
                     start_time='2026-05-22T00:00:00Z',

@@ -6,12 +6,9 @@ from datetime import datetime, timezone
 from unittest.mock import Mock, patch, MagicMock
 import sys
 import os
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../lambda/guardian'))
-
-from services.jira_service import JiraTicketService
-from services.servicenow_service import ServiceNowTicketService
-from handlers.ticketing_handler import TicketingHandler
+from guardian.services.jira_service import JiraTicketService
+from guardian.services.servicenow_service import ServiceNowTicketService
+from guardian.handlers.ticketing_handler import TicketingHandler
 
 
 class TestJiraTicketCreation:
@@ -41,7 +38,7 @@ class TestJiraTicketCreation:
             }
         }
 
-    @patch('services.jira_service.requests.post')
+    @patch('guardian.services.jira_service.requests.post')
     def test_jira_create_issue_success(self, mock_post, jira_service, sample_threat):
         """Test successful Jira issue creation"""
         mock_response = Mock()
@@ -54,7 +51,7 @@ class TestJiraTicketCreation:
         assert issue_key == 'SEC-123'
         mock_post.assert_called_once()
 
-    @patch('services.jira_service.requests.post')
+    @patch('guardian.services.jira_service.requests.post')
     def test_jira_create_issue_high_severity(self, mock_post, jira_service, sample_threat):
         """Test Jira issue creation with high severity (8/10)"""
         mock_response = Mock()
@@ -70,7 +67,7 @@ class TestJiraTicketCreation:
         assert payload['fields']['priority']['name'] == 'Highest'
         assert payload['fields']['issuetype']['name'] == 'Critical'
 
-    @patch('services.jira_service.requests.post')
+    @patch('guardian.services.jira_service.requests.post')
     def test_jira_create_issue_low_severity(self, mock_post, jira_service, sample_threat):
         """Test Jira issue creation with low severity (3/10)"""
         mock_response = Mock()
@@ -108,7 +105,7 @@ class TestServiceNowIncidentCreation:
             'timestamp': datetime.now(timezone.utc).isoformat()
         }
 
-    @patch('services.servicenow_service.requests.post')
+    @patch('guardian.services.servicenow_service.requests.post')
     def test_servicenow_create_incident_success(self, mock_post, servicenow_service, sample_threat):
         """Test successful ServiceNow incident creation"""
         mock_response = Mock()
@@ -121,7 +118,7 @@ class TestServiceNowIncidentCreation:
         assert incident_number == 'INC0010001'
         mock_post.assert_called_once()
 
-    @patch('services.servicenow_service.requests.post')
+    @patch('guardian.services.servicenow_service.requests.post')
     def test_servicenow_create_incident_severity_mapping(self, mock_post, servicenow_service, sample_threat):
         """Test ServiceNow severity conversion (AWS 7/10 -> SNOW 2)"""
         mock_response = Mock()
@@ -137,7 +134,7 @@ class TestServiceNowIncidentCreation:
         assert payload['severity'] == 2
         assert payload['urgency'] == 2
 
-    @patch('services.servicenow_service.requests.post')
+    @patch('guardian.services.servicenow_service.requests.post')
     def test_servicenow_escalate_incident(self, mock_post, servicenow_service):
         """Test ServiceNow incident escalation for critical severity"""
         mock_response = Mock()

@@ -11,9 +11,6 @@ from unittest.mock import Mock, patch
 os.environ["AWS_ENV"] = "localstack"
 
 # Add lambda directory to path
-lambda_dir = Path(__file__).parent.parent.parent / "lambda"
-sys.path.insert(0, str(lambda_dir))
-
 from guardian.checkers.cloudtrail import CloudTrailChecker
 from guardian.checkers.cost import CostChecker
 from guardian.checkers.ec2 import EC2Checker

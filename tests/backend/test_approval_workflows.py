@@ -6,10 +6,6 @@ import pytest
 from unittest.mock import Mock
 from datetime import datetime, timedelta, timezone
 import time
-
-lambda_path = Path(__file__).parent.parent.parent / "lambda"
-sys.path.insert(0, str(lambda_path))
-
 from guardian.storage.approval_workflow import ApprovalWorkflow, RiskLevel
 from guardian.engines.decision_engine import RemediationDecisionEngine
 

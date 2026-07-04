@@ -6,10 +6,6 @@ import pytest
 from unittest.mock import Mock
 
 # Add lambda directory to path
-lambda_path = Path(__file__).parent.parent.parent / "lambda"
-sys.path.insert(0, str(lambda_path))
-
-
 class TestMonitoring:
     """모니터링 & 알람 검증"""
 

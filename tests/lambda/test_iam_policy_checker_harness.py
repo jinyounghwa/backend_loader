@@ -8,10 +8,6 @@ os.environ["AWS_ENV"] = "localstack"
 
 import sys
 from pathlib import Path
-
-lambda_dir = Path(__file__).parent.parent.parent / "lambda"
-sys.path.insert(0, str(lambda_dir))
-
 from guardian.checkers.iam_policy_analyzer import IAMPolicyAnalyzer
 
 

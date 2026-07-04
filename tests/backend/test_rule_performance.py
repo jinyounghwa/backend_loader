@@ -6,11 +6,8 @@ import time
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from storage.rule_cache import RuleCache
-from detectors.parallel_evaluator import ParallelEvaluator, ParallelEvaluationResult
+from guardian.storage.rule_cache import RuleCache
+from guardian.detectors.parallel_evaluator import ParallelEvaluator, ParallelEvaluationResult
 
 
 # ==========================================

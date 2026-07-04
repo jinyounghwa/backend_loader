@@ -1,7 +1,6 @@
 """Telegram bot listener - polls for user commands and executes auto-remediation"""
 
 import logging
-import os
 import re
 import signal
 import sys
@@ -289,8 +288,9 @@ def export_events(format_str: str, days: int = 7, severity: Optional[str] = None
 
 class TelegramBotListener:
     def __init__(self):
-        self.bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-        self.chat_id = os.getenv("TELEGRAM_CHAT_ID")
+        telegram_config = Config.get_telegram_config()
+        self.bot_token = telegram_config["bot_token"]
+        self.chat_id = telegram_config["chat_id"]
 
         if not self.bot_token:
             raise ValueError("TELEGRAM_BOT_TOKEN environment variable is required")
@@ -594,8 +594,8 @@ class TelegramBotListener:
 
 
 if __name__ == "__main__":
-    if not os.getenv("TELEGRAM_BOT_TOKEN"):
-        print("TELEGRAM_BOT_TOKEN 환경변수가 필요합니다.")
+    if not Config.get_telegram_config()["bot_token"]:
+        print("TELEGRAM_BOT_TOKEN 환경변수(또는 SSM 파라미터)가 필요합니다.")
         sys.exit(1)
 
     logging.basicConfig(

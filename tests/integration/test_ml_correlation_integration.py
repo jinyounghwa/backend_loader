@@ -3,8 +3,6 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda'))
 from guardian.ml.threat_prediction_model import ThreatPredictionModel
 from guardian.ml.anomaly_clustering_engine import AnomalyClusteringEngine
 from guardian.ml.threat_trend_analyzer import ThreatTrendAnalyzer

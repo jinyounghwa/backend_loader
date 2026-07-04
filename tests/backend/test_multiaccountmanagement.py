@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import Mock
 
-from guardian.multiaccount import (
+from guardian.multi_account import (
     RoleAssumptioner,
     AccountManager,
     ConsolidatedReporter,

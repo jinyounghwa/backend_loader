@@ -5,10 +5,7 @@ from datetime import datetime, timedelta
 from unittest.mock import MagicMock
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from optimizers.cost_optimizer import CostOptimizer, OptimizationRecommendation
+from guardian.optimizers.cost_optimizer import CostOptimizer, OptimizationRecommendation
 
 
 # ==========================================

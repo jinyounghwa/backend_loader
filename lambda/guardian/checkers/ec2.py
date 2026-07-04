@@ -36,9 +36,18 @@ class EC2Checker(BaseChecker):
         self._client_cache: Dict[str, Any] = {}
 
     def _get_regional_client(self, region: str) -> Any:
-        """Get or create a cached EC2 client for the given region."""
+        """Get or create a cached EC2 client for the given region.
+
+        Uses the checker's cross-account credentials when present, so
+        per-region scans inspect the member account rather than the hub.
+        """
         if region not in self._client_cache:
-            self._client_cache[region] = AWSClientProvider.get_client("ec2", region=region)
+            if self.credentials and self.account_id:
+                self._client_cache[region] = AWSClientProvider.get_client_for_account(
+                    "ec2", self.account_id, self.credentials, region=region
+                )
+            else:
+                self._client_cache[region] = AWSClientProvider.get_client("ec2", region=region)
         return self._client_cache[region]
 
     # ------------------------------------------------------------------

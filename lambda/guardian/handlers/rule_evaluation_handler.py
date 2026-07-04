@@ -5,10 +5,10 @@ from typing import List, Dict, Any
 from dataclasses import dataclass, asdict
 
 from guardian.http_response import success_response
-from storage.security_rules import SecurityRuleRepository
-from detectors.anomaly_detector import AnomalyDetector
-from responders.remediation_orchestrator import RemediationOrchestrator
-from storage.response_audit import ResponseAuditRepository
+from guardian.storage.security_rules import SecurityRuleRepository
+from guardian.detectors.anomaly_detector import AnomalyDetector
+from guardian.responders.remediation_orchestrator import RemediationOrchestrator
+from guardian.storage.response_audit import ResponseAuditRepository
 
 logger = logging.getLogger(__name__)
 

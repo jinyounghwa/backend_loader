@@ -5,10 +5,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from managers.storage_cleanup_manager import StorageCleanupManager
+from guardian.managers.storage_cleanup_manager import StorageCleanupManager
 
 
 # ==========================================

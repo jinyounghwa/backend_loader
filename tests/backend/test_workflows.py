@@ -6,12 +6,9 @@ from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 import sys
 import os
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../lambda/guardian'))
-
-from workflows.workflow_engine import WorkflowEngine
-from workflows.workflow_repository import WorkflowRepository
-from actions.remediation_actions import RemediationActions
+from guardian.workflows.workflow_engine import WorkflowEngine
+from guardian.workflows.workflow_repository import WorkflowRepository
+from guardian.actions.remediation_actions import RemediationActions
 
 
 class TestWorkflowDefinition:

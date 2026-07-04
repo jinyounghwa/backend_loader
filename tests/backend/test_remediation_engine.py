@@ -5,12 +5,9 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from handlers.remediation_handler import RemediationHandler
-from validators.remediation_validator import RemediationValidator
-from storage.remediation_log import RemediationLog
+from guardian.handlers.remediation_handler import RemediationHandler
+from guardian.validators.remediation_validator import RemediationValidator
+from guardian.storage.remediation_log import RemediationLog
 
 
 # ==========================================

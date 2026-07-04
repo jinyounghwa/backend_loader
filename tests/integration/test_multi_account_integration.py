@@ -3,10 +3,6 @@
 import sys
 from pathlib import Path
 import pytest
-
-lambda_path = Path(__file__).parent.parent.parent / "lambda"
-sys.path.insert(0, str(lambda_path))
-
 from guardian.services.multi_account_threat_aggregator import MultiAccountThreatAggregator
 from guardian.orchestrators.multi_account_orchestrator import MultiAccountRemediationOrchestrator
 from guardian.policies.account_policy_manager import AccountPolicyManager

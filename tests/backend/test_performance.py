@@ -7,9 +7,6 @@ import pytest
 import time
 
 # Add lambda directory to path
-lambda_path = Path(__file__).parent.parent.parent / "lambda"
-sys.path.insert(0, str(lambda_path))
-
 from guardian.cache.incident_cache import IncidentCache
 
 

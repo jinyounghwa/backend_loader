@@ -9,10 +9,6 @@ from pathlib import Path
 os.environ['AWS_REGION'] = 'us-east-1'
 os.environ['AWS_ACCESS_KEY_ID'] = 'testing'
 os.environ['AWS_SECRET_ACCESS_KEY'] = 'testing'
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda'))
-
-
 class MockResponse:
     """Mock response object for testing"""
     def __init__(self, status_code=200, body=None):

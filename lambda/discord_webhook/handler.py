@@ -3,22 +3,21 @@
 import json
 import logging
 import os
-import re
 from datetime import datetime, timezone
 
 from guardian.checkers.cost import CostChecker
 from guardian.checkers.ec2 import EC2Checker
 from guardian.checkers.s3 import S3Checker
-from guardian.responders.aws_action_executor import AWSActionExecutor
+from guardian.responders.aws_action_executor import (
+    INSTANCE_ID_PATTERN,
+    REGION_PATTERN,
+    AWSActionExecutor,
+)
 from guardian.responders.discord import DiscordResponder
 from guardian.storage.dynamodb import DynamoDBStorage
 
 logger = logging.getLogger(__name__)
 
-INSTANCE_ID_PATTERN = re.compile(r"^i-[0-9a-f]{8,17}$")
-REGION_PATTERN = re.compile(
-    r"^(us|eu|ap|sa|ca|me|af)-(east|west|south|north|central|southeast|northeast)-[0-9]$"
-)
 MIN_THRESHOLD = 0.01
 MAX_THRESHOLD = 1000000.0
 
@@ -56,16 +55,15 @@ def create_response(content: str, ephemeral: bool = False):
 def lambda_handler(event, context):
     try:
         body = event.get("body", "{}")
-        if isinstance(body, str):
-            interaction = json.loads(body)
-        else:
-            interaction = body
 
         signature = event.get("headers", {}).get("x-signature-ed25519", "")
         timestamp = event.get("headers", {}).get("x-signature-timestamp", "")
 
+        # Verify the signature before parsing any untrusted input.
         if not verify_discord_request(body, signature, timestamp):
             return {"statusCode": 401, "body": json.dumps({"error": "Invalid request signature"})}
+
+        interaction = json.loads(body) if isinstance(body, str) else body
 
         if interaction.get("type") == 1:
             return {"statusCode": 200, "body": json.dumps({"type": 1})}
@@ -85,6 +83,9 @@ def lambda_handler(event, context):
                 return handler(interaction)
             else:
                 return create_response(f"Unknown command: {command_name}", ephemeral=True)
+
+        # Unknown interaction type: reject explicitly instead of returning None
+        return {"statusCode": 400, "body": json.dumps({"error": "Unsupported interaction type"})}
 
     except Exception as e:
         logger.error("Discord handler error: %s", e)

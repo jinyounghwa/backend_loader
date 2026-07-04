@@ -1,10 +1,10 @@
 """Telegram notification responder for AWS Guardian"""
 
 import logging
-import os
 from typing import Any, Dict, Optional
 
 import requests
+from guardian.config import Config
 from guardian.responders.alert_formatter import (
     EMOJI,
     AlertMessage,
@@ -19,8 +19,11 @@ logger = logging.getLogger(__name__)
 
 class TelegramResponder:
     def __init__(self, bot_token: Optional[str] = None, chat_id: Optional[str] = None):
-        self.bot_token = bot_token or os.getenv("TELEGRAM_BOT_TOKEN", "")
-        self.chat_id = chat_id or os.getenv("TELEGRAM_CHAT_ID", "")
+        # Config resolves SSM parameter paths in production and falls back
+        # to TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID env vars for local dev.
+        telegram_config = Config.get_telegram_config()
+        self.bot_token = bot_token or telegram_config["bot_token"]
+        self.chat_id = chat_id or telegram_config["chat_id"]
         self.api_url = f"https://api.telegram.org/bot{self.bot_token}"
 
     def send_message(self, message: str, parse_mode: str = "HTML") -> bool:
@@ -229,7 +232,3 @@ class TelegramResponder:
             msg += f"\n{si} {esc(s)}: {esc(c)}"
         msg += "\n━━━━━━━━━━━━━━━━━━━"
         return self.send_message(msg)
-
-    @staticmethod
-    def _account_info(account_id: str, account_name: Optional[str]) -> str:
-        return format_account_info(account_id, account_name)

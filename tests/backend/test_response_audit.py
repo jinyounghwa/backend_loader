@@ -8,10 +8,7 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from storage.response_audit import ResponseAuditRepository, ResponseAction
+from guardian.storage.response_audit import ResponseAuditRepository, ResponseAction
 
 
 class TestResponseAuditRepository:

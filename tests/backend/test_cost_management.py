@@ -5,11 +5,8 @@ from datetime import datetime, timedelta
 from unittest.mock import MagicMock
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from analyzers.cost_analyzer import CostAnalyzer, CostThreat
-from storage.cost_history import CostHistoryRepository, CostRecord
+from guardian.analyzers.cost_analyzer import CostAnalyzer, CostThreat
+from guardian.storage.cost_history import CostHistoryRepository, CostRecord
 
 
 # ==========================================

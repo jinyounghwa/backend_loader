@@ -6,7 +6,7 @@ Handles version tracking, comparisons, and rollback workflows.
 
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, timezone
-from storage.rule_version import RuleVersionRepository, RuleVersion
+from guardian.storage.rule_version import RuleVersionRepository, RuleVersion
 
 
 class VersionManager:

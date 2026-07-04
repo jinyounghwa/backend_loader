@@ -11,8 +11,6 @@ from pathlib import Path
 import pytest
 
 # Add lambda module to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "lambda"))
-
 from guardian.models import (
     AuditLogRecord,
     CheckerResponse,

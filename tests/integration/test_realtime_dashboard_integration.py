@@ -5,10 +5,6 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 import pytest
-
-lambda_path = Path(__file__).parent.parent.parent / "lambda"
-sys.path.insert(0, str(lambda_path))
-
 from guardian.websocket.event_broadcaster import WebSocketEventBroadcaster
 from guardian.services.realtime_dashboard_service import RealtimeDashboardService
 from guardian.websocket.connection_manager import DashboardConnectionManager

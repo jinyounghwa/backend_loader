@@ -7,10 +7,6 @@ from unittest.mock import Mock, patch
 import json
 
 # Add lambda directory to path
-lambda_path = Path(__file__).parent.parent.parent / "lambda"
-sys.path.insert(0, str(lambda_path))
-
-
 class TestDeployment:
     """배포 자동화 검증"""
 

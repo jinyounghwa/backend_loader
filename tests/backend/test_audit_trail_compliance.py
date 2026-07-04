@@ -5,10 +5,6 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 import pytest
-
-lambda_path = Path(__file__).parent.parent.parent / "lambda"
-sys.path.insert(0, str(lambda_path))
-
 from guardian.services.audit_trail_service import AuditTrailService
 from guardian.reports.compliance_report_generator import ComplianceReportGenerator
 from guardian.validators.policy_compliance_validator import PolicyComplianceValidator

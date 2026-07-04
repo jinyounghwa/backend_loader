@@ -7,10 +7,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from handlers.stream_processor import (
+from guardian.handlers.stream_processor import (
     handle_stream_event,
     process_stream_record,
     handle_insert,
@@ -85,7 +82,7 @@ class TestStreamProcessor:
             ]
         }
 
-        with patch('handlers.stream_processor.process_stream_record', side_effect=[None, Exception('Invalid event')]):
+        with patch('guardian.handlers.stream_processor.process_stream_record', side_effect=[None, Exception('Invalid event')]):
             result = handle_stream_event(event, None)
 
             # Should have one failed record
@@ -104,7 +101,7 @@ class TestStreamProcessor:
             }
         }
 
-        with patch('handlers.stream_processor.broadcast_to_clients') as mock_broadcast:
+        with patch('guardian.handlers.stream_processor.broadcast_to_clients') as mock_broadcast:
             handle_insert(dynamodb)
 
             # Verify broadcast was called
@@ -126,7 +123,7 @@ class TestStreamProcessor:
             }
         }
 
-        with patch('handlers.stream_processor.broadcast_to_clients') as mock_broadcast:
+        with patch('guardian.handlers.stream_processor.broadcast_to_clients') as mock_broadcast:
             handle_modify(dynamodb)
 
             assert mock_broadcast.called
@@ -142,7 +139,7 @@ class TestStreamProcessor:
             }
         }
 
-        with patch('handlers.stream_processor.broadcast_to_clients') as mock_broadcast:
+        with patch('guardian.handlers.stream_processor.broadcast_to_clients') as mock_broadcast:
             handle_remove(dynamodb)
 
             assert mock_broadcast.called
@@ -245,7 +242,7 @@ class TestStreamEventTypes:
             }
         }
 
-        with patch('handlers.stream_processor.handle_insert') as mock_insert:
+        with patch('guardian.handlers.stream_processor.handle_insert') as mock_insert:
             process_stream_record(record)
             assert mock_insert.called
 
@@ -259,7 +256,7 @@ class TestStreamEventTypes:
             }
         }
 
-        with patch('handlers.stream_processor.handle_modify') as mock_modify:
+        with patch('guardian.handlers.stream_processor.handle_modify') as mock_modify:
             process_stream_record(record)
             assert mock_modify.called
 
@@ -272,7 +269,7 @@ class TestStreamEventTypes:
             }
         }
 
-        with patch('handlers.stream_processor.handle_remove') as mock_remove:
+        with patch('guardian.handlers.stream_processor.handle_remove') as mock_remove:
             process_stream_record(record)
             assert mock_remove.called
 
@@ -315,7 +312,7 @@ class TestRealTimeIntegration:
             }
         }
 
-        with patch('handlers.stream_processor.broadcast_to_clients') as mock_broadcast:
+        with patch('guardian.handlers.stream_processor.broadcast_to_clients') as mock_broadcast:
             handle_insert(dynamodb)
 
             call_args = mock_broadcast.call_args[0][0]

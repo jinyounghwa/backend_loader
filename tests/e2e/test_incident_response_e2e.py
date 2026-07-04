@@ -7,10 +7,6 @@ from unittest.mock import Mock, patch
 import time
 
 # Add lambda directory to path
-lambda_path = Path(__file__).parent.parent.parent / "lambda"
-sys.path.insert(0, str(lambda_path))
-
-
 class TestIncidentResponseE2E:
     """엔드투엔드 인시던트 대응 테스트"""
 

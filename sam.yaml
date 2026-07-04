@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Transform: AWS::Serverless-2010-05-13
+Transform: AWS::Serverless-2016-10-31
 Description: 'AWS Guardian - Serverless Security Monitoring'
 
 Parameters:
@@ -27,27 +27,68 @@ Resources:
       FunctionName: GuardianChecker
       CodeUri: lambda/
       Handler: guardian/handler.lambda_handler
+      # Least-privilege policy mirroring terraform/iam.tf
       Policies:
         - Version: '2012-10-17'
           Statement:
             - Effect: Allow
               Action:
-                - ec2:*
-                - s3:*
-                - cloudtrail:*
-                - iam:*
-                - guardduty:*
-                - ce:*
+                - ec2:DescribeInstances
+                - ec2:DescribeRegions
+                - ec2:DescribeSecurityGroups
+                - ce:GetCostAndUsage
               Resource: '*'
             - Effect: Allow
               Action:
-                - dynamodb:*
-              Resource: '*'
+                - ec2:StopInstances
+              Resource: 'arn:aws:ec2:*:*:instance/*'
+            - Effect: Allow
+              Action:
+                - s3:ListAllMyBuckets
+                - s3:GetBucketAcl
+                - s3:GetBucketPolicy
+                - s3:GetBucketLocation
+                - s3:GetBucketPublicAccessBlock
+                - s3:PutBucketPublicAccessBlock
+              Resource: 'arn:aws:s3:::*'
+            - Effect: Allow
+              Action:
+                - cloudtrail:LookupEvents
+              Resource: 'arn:aws:cloudtrail:*:*:trail/*'
+            - Effect: Allow
+              Action:
+                - iam:ListUsers
+                - iam:ListAccessKeys
+                - iam:GetUser
+              Resource: 'arn:aws:iam::*:user/*'
+            - Effect: Allow
+              Action:
+                - guardduty:ListDetectors
+                - guardduty:ListFindings
+                - guardduty:GetFindings
+              Resource: 'arn:aws:guardduty:*:*:detector/*'
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:GetItem
+                - dynamodb:Query
+                - dynamodb:Scan
+                - dynamodb:CreateTable
+                - dynamodb:DescribeTable
+              Resource: 'arn:aws:dynamodb:*:*:table/aws-guardian-*'
             - Effect: Allow
               Action:
                 - ssm:GetParameter
                 - ssm:PutParameter
+              Resource: 'arn:aws:ssm:*:*:parameter/aws-guardian/*'
+            - Effect: Allow
+              Action:
+                - organizations:ListAccounts
               Resource: '*'
+            - Effect: Allow
+              Action:
+                - sts:AssumeRole
+              Resource: 'arn:aws:iam::*:role/aws-guardian-cross-account-role'
       Environment:
         Variables:
           PYTHONPATH: /var/task/lambda
@@ -58,7 +99,8 @@ Resources:
       ScheduleExpression: 'rate(1 hour)'
       State: ENABLED
       Targets:
-        - Arn: !GetAtt GuardianCheckerFunction.Arn
+        - Id: guardian-checker
+          Arn: !GetAtt GuardianCheckerFunction.Arn
           RoleArn: !GetAtt EventBridgeRole.Arn
 
   EventBridgeRole:

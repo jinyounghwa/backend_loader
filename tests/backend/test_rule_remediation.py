@@ -9,12 +9,9 @@ from unittest.mock import MagicMock, patch
 import json
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from responders.rule_remediation import RuleRemediationExecutor, RemediationResult
-from storage.remediation_audit import RemediationAuditRepository, RemediationLog
-from detectors.anomaly_detector import Threat
+from guardian.responders.rule_remediation import RuleRemediationExecutor, RemediationResult
+from guardian.storage.remediation_audit import RemediationAuditRepository, RemediationLog
+from guardian.detectors.anomaly_detector import Threat
 
 
 class TestRuleRemediationExecutor:

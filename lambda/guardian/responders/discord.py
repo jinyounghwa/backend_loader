@@ -4,6 +4,7 @@ import logging
 from typing import Any, Dict, Optional
 
 import requests
+from guardian.config import Config
 from guardian.responders.alert_formatter import (
     AlertMessage,
     check_emoji,
@@ -23,7 +24,9 @@ SEVERITY_COLORS = {
 
 class DiscordResponder:
     def __init__(self, webhook_url: Optional[str] = None):
-        self.webhook_url = webhook_url or ""
+        # Config resolves the SSM parameter path in production and falls
+        # back to the DISCORD_WEBHOOK_URL env var for local dev.
+        self.webhook_url = webhook_url or Config.get_discord_config()["webhook_url"]
 
     def send_embed(self, embed: Dict[str, Any]) -> bool:
         if not self.webhook_url:

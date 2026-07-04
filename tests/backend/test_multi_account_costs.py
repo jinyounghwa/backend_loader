@@ -6,10 +6,7 @@ from unittest.mock import MagicMock
 import sys
 from pathlib import Path
 import json
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from aggregators.multi_account_cost_aggregator import MultiAccountCostAggregator
+from guardian.aggregators.multi_account_cost_aggregator import MultiAccountCostAggregator
 
 
 # ==========================================

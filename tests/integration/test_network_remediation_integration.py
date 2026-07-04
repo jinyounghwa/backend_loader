@@ -5,10 +5,6 @@ from pathlib import Path
 import pytest
 from unittest.mock import Mock
 from datetime import datetime, timezone
-
-lambda_path = Path(__file__).parent.parent.parent / "lambda"
-sys.path.insert(0, str(lambda_path))
-
 from guardian.remediators.network_remediator import NetworkRemediator, RemediationStatus
 
 

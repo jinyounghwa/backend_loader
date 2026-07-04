@@ -9,10 +9,7 @@ from unittest.mock import MagicMock, patch
 import json
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from storage.security_rules import SecurityRule, SecurityRuleRepository
+from guardian.storage.security_rules import SecurityRule, SecurityRuleRepository
 
 
 class TestSecurityRuleModel:

@@ -3,15 +3,11 @@ import boto3
 import os
 from datetime import datetime, timezone
 from typing import Dict, Any
-import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from ml.threat_prediction_model import ThreatPredictionModel
-from ml.anomaly_clustering_engine import AnomalyClusteringEngine
-from ml.threat_trend_analyzer import ThreatTrendAnalyzer
-from ml.pattern_recognition_service import PatternRecognitionService
+from guardian.ml.threat_prediction_model import ThreatPredictionModel
+from guardian.ml.anomaly_clustering_engine import AnomalyClusteringEngine
+from guardian.ml.threat_trend_analyzer import ThreatTrendAnalyzer
+from guardian.ml.pattern_recognition_service import PatternRecognitionService
 
 
 class MLHandler:

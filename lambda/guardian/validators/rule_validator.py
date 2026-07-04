@@ -6,7 +6,7 @@ Performs schema validation and dry-run evaluation against test data.
 
 from typing import Dict, Any, List, Optional
 import json
-from validators.validation_result import ValidationResult
+from guardian.validators.validation_result import ValidationResult
 
 
 class RuleValidator:

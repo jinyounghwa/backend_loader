@@ -74,14 +74,14 @@ resource "aws_iam_role_policy" "lambda_policy" {
           "s3:GetBucketAcl",
           "s3:GetBucketPolicy",
           "s3:GetBucketLocation",
-          "s3:GetPublicAccessBlock"
+          "s3:GetBucketPublicAccessBlock"
         ]
         Resource = ["arn:aws:s3:::*"]
       },
       {
         Sid    = "S3WritePublicAccessBlock"
         Effect = "Allow"
-        Action = ["s3:PutPublicAccessBlock"]
+        Action = ["s3:PutBucketPublicAccessBlock"]
         Resource = ["arn:aws:s3:::*"]
         Condition = {
           StringEquals = {
@@ -166,6 +166,12 @@ resource "aws_iam_role_policy" "lambda_policy" {
             "cloudwatch:namespace" = "aws-guardian"
           }
         }
+      },
+      {
+        Sid      = "OrganizationsDiscovery"
+        Effect   = "Allow"
+        Action   = ["organizations:ListAccounts"]
+        Resource = ["*"]
       },
       {
         Sid    = "STSCrossAccount"

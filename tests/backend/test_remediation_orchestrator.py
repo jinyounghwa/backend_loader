@@ -8,14 +8,11 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from responders.remediation_orchestrator import (
+from guardian.responders.remediation_orchestrator import (
     RemediationOrchestrator, OrchestrationResult, RemediationImpact,
     RemediationApprovalStatus
 )
-from detectors.anomaly_detector import Threat
+from guardian.detectors.anomaly_detector import Threat
 
 
 class TestRemediationOrchestrator:

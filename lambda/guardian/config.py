@@ -1,15 +1,17 @@
 """AWS Guardian configuration module"""
 
+import json
 import logging
 import os
+import re
 from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-_DEFAULTS = {
+_DEFAULTS: Dict[str, str] = {
     "LOCALSTACK_ENDPOINT": "http://localhost:4566",
     "AWS_REGION": "us-east-1",
-    "COST_THRESHOLD": 10.0,
+    "COST_THRESHOLD": "10.0",
     "DYNAMODB_TABLE_NAME": "aws-guardian-events",
     "CROSS_ACCOUNT_ROLE_NAME": "aws-guardian-cross-account-role",
 }
@@ -44,7 +46,7 @@ class Config:
         try:
             import boto3
 
-            ssm = boto3.client("ssm", region_name=cls._env("AWS_REGION", _DEFAULTS["AWS_REGION"]))  # type: ignore
+            ssm = boto3.client("ssm", region_name=cls._env("AWS_REGION", _DEFAULTS["AWS_REGION"]))
             response = ssm.get_parameter(Name=param_name, WithDecryption=True)
             value = response["Parameter"]["Value"]
             cls._ssm_cache[param_name] = value
@@ -55,7 +57,7 @@ class Config:
 
     @classmethod
     def get_endpoint_url(cls) -> str:
-        return cls._env("LOCALSTACK_ENDPOINT", _DEFAULTS["LOCALSTACK_ENDPOINT"])  # type: ignore
+        return cls._env("LOCALSTACK_ENDPOINT", _DEFAULTS["LOCALSTACK_ENDPOINT"])
 
     @classmethod
     def get_boto3_kwargs(cls) -> Dict:
@@ -94,9 +96,9 @@ class Config:
     @classmethod
     def get_cost_threshold(cls) -> float:
         try:
-            return float(cls._env("COST_THRESHOLD", str(_DEFAULTS["COST_THRESHOLD"])))
+            return float(cls._env("COST_THRESHOLD", _DEFAULTS["COST_THRESHOLD"]))
         except ValueError:
-            return _DEFAULTS["COST_THRESHOLD"]
+            return float(_DEFAULTS["COST_THRESHOLD"])
 
     @classmethod
     def get_authorized_regions(cls) -> List[str]:
@@ -157,6 +159,56 @@ class Config:
     def is_organizations_enabled(cls) -> bool:
         return cls._env("ORGANIZATIONS_ENABLED", "false").lower() == "true"
 
+    _ACCOUNT_ID_RE = re.compile(r"^\d{12}$")
+
+    @classmethod
+    def get_static_accounts(cls) -> List[Dict[str, str]]:
+        """Parse the GUARDIAN_ACCOUNTS env var into a list of accounts to monitor.
+
+        Format: JSON array of objects, e.g.
+        ``[{"account_id": "current", "account_name": "Hub"},
+           {"account_id": "222233334444", "account_name": "Prod"}]``
+
+        ``"current"`` means the hub account itself (no role assumption).
+        Entries with an invalid account_id are dropped with a warning so a
+        single typo cannot silently disable monitoring of the other accounts.
+        """
+        raw = cls._env("GUARDIAN_ACCOUNTS", "")
+        if not raw:
+            return []
+        try:
+            parsed = json.loads(raw)
+        except ValueError as e:
+            logger.warning("GUARDIAN_ACCOUNTS is not valid JSON, ignoring: %s", e)
+            return []
+        if not isinstance(parsed, list):
+            logger.warning("GUARDIAN_ACCOUNTS must be a JSON array, ignoring")
+            return []
+
+        accounts: List[Dict[str, str]] = []
+        for entry in parsed:
+            if not isinstance(entry, dict):
+                logger.warning("GUARDIAN_ACCOUNTS entry is not an object, skipping: %r", entry)
+                continue
+            account_id = str(entry.get("account_id", ""))
+            if account_id != "current" and not cls._ACCOUNT_ID_RE.match(account_id):
+                logger.warning(
+                    "GUARDIAN_ACCOUNTS entry has invalid account_id, skipping: %r", account_id
+                )
+                continue
+            accounts.append(
+                {
+                    "account_id": account_id,
+                    "account_name": str(entry.get("account_name", account_id)),
+                }
+            )
+        return accounts
+
+    @classmethod
+    def is_multi_account_enabled(cls) -> bool:
+        """Multi-account mode: explicit account list or AWS Organizations discovery."""
+        return bool(cls.get_static_accounts()) or cls.is_organizations_enabled()
+
     @classmethod
     def get_organization_arn(cls) -> str:
         return cls._env("ORGANIZATION_ARN", "")
@@ -164,6 +216,11 @@ class Config:
     @classmethod
     def get_cross_account_role_name(cls) -> str:
         return cls._env("CROSS_ACCOUNT_ROLE_NAME", _DEFAULTS["CROSS_ACCOUNT_ROLE_NAME"])
+
+    @classmethod
+    def get_cross_account_external_id(cls) -> str:
+        """Optional ExternalId sent on sts:AssumeRole (confused-deputy protection)."""
+        return cls._env("CROSS_ACCOUNT_EXTERNAL_ID", "")
 
     @classmethod
     def reset_cache(cls) -> None:

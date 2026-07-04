@@ -11,10 +11,6 @@ from pathlib import Path
 
 os.environ["AWS_ENV"] = "localstack"
 os.environ["WEBSOCKET_AUTH_TOKEN"] = "valid_token"
-
-lambda_dir = Path(__file__).parent.parent.parent / "lambda"
-sys.path.insert(0, str(lambda_dir))
-
 from guardian.handlers.websocket_handler import (
     handle_anomaly_alert,
     handle_connect,

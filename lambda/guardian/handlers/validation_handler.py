@@ -9,9 +9,9 @@ import json
 import os
 from typing import Dict, Any
 from guardian.http_response import success_response, error_response
-from validators.rule_validator import RuleValidator
-from storage.rule_template import TemplateRepository
-from detectors.anomaly_detector import AnomalyDetector
+from guardian.validators.rule_validator import RuleValidator
+from guardian.storage.rule_template import TemplateRepository
+from guardian.detectors.anomaly_detector import AnomalyDetector
 
 
 def get_table_names() -> Dict[str, str]:

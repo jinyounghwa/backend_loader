@@ -4,15 +4,9 @@ HTTP API Gateway handler for querying WebSocket audit logs
 """
 
 import json
-import sys
-from pathlib import Path
 from typing import Any, Dict
-
-lambda_dir = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(lambda_dir))
-
 from guardian.http_response import success_response, error_response
-from handlers.audit_logger import AuditLogger
+from guardian.handlers.audit_logger import AuditLogger
 
 
 def handle_get_audit_logs(event: Dict[str, Any], context: Any) -> Dict[str, Any]:

@@ -9,8 +9,6 @@ import sys
 from pathlib import Path
 
 # Add lambda module to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "lambda"))
-
 from guardian.models import EventsResponse, StatusResponse
 
 

@@ -12,7 +12,7 @@ import json
 import os
 from typing import Dict, Any
 from guardian.http_response import success_response, error_response
-from storage.rule_template import TemplateRepository, RuleTemplate, BUILTIN_TEMPLATES
+from guardian.storage.rule_template import TemplateRepository, RuleTemplate, BUILTIN_TEMPLATES
 
 
 def get_template_table_name() -> str:

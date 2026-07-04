@@ -73,7 +73,7 @@ class AnomalyDetector:
             # If deployments table is configured, filter by ACTIVE deployment status
             if self.deployments_table_name:
                 try:
-                    from storage.rule_deployment import RuleDeploymentRepository
+                    from guardian.storage.rule_deployment import RuleDeploymentRepository
                 except ImportError:
                     from ..storage.rule_deployment import RuleDeploymentRepository
 

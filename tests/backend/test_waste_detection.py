@@ -5,10 +5,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from detectors.waste_detector import WasteDetector, WasteResource
+from guardian.detectors.waste_detector import WasteDetector, WasteResource
 
 
 # ==========================================

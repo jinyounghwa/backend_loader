@@ -42,8 +42,19 @@ class _LazyOrchestrator:
 
         storage = DynamoDBStorage()
 
-        telegram_responder = TelegramResponder() if telegram_config["bot_token"] else None
-        discord_responder = DiscordResponder() if discord_config["webhook_url"] else None
+        telegram_responder = (
+            TelegramResponder(
+                bot_token=telegram_config["bot_token"],
+                chat_id=telegram_config["chat_id"],
+            )
+            if telegram_config["bot_token"]
+            else None
+        )
+        discord_responder = (
+            DiscordResponder(webhook_url=discord_config["webhook_url"])
+            if discord_config["webhook_url"]
+            else None
+        )
         auto_remediation_responder = AutoRemediationResponder(
             self._logger,
             storage,

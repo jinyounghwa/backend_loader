@@ -9,10 +9,7 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from storage.rule_audit import RuleAuditRepository, AuditLog
+from guardian.storage.rule_audit import RuleAuditRepository, AuditLog
 
 
 class TestAuditLog:

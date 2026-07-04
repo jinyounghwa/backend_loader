@@ -9,11 +9,8 @@ from unittest.mock import MagicMock, patch
 from datetime import datetime, timezone
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from handlers.alert_handler import AlertHandler, AlertFormatter
-from detectors.anomaly_detector import Threat
+from guardian.handlers.alert_handler import AlertHandler, AlertFormatter
+from guardian.detectors.anomaly_detector import Threat
 
 
 class TestAlertFormatter:

@@ -4,8 +4,6 @@ import json
 import sys
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda'))
 from guardian.ml.threat_prediction_model import ThreatPredictionModel
 
 

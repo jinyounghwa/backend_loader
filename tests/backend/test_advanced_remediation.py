@@ -8,12 +8,9 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from responders.advanced_remediation import AdvancedRemediationExecutor, AdvancedRemediationResult
-from responders.aws_action_executor import AWSActionExecutor
-from detectors.anomaly_detector import Threat
+from guardian.responders.advanced_remediation import AdvancedRemediationExecutor, AdvancedRemediationResult
+from guardian.responders.aws_action_executor import AWSActionExecutor
+from guardian.detectors.anomaly_detector import Threat
 
 
 class TestAdvancedRemediationExecutor:

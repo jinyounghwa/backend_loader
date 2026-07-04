@@ -9,12 +9,9 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch, ANY
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from detectors.anomaly_detector import AnomalyDetector
-from storage.security_rules import SecurityRuleRepository, SecurityRule
-from storage.rule_deployment import RuleDeploymentRepository, Deployment
+from guardian.detectors.anomaly_detector import AnomalyDetector
+from guardian.storage.security_rules import SecurityRuleRepository, SecurityRule
+from guardian.storage.rule_deployment import RuleDeploymentRepository, Deployment
 
 
 class TestDeploymentAwareRuleEvaluation:
@@ -98,7 +95,7 @@ class TestDeploymentAwareRuleEvaluation:
 
         mock_audit_logs_table.query.return_value = {'Items': []}
 
-        with patch('storage.rule_deployment.RuleDeploymentRepository') as MockDeploymentRepo:
+        with patch('guardian.storage.rule_deployment.RuleDeploymentRepository') as MockDeploymentRepo:
             mock_deploy_repo = MagicMock()
             MockDeploymentRepo.return_value = mock_deploy_repo
 
@@ -137,7 +134,7 @@ class TestDeploymentAwareRuleEvaluation:
             ]
         }
 
-        with patch('storage.rule_deployment.RuleDeploymentRepository') as MockDeploymentRepo:
+        with patch('guardian.storage.rule_deployment.RuleDeploymentRepository') as MockDeploymentRepo:
             mock_deploy_repo = MagicMock()
             MockDeploymentRepo.return_value = mock_deploy_repo
 
@@ -166,7 +163,7 @@ class TestDeploymentAwareRuleEvaluation:
             ]
         }
 
-        with patch('storage.rule_deployment.RuleDeploymentRepository') as MockDeploymentRepo:
+        with patch('guardian.storage.rule_deployment.RuleDeploymentRepository') as MockDeploymentRepo:
             mock_deploy_repo = MagicMock()
             MockDeploymentRepo.return_value = mock_deploy_repo
 
@@ -211,7 +208,7 @@ class TestDeploymentAwareRuleEvaluation:
 
         mock_audit_logs_table.query.return_value = {'Items': []}
 
-        with patch('storage.rule_deployment.RuleDeploymentRepository') as MockDeploymentRepo:
+        with patch('guardian.storage.rule_deployment.RuleDeploymentRepository') as MockDeploymentRepo:
             mock_deploy_repo = MagicMock()
             MockDeploymentRepo.return_value = mock_deploy_repo
 
@@ -289,7 +286,7 @@ class TestSecurityRuleRepositoryActiveRules:
             ]
         }
 
-        with patch('storage.rule_deployment.RuleDeploymentRepository') as MockDeploymentRepo:
+        with patch('guardian.storage.rule_deployment.RuleDeploymentRepository') as MockDeploymentRepo:
             mock_deploy_repo = MagicMock()
             MockDeploymentRepo.return_value = mock_deploy_repo
 
@@ -320,7 +317,7 @@ class TestSecurityRuleRepositoryActiveRules:
             ]
         }
 
-        with patch('storage.rule_deployment.RuleDeploymentRepository') as MockDeploymentRepo:
+        with patch('guardian.storage.rule_deployment.RuleDeploymentRepository') as MockDeploymentRepo:
             mock_deploy_repo = MagicMock()
             MockDeploymentRepo.return_value = mock_deploy_repo
 
@@ -335,7 +332,7 @@ class TestSecurityRuleRepositoryActiveRules:
 
     def test_list_active_rules_handles_errors_gracefully(self, repository, mock_rules_table):
         """Test that list_active_rules returns empty list on error"""
-        with patch('storage.rule_deployment.RuleDeploymentRepository') as MockDeploymentRepo:
+        with patch('guardian.storage.rule_deployment.RuleDeploymentRepository') as MockDeploymentRepo:
             MockDeploymentRepo.side_effect = Exception('Deployment repo error')
 
             active_rules = repository.list_active_rules('test-account')

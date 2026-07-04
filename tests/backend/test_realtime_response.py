@@ -6,10 +6,6 @@ import pytest
 from unittest.mock import Mock
 from datetime import datetime
 import json
-
-lambda_path = Path(__file__).parent.parent.parent / "lambda"
-sys.path.insert(0, str(lambda_path))
-
 from guardian.handlers.realtime_handler import RealTimeEventProcessor, EventPriority
 
 

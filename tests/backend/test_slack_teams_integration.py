@@ -5,12 +5,9 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from responders.slack_responder import SlackResponder
-from responders.teams_responder import TeamsResponder
-from responders.notification_orchestrator import NotificationOrchestrator
+from guardian.responders.slack_responder import SlackResponder
+from guardian.responders.teams_responder import TeamsResponder
+from guardian.responders.notification_orchestrator import NotificationOrchestrator
 
 
 # ==========================================

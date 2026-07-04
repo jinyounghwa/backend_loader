@@ -3,10 +3,6 @@
 import sys
 from pathlib import Path
 import pytest
-
-lambda_path = Path(__file__).parent.parent.parent / "lambda"
-sys.path.insert(0, str(lambda_path))
-
 from guardian.orchestrators.remediation_orchestrator import RemediationOrchestrator
 
 

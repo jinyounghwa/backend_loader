@@ -100,7 +100,7 @@ class GuardianOrchestrator:
             self.logger.info("Running checks for account: %s (%s)", account_name, account_id)
 
             account_checkers = self.checkers
-            if Config.is_organizations_enabled() and account_id != "current":
+            if Config.is_multi_account_enabled() and account_id != "current":
                 assumed_role = self._assume_role_for_account(account_id)
                 if not assumed_role:
                     self.logger.warning("Skipping account %s - role assumption failed", account_id)
@@ -196,7 +196,16 @@ class GuardianOrchestrator:
     # ------------------------------------------------------------------
 
     def _get_accounts(self) -> List[Dict[str, str]]:
-        """Get list of AWS accounts to check."""
+        """Get list of AWS accounts to check.
+
+        Priority: explicit GUARDIAN_ACCOUNTS list > Organizations discovery
+        > current account only.
+        """
+        static_accounts = Config.get_static_accounts()
+        if static_accounts:
+            self.logger.info("Using %d accounts from GUARDIAN_ACCOUNTS", len(static_accounts))
+            return static_accounts
+
         if not Config.is_organizations_enabled():
             return [{"account_id": "current", "account_name": "Current Account"}]
 
@@ -227,10 +236,14 @@ class GuardianOrchestrator:
                 role_name = Config.get_cross_account_role_name()
             sts_client = AWSClientProvider.get_client("sts")
             assume_role_arn = f"arn:aws:iam::{account_id}:role/{role_name}"
-            response = sts_client.assume_role(
-                RoleArn=assume_role_arn,
-                RoleSessionName=f"guardian-cross-account-{account_id}",
-            )
+            assume_kwargs: Dict[str, Any] = {
+                "RoleArn": assume_role_arn,
+                "RoleSessionName": f"guardian-cross-account-{account_id}",
+            }
+            external_id = Config.get_cross_account_external_id()
+            if external_id:
+                assume_kwargs["ExternalId"] = external_id
+            response = sts_client.assume_role(**assume_kwargs)
             credentials = response["Credentials"]
             self.logger.info("Assumed role for account %s", account_id)
             return {
@@ -251,6 +264,36 @@ class GuardianOrchestrator:
         """Create account-specific checkers with cross-account credentials."""
         try:
             account_checkers = dict(self.checkers)
+
+            if self.checkers.get("cost"):
+                # ce runs against the member account; ssm stays on the hub so the
+                # cost threshold remains centrally managed.
+                cost_clients = {
+                    "ce": AWSClientProvider.get_client_for_account("ce", account_id, credentials),
+                    "ssm": AWSClientProvider.get_client("ssm"),
+                }
+                account_checkers["cost"] = CostChecker(
+                    cost_clients,
+                    {"cost_threshold": Config.get_cost_threshold()},
+                    account_id=account_id,
+                    credentials=credentials,
+                )
+
+            if self.checkers.get("ec2"):
+                ec2_clients = {
+                    "ec2": AWSClientProvider.get_client_for_account("ec2", account_id, credentials),
+                }
+                account_checkers["ec2"] = EC2Checker(
+                    ec2_clients, {}, account_id=account_id, credentials=credentials
+                )
+
+            if self.checkers.get("s3"):
+                s3_clients = {
+                    "s3": AWSClientProvider.get_client_for_account("s3", account_id, credentials),
+                }
+                account_checkers["s3"] = S3Checker(
+                    s3_clients, {}, account_id=account_id, credentials=credentials
+                )
 
             if self.checkers.get("cloudtrail"):
                 ct_clients = {

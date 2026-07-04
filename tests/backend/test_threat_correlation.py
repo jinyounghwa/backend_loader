@@ -5,10 +5,6 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock
 import pytest
-
-lambda_path = Path(__file__).parent.parent.parent / "lambda"
-sys.path.insert(0, str(lambda_path))
-
 from guardian.engines.threat_correlation_engine import ThreatCorrelationEngine
 from guardian.detectors.attack_chain_detector import AttackChainDetector
 from guardian.engines.threat_clustering_engine import ThreatClusteringEngine

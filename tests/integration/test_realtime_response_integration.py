@@ -8,10 +8,6 @@ from datetime import datetime, timezone
 import json
 import hmac
 import hashlib
-
-lambda_path = Path(__file__).parent.parent.parent / "lambda"
-sys.path.insert(0, str(lambda_path))
-
 from guardian.handlers.realtime_handler import RealTimeEventProcessor
 from guardian.handlers.threat_callback_handler import ThreatCallbackHandler
 

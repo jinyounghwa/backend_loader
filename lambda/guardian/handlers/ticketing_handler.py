@@ -4,13 +4,9 @@ import logging
 import json
 from typing import Dict, List, Optional
 from datetime import datetime, timezone
-import sys
-import os
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from services.jira_service import JiraTicketService
-from services.servicenow_service import ServiceNowTicketService
+from guardian.services.jira_service import JiraTicketService
+from guardian.services.servicenow_service import ServiceNowTicketService
 
 logger = logging.getLogger(__name__)
 

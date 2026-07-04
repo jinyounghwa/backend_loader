@@ -7,10 +7,8 @@ from unittest.mock import MagicMock, patch, call
 from dataclasses import asdict
 
 # Add lambda/guardian to path to avoid 'lambda' keyword conflict
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
 # Import the handler and related classes
-from handlers.rule_evaluation_handler import (
+from guardian.handlers.rule_evaluation_handler import (
     RuleEvaluationHandler,
     EvaluationMetrics,
     EvaluationResult

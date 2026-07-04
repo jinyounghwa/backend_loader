@@ -5,11 +5,8 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from managers.multi_account_manager import MultiAccountManager
-from storage.account_registry import AccountRegistry
+from guardian.managers.multi_account_manager import MultiAccountManager
+from guardian.storage.account_registry import AccountRegistry
 
 
 # ==========================================

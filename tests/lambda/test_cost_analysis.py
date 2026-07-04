@@ -10,10 +10,6 @@ import unittest
 from pathlib import Path
 
 os.environ["AWS_ENV"] = "localstack"
-
-lambda_dir = Path(__file__).parent.parent.parent / "lambda"
-sys.path.insert(0, str(lambda_dir))
-
 from guardian.analytics.cost_analyzer import (
     CostAnalyzer,
     generate_monthly_report,

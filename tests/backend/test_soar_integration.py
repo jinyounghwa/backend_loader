@@ -6,11 +6,8 @@ from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 import sys
 import os
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../lambda/guardian'))
-
-from integrations.splunk_phantom_connector import SplunkPhantomConnector
-from integrations.swimlane_connector import SwimlaneConnector
+from guardian.integrations.splunk_phantom_connector import SplunkPhantomConnector
+from guardian.integrations.swimlane_connector import SwimlaneConnector
 
 
 class TestSplunkPhantomIncidentCreation:
@@ -31,7 +28,7 @@ class TestSplunkPhantomIncidentCreation:
             'threat_type': 'unauthorized_access'
         }
 
-    @patch('integrations.splunk_phantom_connector.requests.post')
+    @patch('guardian.integrations.splunk_phantom_connector.requests.post')
     def test_send_incident_to_phantom(self, mock_post, phantom_connector, sample_incident):
         """Test sending incident to Splunk Phantom"""
         mock_response = Mock()
@@ -44,7 +41,7 @@ class TestSplunkPhantomIncidentCreation:
         assert container_id == '12345'
         mock_post.assert_called_once()
 
-    @patch('integrations.splunk_phantom_connector.requests.post')
+    @patch('guardian.integrations.splunk_phantom_connector.requests.post')
     def test_send_incident_creates_container(self, mock_post, phantom_connector, sample_incident):
         """Test incident is created as Phantom container"""
         mock_response = Mock()
@@ -60,7 +57,7 @@ class TestSplunkPhantomIncidentCreation:
         assert payload['label'] == 'aws_guardian'
         assert 'data' in payload
 
-    @patch('integrations.splunk_phantom_connector.requests.post')
+    @patch('guardian.integrations.splunk_phantom_connector.requests.post')
     def test_send_incident_failure(self, mock_post, phantom_connector, sample_incident):
         """Test handling of failed incident submission"""
         mock_response = Mock()
@@ -79,7 +76,7 @@ class TestSplunkPhantomPlaybookExecution:
     def phantom_connector(self):
         return SplunkPhantomConnector('https://phantom.example.com', 'api_token')
 
-    @patch('integrations.splunk_phantom_connector.requests.post')
+    @patch('guardian.integrations.splunk_phantom_connector.requests.post')
     def test_run_phantom_playbook(self, mock_post, phantom_connector):
         """Test running Phantom playbook"""
         mock_response = Mock()
@@ -92,7 +89,7 @@ class TestSplunkPhantomPlaybookExecution:
         assert run_id == '999'
         mock_post.assert_called_once()
 
-    @patch('integrations.splunk_phantom_connector.requests.post')
+    @patch('guardian.integrations.splunk_phantom_connector.requests.post')
     def test_run_playbook_payload(self, mock_post, phantom_connector):
         """Test playbook run payload structure"""
         mock_response = Mock()
@@ -107,7 +104,7 @@ class TestSplunkPhantomPlaybookExecution:
         assert payload['container_id'] == '12345'
         assert payload['playbook_name'] == 'Isolate Host'
 
-    @patch('integrations.splunk_phantom_connector.requests.get')
+    @patch('guardian.integrations.splunk_phantom_connector.requests.get')
     def test_track_playbook_status(self, mock_get, phantom_connector):
         """Test tracking playbook execution status"""
         mock_response = Mock()
@@ -125,7 +122,7 @@ class TestSplunkPhantomPlaybookExecution:
         assert 'timestamp' in status
         assert status['run_id'] == '999'
 
-    @patch('integrations.splunk_phantom_connector.requests.get')
+    @patch('guardian.integrations.splunk_phantom_connector.requests.get')
     def test_get_available_playbooks(self, mock_get, phantom_connector):
         """Test retrieving available playbooks"""
         mock_response = Mock()
@@ -163,7 +160,7 @@ class TestSwimlaneIncidentCreation:
             'threat_type': 'credential_abuse'
         }
 
-    @patch('integrations.swimlane_connector.requests.post')
+    @patch('guardian.integrations.swimlane_connector.requests.post')
     def test_send_incident_to_swimlane(self, mock_post, swimlane_connector, sample_incident):
         """Test sending incident to Swimlane"""
         mock_response = Mock()
@@ -176,7 +173,7 @@ class TestSwimlaneIncidentCreation:
         assert record_id == 'rec-789'
         mock_post.assert_called_once()
 
-    @patch('integrations.swimlane_connector.requests.post')
+    @patch('guardian.integrations.swimlane_connector.requests.post')
     def test_trigger_swimlane_workflow(self, mock_post, swimlane_connector):
         """Test triggering Swimlane workflow"""
         mock_response = Mock()
@@ -190,7 +187,7 @@ class TestSwimlaneIncidentCreation:
         payload = call_args[1]['json']
         assert payload['workflowName'] == 'Revoke Access'
 
-    @patch('integrations.swimlane_connector.requests.patch')
+    @patch('guardian.integrations.swimlane_connector.requests.patch')
     def test_update_record_status(self, mock_patch, swimlane_connector):
         """Test updating Swimlane record status"""
         mock_response = Mock()
@@ -204,7 +201,7 @@ class TestSwimlaneIncidentCreation:
         payload = call_args[1]['json']
         assert payload['status'] == 'resolved'
 
-    @patch('integrations.swimlane_connector.requests.patch')
+    @patch('guardian.integrations.swimlane_connector.requests.patch')
     def test_attach_evidence_to_record(self, mock_patch, swimlane_connector):
         """Test attaching evidence to Swimlane record"""
         evidence = {
@@ -232,7 +229,7 @@ class TestSwimlaneWorkflowResults:
     def swimlane_connector(self):
         return SwimlaneConnector('https://swimlane.example.com', 'api_key', 'app_123')
 
-    @patch('integrations.swimlane_connector.requests.get')
+    @patch('guardian.integrations.swimlane_connector.requests.get')
     def test_receive_playbook_result(self, mock_get, swimlane_connector):
         """Test retrieving playbook/workflow results"""
         mock_response = Mock()
@@ -249,7 +246,7 @@ class TestSwimlaneWorkflowResults:
         assert result['status'] == 'completed'
         assert result['result']['users_affected'] == 2
 
-    @patch('integrations.swimlane_connector.requests.patch')
+    @patch('guardian.integrations.swimlane_connector.requests.patch')
     def test_sync_status_with_swimlane(self, mock_patch, swimlane_connector):
         """Test synchronizing incident status"""
         mock_response = Mock()
@@ -260,7 +257,7 @@ class TestSwimlaneWorkflowResults:
 
         assert result is True
 
-    @patch('integrations.swimlane_connector.requests.get')
+    @patch('guardian.integrations.swimlane_connector.requests.get')
     def test_get_available_workflows(self, mock_get, swimlane_connector):
         """Test retrieving available workflows"""
         mock_response = Mock()
@@ -279,7 +276,7 @@ class TestSwimlaneWorkflowResults:
         assert len(workflows) == 3
         assert workflows[0]['name'] == 'Revoke Access'
 
-    @patch('integrations.swimlane_connector.requests.get')
+    @patch('guardian.integrations.swimlane_connector.requests.get')
     def test_get_available_workflows_empty(self, mock_get, swimlane_connector):
         """Test when no workflows available"""
         mock_response = Mock()
@@ -295,7 +292,7 @@ class TestSwimlaneWorkflowResults:
 class TestBidirectionalSynchronization:
     """Bonus: Bidirectional status synchronization tests"""
 
-    @patch('integrations.splunk_phantom_connector.requests.post')
+    @patch('guardian.integrations.splunk_phantom_connector.requests.post')
     def test_phantom_sync_status(self, mock_post):
         """Test Phantom status synchronization"""
         connector = SplunkPhantomConnector('https://phantom.example.com', 'token')
@@ -308,7 +305,7 @@ class TestBidirectionalSynchronization:
 
         assert result is True
 
-    @patch('integrations.splunk_phantom_connector.requests.get')
+    @patch('guardian.integrations.splunk_phantom_connector.requests.get')
     def test_phantom_get_case_summary(self, mock_get):
         """Test getting Phantom case summary"""
         connector = SplunkPhantomConnector('https://phantom.example.com', 'token')

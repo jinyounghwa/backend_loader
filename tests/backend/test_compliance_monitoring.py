@@ -5,11 +5,8 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock
 import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'lambda' / 'guardian'))
-
-from monitors.compliance_monitor import ComplianceMonitor
-from validators.policy_validator import PolicyValidator
+from guardian.monitors.compliance_monitor import ComplianceMonitor
+from guardian.validators.policy_validator import PolicyValidator
 
 
 # ==========================================
