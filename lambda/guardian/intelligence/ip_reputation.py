@@ -1,7 +1,7 @@
 import logging
 import json
+import ipaddress
 from typing import Dict, Any, Optional
-import re
 
 logger = logging.getLogger(__name__)
 
@@ -190,37 +190,35 @@ class IPReputation:
             logger.warning(f"Cache set failed: {e}")
 
     def _is_valid_ip(self, ip_address: str) -> bool:
-        """IP 주소 유효성 검증"""
-        ipv4_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
-        ipv6_pattern = r'^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$'
-
-        if not (re.match(ipv4_pattern, ip_address) or re.match(ipv6_pattern, ip_address)):
+        """IP 주소 유효성 검증 (stdlib ipaddress 기반, IPv4/IPv6 정확 파싱)."""
+        if not isinstance(ip_address, str):
+            return False
+        try:
+            ipaddress.ip_address(ip_address.strip())
+            return True
+        except ValueError:
             return False
 
-        if re.match(ipv4_pattern, ip_address):
-            parts = ip_address.split('.')
-            for part in parts:
-                if not (0 <= int(part) <= 255):
-                    return False
-
-        return True
-
     def _is_private_ip(self, ip_address: str) -> bool:
-        """사설 IP 판단"""
-        private_ranges = [
-            r'^10\.',
-            r'^172\.(1[6-9]|2[0-9]|3[0-1])\.',
-            r'^192\.168\.',
-            r'^127\.',
-            r'^::1$',
-            r'^fc00:',
-        ]
+        """사설/예약 IP 판단.
 
-        for pattern in private_ranges:
-            if re.match(pattern, ip_address):
-                return True
-
-        return False
+        stdlib 를 사용해 RFC1918 사설 대역뿐 아니라 루프백, 링크로컬
+        (169.254.0.0/16 — 클라우드 메타데이터 169.254.169.254 포함),
+        예약/미지정(0.0.0.0) 대역까지 모두 내부로 분류한다. 이 값들은
+        외부 평판 조회 대상이 아니며 안전한 것으로 취급되어서는 안 된다.
+        """
+        try:
+            ip = ipaddress.ip_address(ip_address.strip())
+        except ValueError:
+            return False
+        return (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_unspecified
+            or ip.is_multicast
+        )
 
     def get_threat_level_from_score(self, abuse_score: int) -> str:
         """AbuseIPDB 점수 → 위협도 변환"""

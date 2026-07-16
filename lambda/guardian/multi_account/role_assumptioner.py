@@ -47,12 +47,17 @@ class RoleAssumptioner:
             Credentials dict or None
         """
         try:
-            response = self.sts_client.assume_role(
-                RoleArn=role_arn,
-                RoleSessionName=session_name,
-                DurationSeconds=duration_seconds,
-            )
-            
+            assume_kwargs: Dict[str, Any] = {
+                "RoleArn": role_arn,
+                "RoleSessionName": session_name,
+                "DurationSeconds": duration_seconds,
+            }
+            # Confused-deputy protection: include ExternalId when configured.
+            external_id = Config.get_cross_account_external_id()
+            if external_id:
+                assume_kwargs["ExternalId"] = external_id
+            response = self.sts_client.assume_role(**assume_kwargs)
+
             credentials = response['Credentials']
             return {
                 'access_key': credentials['AccessKeyId'],

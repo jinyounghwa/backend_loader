@@ -5,6 +5,8 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime, timezone
 import json
 
+from guardian.config import Config
+
 logger = logging.getLogger(__name__)
 
 
@@ -129,10 +131,15 @@ class MultiAccountManager:
                     return cached_creds['credentials']
 
             # Assume the role
-            response = self.sts_client.assume_role(
-                RoleArn=role_arn,
-                RoleSessionName='guardian-cross-account-session'
-            )
+            assume_kwargs: Dict[str, Any] = {
+                'RoleArn': role_arn,
+                'RoleSessionName': 'guardian-cross-account-session',
+            }
+            # Confused-deputy protection: include ExternalId when configured.
+            external_id = Config.get_cross_account_external_id()
+            if external_id:
+                assume_kwargs['ExternalId'] = external_id
+            response = self.sts_client.assume_role(**assume_kwargs)
 
             credentials = response['Credentials']
 
@@ -272,11 +279,24 @@ class MultiAccountManager:
             True if removed successfully
         """
         try:
+            # Resolve the account's role_arn *before* deletion — the credential
+            # cache is keyed by role_arn, not account_id, so we must look it up
+            # to actually evict the temporary credentials of the removed account.
+            role_arn = None
+            try:
+                item = self.table.get_item(Key={'account_id': account_id}).get('Item', {})
+                role_arn = item.get('role_arn')
+            except Exception as lookup_err:
+                logger.warning(f"Could not resolve role_arn for {account_id}: {lookup_err}")
+
             self.table.delete_item(Key={'account_id': account_id})
 
-            # Clear cached credentials
-            if account_id in self.credentials_cache:
-                del self.credentials_cache[account_id]
+            # Clear cached credentials for the removed account so its temporary
+            # session token cannot be reused from memory until natural expiry.
+            if role_arn and role_arn in self.credentials_cache:
+                del self.credentials_cache[role_arn]
+            # Defensive: also drop any stray entry keyed by account_id.
+            self.credentials_cache.pop(account_id, None)
 
             logger.info(f"Removed account {account_id}")
             return True

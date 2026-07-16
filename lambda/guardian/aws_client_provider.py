@@ -187,11 +187,18 @@ class AWSClientProvider:
         """
         async with await cls.get_async_client("sts") as sts_client:
             role_arn = f"arn:aws:iam::{account_id}:role/{role_name}"
-            response = await sts_client.assume_role(
-                RoleArn=role_arn,
-                RoleSessionName=f"guardian-{account_id}",
-                DurationSeconds=session_duration,
-            )
+            assume_kwargs: Dict[str, Any] = {
+                "RoleArn": role_arn,
+                "RoleSessionName": f"guardian-{account_id}",
+                "DurationSeconds": session_duration,
+            }
+            # Confused-deputy protection: send ExternalId when configured so a
+            # third party cannot trick Guardian into assuming a role it was not
+            # explicitly authorized for. Mirrors orchestrator._assume_role_for_account.
+            external_id = Config.get_cross_account_external_id()
+            if external_id:
+                assume_kwargs["ExternalId"] = external_id
+            response = await sts_client.assume_role(**assume_kwargs)
 
             credentials = response["Credentials"]
             logger.debug("Successfully assumed role in account %s", account_id)

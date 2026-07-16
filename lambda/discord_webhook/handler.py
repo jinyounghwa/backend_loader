@@ -21,6 +21,9 @@ logger = logging.getLogger(__name__)
 MIN_THRESHOLD = 0.01
 MAX_THRESHOLD = 1000000.0
 
+# Reject signed requests older than this to bound the replay window.
+MAX_SIGNATURE_AGE_SECONDS = 300
+
 cost_checker = CostChecker()
 ec2_checker = EC2Checker()
 s3_checker = S3Checker()
@@ -40,6 +43,14 @@ def verify_discord_request(request_body: str, signature: str, timestamp: str) ->
         verify_key = VerifyKey(bytes.fromhex(public_key))
         message = (timestamp + request_body).encode("utf-8")
         verify_key.verify(message, bytes.fromhex(signature))
+
+        # Replay defense: the signed timestamp must be recent. A captured but
+        # still-valid signed request (e.g. /stop, /budget) cannot be replayed
+        # outside this window.
+        age = abs(datetime.now(timezone.utc).timestamp() - float(timestamp))
+        if age > MAX_SIGNATURE_AGE_SECONDS:
+            logger.warning("Discord signature timestamp too old/skewed: %ss", age)
+            return False
         return True
     except Exception as e:
         # Fail closed: any error (bad signature, malformed hex, missing nacl)
